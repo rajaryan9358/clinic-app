@@ -1,0 +1,1872 @@
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import client from '../../api/client';
+import AppIcon from '../../components/AppIcon';
+import StatusBadge from '../../components/StatusBadge';
+import { formatDate } from '../../utils/dateFormat';
+
+const TABS = [
+    { key: 'overview',  label: 'Overview',       icon: 'dashboard' },
+    { key: 'branches',  label: 'Branches',        icon: 'building' },
+    { key: 'domains',   label: 'Domains',         icon: 'globe' },
+    { key: 'doctors',   label: 'Doctors',         icon: 'stethoscope' },
+    { key: 'services',  label: 'Services',        icon: 'clipboard-check' },
+    { key: 'staff',     label: 'Staff Users',     icon: 'users' },
+    { key: 'settings',  label: 'Clinic Settings', icon: 'settings' },
+];
+
+// ── Shared UI helpers ─────────────────────────────────────────────────────────
+
+function Card({ children, className = '' }) {
+    return <div className={`rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}>{children}</div>;
+}
+
+function InfoRow({ label, value }) {
+    if (value == null || value === '') return null;
+    return (
+        <div className="flex items-start gap-4 border-b border-gray-100 py-2.5 last:border-0">
+            <span className="w-44 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+            <span className="text-sm text-gray-800">{value}</span>
+        </div>
+    );
+}
+
+function SectionHeader({ title, subtitle, action }) {
+    return (
+        <div className="flex items-center justify-between gap-4 pb-4">
+            <div>
+                <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+                {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+            </div>
+            {action}
+        </div>
+    );
+}
+
+function EmptyState({ icon, text }) {
+    return (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+            <AppIcon name={icon} className="mb-3 h-8 w-8 text-gray-200" />
+            <p className="text-sm text-gray-400">{text}</p>
+        </div>
+    );
+}
+
+function LoadingState() {
+    return (
+        <div className="flex items-center justify-center py-14">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        </div>
+    );
+}
+
+// ── Services Tab ─────────────────────────────────────────────────────────────
+
+function ServicesTab({ clinicId }) {
+    const [services, setServices] = useState([]);
+    const [branches, setBranches] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const [sheet, setSheet] = useState({ open: false, mode: 'clinic', service: null });
+    const [form, setForm] = useState({ name: '', code: '', description: '', duration_minutes: '', fee: '', status: 'active' });
+    const [branchIds, setBranchIds] = useState([]);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    const load = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [svcRes, brRes] = await Promise.all([
+                client.get('/super-admin/services', { params: { clinic_id: clinicId, per_page: 200 } }),
+                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 200 } }),
+            ]);
+            setServices(Array.isArray(svcRes.data?.data) ? svcRes.data.data : []);
+            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to load services');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { load(); }, [clinicId]);
+
+    const openAdd = () => {
+        setSaveError('');
+        setForm({ name: '', code: '', description: '', duration_minutes: '', fee: '' });
+        setBranchIds([]);
+        setSheet({ open: true, mode: 'add', service: null });
+    };
+
+    const openEdit = (service) => {
+        setSaveError('');
+        setForm({
+            name: service?.name || '',
+            code: service?.code || '',
+            description: service?.description || '',
+            duration_minutes: service?.duration_minutes ?? '',
+            fee: service?.fee ?? '',
+            status: service?.status || 'active',
+        });
+        const ids = Array.isArray(service?.branches) ? service.branches.map((b) => String(b.id)) : [];
+        setBranchIds(ids);
+        setSheet({ open: true, mode: 'edit', service });
+    };
+
+    const toggleBranch = (id) => {
+        const sid = String(id);
+        setBranchIds((prev) => prev.includes(sid) ? prev.filter((x) => x !== sid) : [...prev, sid]);
+    };
+
+    const save = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        setSaveError('');
+
+        try {
+            const payload = {
+                clinic_id: clinicId,
+                name: String(form.name || '').trim(),
+                code: String(form.code || '').trim() || null,
+                description: String(form.description || '').trim() || null,
+                duration_minutes: form.duration_minutes === '' ? null : Number(form.duration_minutes),
+                fee: form.fee === '' ? null : Number(form.fee),
+                status: 'active',
+            };
+
+            if (!payload.name) {
+                setSaveError('Service name is required.');
+                return;
+            }
+
+            let serviceId = sheet.service?.id;
+            if (serviceId) {
+                await client.put(`/super-admin/services/${serviceId}`, payload);
+            } else {
+                const res = await client.post('/super-admin/services', payload);
+                serviceId = res.data?.data?.id;
+            }
+
+            if (serviceId) {
+                const ids = (branchIds || []).map((v) => Number(v)).filter((n) => Number.isFinite(n));
+                await client.put(`/super-admin/services/${serviceId}/branches`, { branch_ids: ids });
+            }
+
+            await load();
+            setSheet({ open: false, mode: 'add', service: null });
+        } catch (e) {
+            setSaveError(e?.response?.data?.message || 'Failed to save service');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingState />;
+    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+
+    return (
+        <>
+            <SectionHeader
+                title="Services"
+                subtitle="Create services for this clinic and assign them to branches."
+                action={
+                    <Btn variant="primary" onClick={openAdd}>
+                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Service
+                    </Btn>
+                }
+            />
+
+            {!services.length ? (
+                <EmptyState icon="clipboard-check" text="No services yet." />
+            ) : (
+                <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    {services.map((svc) => {
+                        const assigned = Array.isArray(svc?.branches) ? svc.branches : [];
+                        const branchNames = assigned.map((b) => b?.name).filter(Boolean).join(', ');
+                        return (
+                            <div key={svc.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-gray-900">{svc.name}</p>
+                                    <p className="mt-0.5 text-xs text-gray-500">
+                                        {svc.code ? `${svc.code} · ` : ''}
+                                        {svc.duration_minutes ? `${svc.duration_minutes} min · ` : ''}
+                                        {svc.fee != null && svc.fee !== '' ? `₹${svc.fee} · ` : ''}
+                                        {branchNames ? `Branches: ${branchNames}` : 'All branches'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Btn onClick={() => openEdit(svc)}>Edit</Btn>
+                                    <DeleteBtn endpoint={`/super-admin/services/${svc.id}`} onDeleted={load} label="service" />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            <Sheet
+                open={sheet.open}
+                title={sheet.mode === 'edit' ? `Edit Service — ${sheet.service?.name}` : 'Add Service'}
+                subtitle="Configure the service details and select which branches offer it."
+                onClose={() => setSheet({ open: false, mode: 'add', service: null })}
+                footer={
+                    <div className="flex items-center justify-between gap-3">
+                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                        <div className="ml-auto flex gap-2">
+                            <Btn onClick={() => setSheet({ open: false, mode: 'add', service: null })} disabled={saving}>Cancel</Btn>
+                            <Btn variant="primary" type="submit" disabled={saving} className="min-w-[110px]">
+                                {saving ? 'Saving…' : 'Save'}
+                            </Btn>
+                        </div>
+                    </div>
+                }
+            >
+                <form onSubmit={save} className="space-y-4">
+                    <Field label="Service Name" required>
+                        <TextInput value={form.name} onChange={(v) => setForm((p) => ({ ...p, name: v }))} placeholder="Consultation" />
+                    </Field>
+
+                    <Field label="Code">
+                        <TextInput value={form.code} onChange={(v) => setForm((p) => ({ ...p, code: v }))} placeholder="CONS" />
+                    </Field>
+
+                    <Field label="Description">
+                        <TextInput value={form.description} onChange={(v) => setForm((p) => ({ ...p, description: v }))} placeholder="" />
+                    </Field>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="Duration (minutes)">
+                            <TextInput type="number" value={form.duration_minutes} onChange={(v) => setForm((p) => ({ ...p, duration_minutes: v }))} placeholder="15" />
+                        </Field>
+                        <Field label="Fee">
+                            <TextInput type="number" value={form.fee} onChange={(v) => setForm((p) => ({ ...p, fee: v }))} placeholder="500" />
+                        </Field>
+                    </div>
+
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700">Branch Assignment</label>
+                        {branches.length === 0 ? (
+                            <p className="text-sm text-gray-400">No branches found for this clinic.</p>
+                        ) : (
+                            <div className="space-y-2 rounded-xl border border-gray-200 p-3">
+                                {branches.map((b) => (
+                                    <label key={b.id} className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={branchIds.includes(String(b.id))}
+                                            onChange={() => toggleBranch(b.id)}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                                        />
+                                        <span className="text-sm text-gray-700">{b.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                        <p className="mt-1 text-xs text-gray-400">Leave all unchecked to make this service available across all branches.</p>
+                    </div>
+                </form>
+            </Sheet>
+        </>
+    );
+}
+
+function DeleteBtn({ endpoint, onDeleted, label = 'item' }) {
+    const [confirming, setConfirming] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    if (!confirming) {
+        return (
+            <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+            >
+                <AppIcon name="trash" className="h-3.5 w-3.5" />
+                Delete
+            </button>
+        );
+    }
+
+    return (
+        <div className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-2.5 py-1.5">
+            <span className="text-xs font-semibold text-red-700">Delete {label}?</span>
+            <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                    setBusy(true);
+                    try {
+                        await client.delete(endpoint);
+                        setConfirming(false);
+                        onDeleted();
+                    } catch {
+                        setConfirming(false);
+                    } finally {
+                        setBusy(false);
+                    }
+                }}
+                className="rounded px-1.5 py-0.5 text-xs font-bold text-red-700 hover:bg-red-200 disabled:opacity-50"
+            >
+                {busy ? '…' : 'Yes'}
+            </button>
+            <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="rounded px-1.5 py-0.5 text-xs font-semibold text-gray-600 hover:bg-gray-200"
+            >
+                No
+            </button>
+        </div>
+    );
+}
+
+function Btn({ onClick, children, variant = 'secondary', disabled, type = 'button', className = '' }) {
+    const base = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50';
+    const styles = {
+        primary: 'bg-blue-600 text-white hover:bg-blue-700',
+        secondary: 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+        danger: 'bg-red-600 text-white hover:bg-red-700',
+        ghost: 'text-blue-600 hover:underline text-xs font-medium',
+    };
+    return (
+        <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles[variant]} ${className}`}>
+            {children}
+        </button>
+    );
+}
+
+// ── Inline Modal Sheet ────────────────────────────────────────────────────────
+
+function Sheet({ open, title, subtitle, onClose, children, footer }) {
+    const overlayRef = useRef(null);
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [open, onClose]);
+
+    if (!open) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex justify-end" aria-modal="true" role="dialog">
+            <div
+                ref={overlayRef}
+                className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+                onClick={onClose}
+            />
+            <div className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
+                    <div>
+                        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+                        {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                    >
+                        <AppIcon name="close" className="h-4 w-4" />
+                    </button>
+                </div>
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+                {/* Footer */}
+                {footer && <div className="border-t border-gray-200 px-6 py-4">{footer}</div>}
+            </div>
+        </div>
+    );
+}
+
+// ── Small form helpers ────────────────────────────────────────────────────────
+
+function Field({ label, required, error, children }) {
+    return (
+        <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">
+                {label}{required && <span className="ml-0.5 text-red-500">*</span>}
+            </label>
+            {children}
+            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        </div>
+    );
+}
+
+function TextInput({ value, onChange, placeholder, type = 'text', disabled = false, readOnly = false }) {
+    return (
+        <input
+            type={type}
+            value={value || ''}
+            disabled={disabled}
+            readOnly={readOnly}
+            onChange={(e) => (onChange ? onChange(e.target.value) : undefined)}
+            placeholder={placeholder}
+            className={`w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-gray-50 text-gray-500' : ''}`}
+        />
+    );
+}
+
+function SelectInput({ value, onChange, options }) {
+    return (
+        <select
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        >
+            {options.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+        </select>
+    );
+}
+
+function Toggle({ checked, onChange, label }) {
+    return (
+        <label className="flex cursor-pointer items-center gap-3">
+            <div className="relative">
+                <input type="checkbox" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
+                <div className={`flex h-5 w-9 items-center rounded-full transition-colors ${Boolean(checked) ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                    <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${Boolean(checked) ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+            </div>
+            <span className="text-sm text-gray-700">{label}</span>
+        </label>
+    );
+}
+
+// ── Overview Tab ──────────────────────────────────────────────────────────────
+
+function OverviewTab({ clinic, clinicId, onEditClinic }) {
+    if (!clinic) return <LoadingState />;
+    return (
+        <div className="grid gap-5 lg:grid-cols-2">
+            <Card className="p-5">
+                <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-900">Clinic Information</h3>
+                    <Btn onClick={onEditClinic}>
+                        <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
+                    </Btn>
+                </div>
+                <InfoRow label="Name" value={clinic.name} />
+                <InfoRow label="Slug" value={clinic.slug} />
+                <InfoRow label="Legal Name" value={clinic.legal_name} />
+                <InfoRow label="Owner" value={clinic.owner_name} />
+                <InfoRow label="Owner Email" value={clinic.owner_email} />
+                <InfoRow label="Owner Phone" value={clinic.owner_phone} />
+                <InfoRow label="Status" value={<StatusBadge status={clinic.status} />} />
+                <InfoRow label="Created" value={formatDate(clinic.created_at)} />
+            </Card>
+        </div>
+    );
+}
+
+// ── Branches Tab ──────────────────────────────────────────────────────────────
+
+function BranchesTab({ clinicId }) {
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [settings, setSettings] = useState({});
+
+    // Sheet state
+    const [sheet, setSheet] = useState({ open: false, mode: null, branch: null, branchSetting: null });
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    const load = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [brRes, setRes] = await Promise.all([
+                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
+                client.get('/super-admin/settings/branch', { params: { clinic_id: clinicId, per_page: 100 } }).catch(() => ({ data: { data: [] } })),
+            ]);
+            setItems(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
+            const settingMap = {};
+            (Array.isArray(setRes.data?.data) ? setRes.data.data : []).forEach((s) => {
+                settingMap[s.branch_id] = s;
+            });
+            setSettings(settingMap);
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to load branches');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { load(); }, [clinicId]);
+
+    const openAddBranch = () => {
+        setForm({ clinic_id: clinicId, name: '', address: '', phone: '', email: '', status: 'active', is_main_branch: false });
+        setSaveError('');
+        setSheet({ open: true, mode: 'add_branch', branch: null, branchSetting: null });
+    };
+
+    const openEditBranch = (branch) => {
+        setForm({ ...branch });
+        setSaveError('');
+        setSheet({ open: true, mode: 'edit_branch', branch, branchSetting: null });
+    };
+
+    const openEditSettings = (branch) => {
+        const s = settings[branch.id] || {};
+        setForm({ branch_id: branch.id, clinic_id: clinicId, booking_enabled: s.booking_enabled ?? true, walkin_enabled: s.walkin_enabled ?? true, token_system_enabled: s.token_system_enabled ?? false, max_advance_days: s.max_advance_days ?? 30, min_notice_minutes: s.min_notice_minutes ?? 60 });
+        setSaveError('');
+        setSheet({ open: true, mode: 'edit_settings', branch, branchSetting: s });
+    };
+
+    const closeSheet = () => setSheet({ open: false, mode: null, branch: null, branchSetting: null });
+
+    const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSaveError('');
+        try {
+            if (sheet.mode === 'add_branch') {
+                await client.post('/super-admin/branches', form);
+            } else if (sheet.mode === 'edit_branch') {
+                await client.put(`/super-admin/branches/${sheet.branch.id}`, form);
+            } else if (sheet.mode === 'edit_settings') {
+                const s = sheet.branchSetting;
+                if (s?.id) {
+                    await client.put(`/super-admin/settings/branch/${s.id}`, form);
+                } else {
+                    await client.post('/super-admin/settings/branch', form);
+                }
+            }
+            closeSheet();
+            load();
+        } catch (e) {
+            setSaveError(e?.response?.data?.message || 'Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingState />;
+    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+
+    return (
+        <>
+            <SectionHeader
+                title="Branches"
+                subtitle="Locations under this clinic."
+                action={
+                    <Btn variant="primary" onClick={openAddBranch}>
+                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Branch
+                    </Btn>
+                }
+            />
+
+            {!items.length ? <EmptyState icon="building" text="No branches yet. Add your first branch." /> : (
+                <div className="space-y-4">
+                    {items.map((branch) => {
+                        const s = settings[branch.id] || {};
+                        return (
+                            <Card key={branch.id} className="p-5">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <h4 className="text-sm font-semibold text-gray-900">{branch.name}</h4>
+                                            <StatusBadge status={branch.status} />
+                                            {branch.code && <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{branch.code}</span>}
+                                            {branch.is_main_branch && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Main</span>}
+                                        </div>
+                                        {(branch.city || branch.state) && (
+                                            <p className="mt-0.5 text-xs text-gray-500">{[branch.city, branch.state].filter(Boolean).join(', ')}</p>
+                                        )}
+                                        {branch.phone && <p className="mt-0.5 text-xs text-gray-400">{branch.phone}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <Btn onClick={() => openEditBranch(branch)}>
+                                            <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
+                                        </Btn>
+                                        <DeleteBtn endpoint={`/super-admin/branches/${branch.id}`} onDeleted={load} label="branch" />
+                                    </div>
+                                </div>
+
+                                {/* Branch settings pills */}
+                                <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+                                    {[
+                                        { label: 'Booking', value: s.booking_enabled },
+                                        { label: 'Walk-in', value: s.walkin_enabled },
+                                        { label: 'Token System', value: s.token_system_enabled },
+                                    ].map(({ label, value }) => (
+                                        <span
+                                            key={label}
+                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                                value ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                                            }`}
+                                        >
+                                            <AppIcon name={value ? 'check' : 'close'} className="h-3 w-3" />
+                                            {label}
+                                        </span>
+                                    ))}
+                                    {s.max_advance_days != null && (
+                                        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                                            {s.max_advance_days}d advance
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => openEditSettings(branch)}
+                                        className="ml-1 text-xs font-medium text-blue-600 hover:underline"
+                                    >
+                                        Edit settings →
+                                    </button>
+                                </div>
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Branch Sheet */}
+            <Sheet
+                open={sheet.open}
+                title={
+                    sheet.mode === 'add_branch' ? 'Add Branch'
+                    : sheet.mode === 'edit_branch' ? `Edit Branch — ${sheet.branch?.name}`
+                    : `Branch Settings — ${sheet.branch?.name}`
+                }
+                subtitle={
+                    sheet.mode === 'edit_settings'
+                        ? 'Control booking behavior for this branch.'
+                        : 'Fill in the branch details below.'
+                }
+                onClose={closeSheet}
+                footer={
+                    <div className="flex items-center justify-between gap-3">
+                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                        <div className="ml-auto flex gap-2">
+                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
+                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                                {saving ? 'Saving…' : 'Save'}
+                            </Btn>
+                        </div>
+                    </div>
+                }
+            >
+                {sheet.mode === 'edit_settings' ? (
+                    <div className="space-y-4">
+                        <Toggle checked={form.booking_enabled} onChange={(v) => setForm((p) => ({ ...p, booking_enabled: v }))} label="Online booking enabled" />
+                        <Toggle checked={form.walkin_enabled} onChange={(v) => setForm((p) => ({ ...p, walkin_enabled: v }))} label="Walk-in enabled" />
+                        <Toggle checked={form.token_system_enabled} onChange={(v) => setForm((p) => ({ ...p, token_system_enabled: v }))} label="Token system enabled" />
+                        <Field label="Max advance booking days">
+                            <TextInput type="number" {...f('max_advance_days')} />
+                        </Field>
+                        <Field label="Min booking notice (minutes)">
+                            <TextInput type="number" {...f('min_notice_minutes')} />
+                        </Field>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <Field label="Branch Name" required>
+                            <TextInput {...f('name')} placeholder="e.g. Koramangala Branch" />
+                        </Field>
+                        <Field label="Address">
+                            <textarea
+                                value={form.address ?? ''}
+                                onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                                placeholder="Full branch address"
+                                rows={2}
+                                className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
+                            />
+                        </Field>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="Phone">
+                                <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
+                            </Field>
+                            <Field label="Email">
+                                <TextInput type="email" {...f('email')} placeholder="branch@clinic.com" />
+                            </Field>
+                        </div>
+                        <Field label="Status">
+                            <SelectInput {...f('status')} options={[
+                                { value: 'active', label: 'Active' },
+                                { value: 'inactive', label: 'Inactive' },
+                            ]} />
+                        </Field>
+                        <Toggle
+                            checked={form.is_main_branch}
+                            onChange={(v) => setForm((p) => ({ ...p, is_main_branch: v }))}
+                            label="Main branch"
+                        />
+                    </div>
+                )}
+            </Sheet>
+        </>
+    );
+}
+
+// ── Domains Tab ───────────────────────────────────────────────────────────────
+
+function DomainsTab({ clinicId }) {
+    const [items, setItems] = useState([]);
+    const [branches, setBranches] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [sheet, setSheet] = useState({ open: false, domain: null });
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    const load = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [domRes, brRes] = await Promise.all([
+                client.get('/super-admin/domains', { params: { clinic_id: clinicId, per_page: 100 } }),
+                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
+            ]);
+            setItems(Array.isArray(domRes.data?.data) ? domRes.data.data : []);
+            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to load');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { load(); }, [clinicId]);
+
+    const openAdd = () => {
+        setForm({ clinic_id: clinicId, branch_id: '', host: '', type: 'booking', is_primary: false, status: 'active' });
+        setSaveError('');
+        setSheet({ open: true, domain: null });
+    };
+
+    const openEdit = (domain) => {
+        setForm({ ...domain, branch_id: domain.branch_id || '' });
+        setSaveError('');
+        setSheet({ open: true, domain });
+    };
+
+    const closeSheet = () => setSheet({ open: false, domain: null });
+    const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSaveError('');
+        try {
+            if (sheet.domain) {
+                await client.put(`/super-admin/domains/${sheet.domain.id}`, form);
+            } else {
+                await client.post('/super-admin/domains', form);
+            }
+            closeSheet();
+            load();
+        } catch (e) {
+            setSaveError(e?.response?.data?.message || 'Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingState />;
+    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+
+    return (
+        <>
+            <SectionHeader
+                title="Domains & Links"
+                subtitle="Booking portals linked to this clinic's branches."
+                action={
+                    <Btn variant="primary" onClick={openAdd}>
+                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Domain
+                    </Btn>
+                }
+            />
+
+            {!items.length ? <EmptyState icon="globe" text="No domains linked yet." /> : (
+                <div className="space-y-3">
+                    {items.map((domain) => (
+                        <Card key={domain.id} className="p-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <a
+                                            href={`https://${domain.host}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-sm font-semibold text-blue-600 hover:underline"
+                                        >
+                                            {domain.host}
+                                        </a>
+                                        <StatusBadge status={domain.status} />
+                                        {domain.type && (
+                                            <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 capitalize">
+                                                {domain.type === 'booking' ? 'Booking Portal' : domain.type === 'portal' ? 'Patient Portal' : domain.type}
+                                            </span>
+                                        )}
+                                        {domain.is_primary && (
+                                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Primary</span>
+                                        )}
+                                    </div>
+                                    {domain.branch?.name && <p className="mt-0.5 text-xs text-gray-500">Branch: {domain.branch.name}</p>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Btn onClick={() => openEdit(domain)}>
+                                        <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
+                                    </Btn>
+                                    <DeleteBtn endpoint={`/super-admin/domains/${domain.id}`} onDeleted={load} label="domain" />
+                                </div>
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            )}
+
+            <Sheet
+                open={sheet.open}
+                title={sheet.domain ? `Edit Domain — ${sheet.domain.host}` : 'Add Domain'}
+                subtitle="Link a custom domain to a branch booking portal."
+                onClose={closeSheet}
+                footer={
+                    <div className="flex items-center justify-between gap-3">
+                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                        <div className="ml-auto flex gap-2">
+                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
+                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                                {saving ? 'Saving…' : 'Save'}
+                            </Btn>
+                        </div>
+                    </div>
+                }
+            >
+                <div className="space-y-4">
+                    <Field label="Host / Domain" required>
+                        <TextInput {...f('host')} placeholder="book.yourclinic.com" />
+                    </Field>
+                    <Field label="Branch">
+                        <SelectInput
+                            value={form.branch_id || ''}
+                            onChange={(v) => setForm((p) => ({ ...p, branch_id: v }))}
+                            options={[{ value: '', label: 'Select branch…' }, ...branches.map((b) => ({ value: String(b.id), label: b.name }))]}
+                        />
+                    </Field>
+                    <Field label="Type">
+                        <SelectInput {...f('type')} options={[
+                            { value: 'booking', label: 'Booking Portal' },
+                            { value: 'portal', label: 'Patient Portal' },
+                        ]} />
+                    </Field>
+                    <Field label="Status">
+                        <SelectInput {...f('status')} options={[
+                            { value: 'active', label: 'Active' },
+                            { value: 'inactive', label: 'Inactive' },
+                        ]} />
+                    </Field>
+                    <Toggle
+                        checked={form.is_primary}
+                        onChange={(v) => setForm((p) => ({ ...p, is_primary: v }))}
+                        label="Primary domain"
+                    />
+                </div>
+            </Sheet>
+        </>
+    );
+}
+
+// ── Doctors Tab ───────────────────────────────────────────────────────────────
+
+function DoctorsTab({ clinicId }) {
+    const [items, setItems] = useState([]);
+    const [branches, setBranches] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [sheet, setSheet] = useState({ open: false, doctor: null });
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+    const [photoFile, setPhotoFile] = useState(null);
+    const [photoPreview, setPhotoPreview] = useState('');
+    const photoInputRef = useRef(null);
+
+    const load = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [docRes, brRes] = await Promise.all([
+                client.get('/super-admin/doctors', { params: { clinic_id: clinicId, per_page: 100 } }),
+                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
+            ]);
+            setItems(Array.isArray(docRes.data?.data) ? docRes.data.data : []);
+            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to load');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { load(); }, [clinicId]);
+
+    const openAdd = () => {
+        setForm({
+            clinic_id: clinicId,
+            title: 'Dr.',
+            full_name: '',
+            specialization: '',
+            qualification: '',
+            experience_years: '',
+            gender: '',
+            phone: '',
+            email: '',
+            photo_url: '',
+            password: '',
+            consultation_fee: '',
+            followup_fee: '',
+            slot_duration_minutes: '15',
+            buffer_time_minutes: '5',
+            branch_ids: [],
+        });
+        setPhotoFile(null);
+        setPhotoPreview('');
+        setSaveError('');
+        setSheet({ open: true, doctor: null });
+    };
+
+    const openEdit = (doctor) => {
+        setForm({ ...doctor, password: '', branch_ids: doctor.branch_ids || [] });
+        setPhotoFile(null);
+        setPhotoPreview(doctor.photo_url || '');
+        setSaveError('');
+        setSheet({ open: true, doctor });
+    };
+
+    const closeSheet = () => {
+        setSheet({ open: false, doctor: null });
+        setPhotoFile(null);
+        setPhotoPreview('');
+    };
+
+    const handlePhotoChange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setPhotoFile(file);
+        setPhotoPreview(URL.createObjectURL(file));
+    };
+    const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
+
+    const toggleBranch = (branchId) => {
+        setForm((p) => {
+            const ids = Array.isArray(p.branch_ids) ? p.branch_ids : [];
+            const sid = String(branchId);
+            return { ...p, branch_ids: ids.map(String).includes(sid) ? ids.filter((x) => String(x) !== sid) : [...ids, branchId] };
+        });
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSaveError('');
+        try {
+            let photoUrl = form.photo_url || '';
+            if (photoFile) {
+                const fd = new FormData();
+                fd.append('file', photoFile);
+                fd.append('module', 'doctors');
+                fd.append('clinic_id', String(clinicId));
+                const upRes = await client.post('/super-admin/uploads/image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                photoUrl = upRes.data?.data?.url || photoUrl;
+            }
+            const payload = {
+                ...form,
+                photo_url: photoUrl || undefined,
+                clinic_id: Number(form.clinic_id),
+                experience_years: form.experience_years === '' ? null : Number(form.experience_years),
+                consultation_fee: form.consultation_fee === '' ? null : Number(form.consultation_fee),
+                followup_fee: form.followup_fee === '' ? null : Number(form.followup_fee),
+                slot_duration_minutes: form.slot_duration_minutes === '' ? null : Number(form.slot_duration_minutes),
+                buffer_time_minutes: form.buffer_time_minutes === '' ? null : Number(form.buffer_time_minutes),
+                branch_ids: Array.isArray(form.branch_ids)
+                    ? form.branch_ids.map((v) => Number(v)).filter((n) => Number.isFinite(n))
+                    : [],
+            };
+            // Only send password if the user explicitly entered one (blank = keep existing)
+            if (!payload.password) delete payload.password;
+            if (sheet.doctor) {
+                await client.put(`/super-admin/doctors/${sheet.doctor.id}`, payload);
+            } else {
+                await client.post('/super-admin/doctors', payload);
+            }
+            closeSheet();
+            load();
+        } catch (e) {
+            setSaveError(e?.response?.data?.message || 'Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingState />;
+    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+
+    return (
+        <>
+            <SectionHeader
+                title="Doctors"
+                subtitle="Doctors registered under this clinic."
+                action={
+                    <Btn variant="primary" onClick={openAdd}>
+                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Doctor
+                    </Btn>
+                }
+            />
+
+            {!items.length ? <EmptyState icon="stethoscope" text="No doctors yet." /> : (
+                <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    {items.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
+                            <div className="flex items-center gap-3">
+                                {doc.photo_url
+                                    ? <img src={doc.photo_url} alt="" className="h-9 w-9 rounded-full object-cover border border-gray-200" />
+                                    : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600 text-sm font-bold">{(doc.full_name || '?')[0]}</div>
+                                }
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-900">{doc.full_name}</p>
+                                    <p className="text-xs text-gray-500">{[doc.specialization, doc.qualification].filter(Boolean).join(' · ')}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <StatusBadge status={doc.status} />
+                                <Btn onClick={() => openEdit(doc)}>
+                                    <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
+                                </Btn>
+                                <Link
+                                    to={`/modules/doctors/${doc.id}`}
+                                    className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                    View
+                                </Link>
+                                <DeleteBtn endpoint={`/super-admin/doctors/${doc.id}`} onDeleted={load} label="doctor" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <Sheet
+                open={sheet.open}
+                title={sheet.doctor ? `Edit Doctor — ${sheet.doctor.full_name}` : 'Add Doctor'}
+                subtitle="Doctor profile and clinic assignment."
+                onClose={closeSheet}
+                footer={
+                    <div className="flex items-center justify-between gap-3">
+                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                        <div className="ml-auto flex gap-2">
+                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
+                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                                {saving ? 'Saving…' : 'Save'}
+                            </Btn>
+                        </div>
+                    </div>
+                }
+            >
+                <div className="space-y-4">
+                    {/* Photo upload */}
+                    <Field label="Profile Photo">
+                        <div className="flex items-center gap-4">
+                            <div
+                                className="relative h-24 w-20 flex-shrink-0 cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:border-blue-400"
+                                onClick={() => photoInputRef.current?.click()}
+                            >
+                                {photoPreview ? (
+                                    <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
+                                ) : (
+                                    <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+                                        <AppIcon name="plus" className="h-5 w-5 text-gray-400" />
+                                        <span className="text-xs text-gray-400">Photo</span>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                <p>Click to upload a portrait photo.</p>
+                                <p className="mt-1">JPG, PNG or WebP · max 2 MB</p>
+                                {photoPreview && (
+                                    <button
+                                        type="button"
+                                        className="mt-2 text-red-500 hover:underline"
+                                        onClick={() => { setPhotoFile(null); setPhotoPreview(''); setForm((p) => ({ ...p, photo_url: '' })); }}
+                                    >
+                                        Remove photo
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
+                    </Field>
+                    <div className="grid grid-cols-4 gap-3">
+                        <Field label="Title">
+                            <SelectInput {...f('title')} options={[
+                                { value: 'Dr.', label: 'Dr.' },
+                                { value: 'Prof.', label: 'Prof.' },
+                                { value: 'Mr.', label: 'Mr.' },
+                                { value: 'Ms.', label: 'Ms.' },
+                            ]} />
+                        </Field>
+                        <div className="col-span-3">
+                            <Field label="Full Name" required>
+                                <TextInput {...f('full_name')} placeholder="Doctor's full name" />
+                            </Field>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Specialization">
+                            <TextInput {...f('specialization')} placeholder="e.g. Cardiologist" />
+                        </Field>
+                        <Field label="Qualification">
+                            <TextInput {...f('qualification')} placeholder="e.g. MBBS, MD" />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Experience (Years)">
+                            <TextInput type="number" {...f('experience_years')} placeholder="0" />
+                        </Field>
+                        <Field label="Gender">
+                            <SelectInput {...f('gender')} options={[
+                                { value: '', label: 'Select…' },
+                                { value: 'male', label: 'Male' },
+                                { value: 'female', label: 'Female' },
+                                { value: 'other', label: 'Other' },
+                            ]} />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Phone">
+                            <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
+                        </Field>
+                        <Field label="Email">
+                            <TextInput type="email" {...f('email')} placeholder="doctor@clinic.com" />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Consultation Fee (₹)">
+                            <TextInput type="number" {...f('consultation_fee')} placeholder="500" />
+                        </Field>
+                        <Field label="Follow-up Fee (₹)">
+                            <TextInput type="number" {...f('followup_fee')} placeholder="300" />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Slot Duration (min)">
+                            <TextInput type="number" {...f('slot_duration_minutes')} placeholder="15" />
+                        </Field>
+                        <Field label="Buffer Time (min)">
+                            <TextInput type="number" {...f('buffer_time_minutes')} placeholder="5" />
+                        </Field>
+                    </div>
+                    <Field
+                        label="Password (Login)"
+                        hint={sheet.doctor ? 'Leave blank to keep the existing password.' : 'Set a password so the doctor can log in to the portal.'}
+                    >
+                        <TextInput type="password" {...f('password')} placeholder="••••••••" />
+                    </Field>
+                    {branches.length > 0 && (
+                        <Field label="Branches" hint={(form.branch_ids || []).length ? `${(form.branch_ids || []).length} selected` : undefined}>
+                            <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+                                {branches.map((b) => {
+                                    const selected = (form.branch_ids || []).map(String).includes(String(b.id));
+                                    return (
+                                        <label key={b.id} className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors ${selected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selected}
+                                                onChange={() => toggleBranch(b.id)}
+                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-medium text-gray-800">{b.name}</span>
+                                                    {b.is_main_branch && (
+                                                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Main</span>
+                                                    )}
+                                                </div>
+                                                {b.address && <p className="mt-0.5 truncate text-xs text-gray-500">{b.address}</p>}
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </Field>
+                    )}
+                </div>
+            </Sheet>
+        </>
+    );
+}
+
+// ── Staff Tab ─────────────────────────────────────────────────────────────────
+
+function StaffTab({ clinicId }) {
+    const [items, setItems] = useState([]);
+    const [branches, setBranches] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [sheet, setSheet] = useState({ open: false, user: null });
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    const load = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [usrRes, brRes] = await Promise.all([
+                client.get('/super-admin/users', { params: { clinic_id: clinicId, per_page: 100 } }),
+                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
+            ]);
+            setItems(Array.isArray(usrRes.data?.data) ? usrRes.data.data : []);
+            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to load');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { load(); }, [clinicId]);
+
+    const openAdd = () => {
+        setForm({ clinic_id: clinicId, full_name: '', email: '', phone: '', password: '', role: 'receptionist', branch_ids: [] });
+        setSaveError('');
+        setSheet({ open: true, user: null });
+    };
+
+    const openEdit = (user) => {
+        setForm({ ...user, password: '', branch_ids: user.branch_ids || [] });
+        setSaveError('');
+        setSheet({ open: true, user });
+    };
+
+    const closeSheet = () => setSheet({ open: false, user: null });
+    const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
+
+    const toggleBranch = (branchId) => {
+        setForm((p) => {
+            const ids = Array.isArray(p.branch_ids) ? p.branch_ids : [];
+            const sid = String(branchId);
+            return { ...p, branch_ids: ids.map(String).includes(sid) ? ids.filter((x) => String(x) !== sid) : [...ids, branchId] };
+        });
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSaveError('');
+        try {
+            const payload = { ...form };
+            if (!payload.password) delete payload.password;
+            if (sheet.user) {
+                await client.put(`/super-admin/users/${sheet.user.id}`, payload);
+            } else {
+                await client.post('/super-admin/users', payload);
+            }
+            closeSheet();
+            load();
+        } catch (e) {
+            setSaveError(e?.response?.data?.message || 'Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingState />;
+    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+
+    const roleLabel = (r) => String(r || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+    return (
+        <>
+            <SectionHeader
+                title="Staff Users"
+                subtitle="All staff with access to this clinic."
+                action={
+                    <Btn variant="primary" onClick={openAdd}>
+                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Staff
+                    </Btn>
+                }
+            />
+
+            {!items.length ? <EmptyState icon="users" text="No staff users yet." /> : (
+                <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    {items.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 text-sm font-bold">
+                                    {(user.full_name || user.email || '?')[0].toUpperCase()}
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-900">{user.full_name}</p>
+                                    <p className="text-xs text-gray-500">{user.email} · {roleLabel(user.role)}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <StatusBadge status={user.status} />
+                                <Btn onClick={() => openEdit(user)}>
+                                    <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
+                                </Btn>
+                                <DeleteBtn endpoint={`/super-admin/users/${user.id}`} onDeleted={load} label="staff user" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <Sheet
+                open={sheet.open}
+                title={sheet.user ? `Edit Staff — ${sheet.user.full_name}` : 'Add Staff User'}
+                subtitle="Create login credentials and assign role + branches."
+                onClose={closeSheet}
+                footer={
+                    <div className="flex items-center justify-between gap-3">
+                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                        <div className="ml-auto flex gap-2">
+                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
+                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                                {saving ? 'Saving…' : 'Save'}
+                            </Btn>
+                        </div>
+                    </div>
+                }
+            >
+                <div className="space-y-4">
+                    <Field label="Full Name" required>
+                        <TextInput {...f('full_name')} placeholder="Staff Member Name" />
+                    </Field>
+                    <Field label="Email">
+                        <TextInput type="email" {...f('email')} placeholder="staff@clinic.com" />
+                    </Field>
+                    <Field label="Phone">
+                        <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
+                    </Field>
+                    <Field label={sheet.user ? 'New Password (leave blank to keep)' : 'Password'} required={!sheet.user}>
+                        <TextInput type="password" {...f('password')} placeholder="••••••••" />
+                    </Field>
+                    <Field label="Role" required>
+                        <SelectInput {...f('role')} options={[
+                            { value: 'clinic_admin', label: 'Clinic Admin' },
+                            { value: 'branch_manager', label: 'Branch Manager' },
+                            { value: 'receptionist', label: 'Receptionist' },
+                            { value: 'assistant', label: 'Assistant' },
+                        ]} />
+                    </Field>
+                    {branches.length > 0 && (
+                        <Field label="Branch Access">
+                            <div className="space-y-2 rounded-xl border border-gray-200 p-3">
+                                {branches.map((b) => (
+                                    <label key={b.id} className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={(form.branch_ids || []).map(String).includes(String(b.id))}
+                                            onChange={() => toggleBranch(b.id)}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                                        />
+                                        <span className="text-sm text-gray-700">{b.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </Field>
+                    )}
+                </div>
+            </Sheet>
+        </>
+    );
+}
+
+// ── Clinic Settings Tab ───────────────────────────────────────────────────────
+
+function SettingsTab({ clinicId }) {
+    const [setting, setSetting] = useState(null);
+    const [form, setForm] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    const [waAccount, setWaAccount] = useState(null);
+    const [waForm, setWaForm] = useState({
+        business_name: '',
+        phone_number: '',
+        phone_number_id: '',
+        waba_id: '',
+        webhook_verify_token: '',
+        access_token: '',
+        status: 'pending',
+        branch_id: '',
+    });
+    const [waLoading, setWaLoading] = useState(true);
+    const [waSaving, setWaSaving] = useState(false);
+    const [waError, setWaError] = useState('');
+    const [waSuccess, setWaSuccess] = useState('');
+
+    useEffect(() => {
+        let cancelled = false;
+        client.get('/super-admin/settings/clinic', { params: { clinic_id: clinicId, per_page: 1 } })
+            .then((res) => {
+                const item = Array.isArray(res.data?.data) ? res.data.data[0] : null;
+                if (!cancelled) { setSetting(item); setForm(item || {}); }
+            })
+            .catch((e) => { if (!cancelled) setError(e?.response?.data?.message || 'Failed to load'); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [clinicId]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setWaLoading(true);
+        setWaError('');
+        client.get('/super-admin/whatsapp/accounts', { params: { clinic_id: clinicId, per_page: 100 } })
+            .then((res) => {
+                const items = Array.isArray(res.data?.data) ? res.data.data : [];
+                const preferred = items.find((x) => String(x?.status || '') === 'active') || items[0] || null;
+                if (cancelled) return;
+                setWaAccount(preferred);
+                setWaForm({
+                    business_name: preferred?.business_name || '',
+                    phone_number: preferred?.phone_number || '',
+                    phone_number_id: preferred?.phone_number_id || '',
+                    waba_id: preferred?.waba_id || '',
+                    webhook_verify_token: preferred?.webhook_verify_token || '',
+                    access_token: '',
+                    status: preferred?.status || 'pending',
+                    branch_id: preferred?.branch_id ? String(preferred.branch_id) : '',
+                });
+            })
+            .catch((e) => {
+                if (cancelled) return;
+                setWaError(e?.response?.data?.message || 'Failed to load WhatsApp settings');
+            })
+            .finally(() => {
+                if (cancelled) return;
+                setWaLoading(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [clinicId]);
+
+    const save = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        setError('');
+        setSuccess('');
+        try {
+            if (setting?.id) {
+                await client.put(`/super-admin/settings/clinic/${setting.id}`, form);
+            } else {
+                await client.post('/super-admin/settings/clinic', { ...form, clinic_id: clinicId });
+            }
+            setSuccess('Settings saved successfully.');
+            setTimeout(() => setSuccess(''), 3000);
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const saveWhatsapp = async (e) => {
+        e.preventDefault();
+        setWaSaving(true);
+        setWaError('');
+        setWaSuccess('');
+
+        try {
+            const payload = {
+                clinic_id: clinicId,
+                business_name: waForm.business_name || null,
+                phone_number: waForm.phone_number,
+                provider: 'meta',
+                phone_number_id: waForm.phone_number_id || null,
+                waba_id: waForm.waba_id || null,
+                status: waForm.status || 'pending',
+                branch_id: waForm.branch_id ? Number(waForm.branch_id) : null,
+            };
+
+            if (String(waForm.access_token || '').trim()) {
+                payload.access_token = String(waForm.access_token).trim();
+            }
+
+            if (String(waForm.webhook_verify_token || '').trim()) {
+                payload.webhook_verify_token = String(waForm.webhook_verify_token).trim();
+            }
+
+            if (waAccount?.id) {
+                await client.put(`/super-admin/whatsapp/accounts/${waAccount.id}`, payload);
+            } else {
+                await client.post('/super-admin/whatsapp/accounts', payload);
+            }
+
+            const res = await client.get('/super-admin/whatsapp/accounts', { params: { clinic_id: clinicId, per_page: 100 } });
+            const items = Array.isArray(res.data?.data) ? res.data.data : [];
+            const preferred = items.find((x) => String(x?.status || '') === 'active') || items[0] || null;
+            setWaAccount(preferred);
+            setWaForm((p) => ({ ...p, access_token: '' }));
+            setWaSuccess('WhatsApp credentials saved successfully.');
+            setTimeout(() => setWaSuccess(''), 3000);
+        } catch (e) {
+            setWaError(e?.response?.data?.message || 'Failed to save WhatsApp credentials');
+        } finally {
+            setWaSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingState />;
+
+    const toggle = (key) => setForm((p) => ({ ...p, [key]: !p[key] }));
+
+    return (
+        <div className="max-w-xl space-y-5">
+            {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
+            {success && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{success}</p>}
+
+            <form onSubmit={save} className="space-y-5">
+                <Card className="p-5">
+                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Booking Controls</h3>
+                    <div className="space-y-3">
+                        {[
+                            { key: 'booking_enabled', label: 'Online booking enabled' },
+                            { key: 'whatsapp_booking_enabled', label: 'WhatsApp booking enabled' },
+                            { key: 'auto_confirm', label: 'Auto-confirm appointments' },
+                            { key: 'allow_reschedule', label: 'Allow patient rescheduling' },
+                            { key: 'allow_cancel', label: 'Allow patient cancellation' },
+                        ].map(({ key, label }) => (
+                            <Toggle key={key} checked={Boolean(form[key])} onChange={() => toggle(key)} label={label} />
+                        ))}
+                    </div>
+                </Card>
+
+                <Card className="p-5">
+                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Cutoff</h3>
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700">Booking Cutoff (hours before appointment)</label>
+                        <input
+                            type="number"
+                            min={0}
+                            max={168}
+                            value={form.cutoff_hours ?? ''}
+                            onChange={(e) => setForm((p) => ({ ...p, cutoff_hours: e.target.value }))}
+                            className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                    </div>
+                </Card>
+
+                <div className="flex justify-end">
+                    <button
+                        type="submit"
+                        disabled={saving}
+                        className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                    >
+                        {saving ? 'Saving…' : 'Save Clinic Settings'}
+                    </button>
+                </div>
+            </form>
+
+            <form onSubmit={saveWhatsapp} className="space-y-4">
+                <Card className="p-5">
+                    <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-gray-900">WhatsApp Business Credentials</h3>
+                        <p className="mt-0.5 text-xs text-gray-500">Configure WhatsApp Business API credentials for this clinic.</p>
+                    </div>
+
+                    {waLoading ? (
+                        <div className="flex items-center justify-center py-6">
+                            <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {waError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{waError}</p>}
+                            {waSuccess && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{waSuccess}</p>}
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <Field label="Provider">
+                                    <TextInput value="meta" placeholder="meta" disabled readOnly />
+                                </Field>
+                                <Field label="Status">
+                                    <SelectInput
+                                        value={waForm.status}
+                                        onChange={(v) => setWaForm((p) => ({ ...p, status: v }))}
+                                        options={[
+                                            { value: 'pending', label: 'pending' },
+                                            { value: 'active', label: 'active' },
+                                            { value: 'inactive', label: 'inactive' },
+                                        ]}
+                                    />
+                                </Field>
+                            </div>
+
+                            <Field label="Business Name">
+                                <TextInput value={waForm.business_name} onChange={(v) => setWaForm((p) => ({ ...p, business_name: v }))} placeholder="Business Name" />
+                            </Field>
+
+                            <Field label="Phone Number" required>
+                                <TextInput value={waForm.phone_number} onChange={(v) => setWaForm((p) => ({ ...p, phone_number: v }))} placeholder="+91XXXXXXXXXX" />
+                            </Field>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <Field label="Phone Number ID">
+                                    <TextInput value={waForm.phone_number_id} onChange={(v) => setWaForm((p) => ({ ...p, phone_number_id: v }))} placeholder="Meta phone_number_id" />
+                                </Field>
+                                <Field label="WABA ID">
+                                    <TextInput value={waForm.waba_id} onChange={(v) => setWaForm((p) => ({ ...p, waba_id: v }))} placeholder="WhatsApp Business Account ID" />
+                                </Field>
+                            </div>
+
+                            <Field label="Webhook Verify Token">
+                                <TextInput value={waForm.webhook_verify_token} onChange={(v) => setWaForm((p) => ({ ...p, webhook_verify_token: v }))} placeholder="Verify token" />
+                            </Field>
+
+                            <Field label="Access Token" required={false}>
+                                <TextInput
+                                    type="password"
+                                    value={waForm.access_token}
+                                    onChange={(v) => setWaForm((p) => ({ ...p, access_token: v }))}
+                                    placeholder={waAccount?.id ? 'Leave blank to keep existing' : 'Access token'}
+                                />
+                            </Field>
+
+                            <div className="flex justify-end pt-1">
+                                <button
+                                    type="submit"
+                                    disabled={waSaving}
+                                    className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                                >
+                                    {waSaving ? 'Saving…' : 'Save WhatsApp Credentials'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </Card>
+            </form>
+        </div>
+    );
+}
+
+// ── Edit Clinic Sheet ─────────────────────────────────────────────────────────
+
+function EditClinicSheet({ open, clinic, onClose, onSaved }) {
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (open && clinic) {
+            setForm({ ...clinic });
+        }
+    }, [open, clinic]);
+
+    const f = (key) => ({ value: form[key] || '', onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
+
+    const handleSave = async () => {
+        setSaving(true);
+        setError('');
+        try {
+            await client.put(`/super-admin/clinics/${clinic.id}`, form);
+            onSaved();
+            onClose();
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Sheet
+            open={open}
+            title="Edit Clinic"
+            subtitle="Update clinic details and status."
+            onClose={onClose}
+            footer={
+                <div className="flex items-center justify-between gap-3">
+                    {error && <p className="text-sm text-red-600">{error}</p>}
+                    <div className="ml-auto flex gap-2">
+                        <Btn onClick={onClose} disabled={saving}>Cancel</Btn>
+                        <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                            {saving ? 'Saving…' : 'Save'}
+                        </Btn>
+                    </div>
+                </div>
+            }
+        >
+            <div className="space-y-4">
+                <Field label="Clinic Name" required>
+                    <TextInput {...f('name')} placeholder="Clinic Name" />
+                </Field>
+                <Field label="Slug">
+                    <TextInput {...f('slug')} placeholder="my-clinic" />
+                </Field>
+                <Field label="Legal Name">
+                    <TextInput {...f('legal_name')} placeholder="Registered legal name" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label="Owner Name">
+                        <TextInput {...f('owner_name')} placeholder="Owner" />
+                    </Field>
+                    <Field label="Owner Phone">
+                        <TextInput {...f('owner_phone')} placeholder="+91 XXXXXXXXXX" />
+                    </Field>
+                </div>
+                <Field label="Owner Email">
+                    <TextInput type="email" {...f('owner_email')} placeholder="owner@clinic.com" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label="Status">
+                        <SelectInput {...f('status')} options={[
+                            { value: 'active', label: 'Active' },
+                            { value: 'trial', label: 'Trial' },
+                            { value: 'suspended', label: 'Suspended' },
+                            { value: 'inactive', label: 'Inactive' },
+                        ]} />
+                    </Field>
+                    <Field label="Trial Ends At">
+                        <TextInput type="date" {...f('trial_ends_at')} />
+                    </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label="Primary Color" hint="Default: #2563EB">
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="color"
+                                value={form.primary_color || '#2563EB'}
+                                onChange={(e) => setForm((p) => ({ ...p, primary_color: e.target.value }))}
+                                className="h-9 w-12 cursor-pointer rounded-lg border border-gray-300 p-0.5"
+                            />
+                            <TextInput value={form.primary_color || ''} onChange={(v) => setForm((p) => ({ ...p, primary_color: v }))} placeholder="#2563EB" />
+                        </div>
+                    </Field>
+                    <Field label="Secondary Color" hint="Default: #64748B">
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="color"
+                                value={form.secondary_color || '#64748B'}
+                                onChange={(e) => setForm((p) => ({ ...p, secondary_color: e.target.value }))}
+                                className="h-9 w-12 cursor-pointer rounded-lg border border-gray-300 p-0.5"
+                            />
+                            <TextInput value={form.secondary_color || ''} onChange={(v) => setForm((p) => ({ ...p, secondary_color: v }))} placeholder="#64748B" />
+                        </div>
+                    </Field>
+                </div>
+            </div>
+        </Sheet>
+    );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
+export default function ClinicDetailPage() {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [clinic, setClinic] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [activeTab, setActiveTab] = useState('overview');
+    const [editSheet, setEditSheet] = useState(false);
+
+    const loadClinic = () => {
+        client.get(`/super-admin/clinics/${id}`)
+            .then((res) => setClinic(res.data?.data || null))
+            .catch((e) => setError(e?.response?.data?.message || 'Clinic not found'))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { loadClinic(); }, [id]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-20">
+                <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+                <p className="text-sm text-red-700">{error}</p>
+                <button onClick={() => navigate('/workflows/clinics')} className="mt-3 text-sm font-semibold text-blue-600 hover:underline">
+                    ← Back to Clinics
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-5">
+            {/* Breadcrumb + title */}
+            <div className="flex flex-wrap items-center gap-3">
+                <button
+                    onClick={() => navigate('/workflows/clinics')}
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                    <AppIcon name="chevron-right" className="h-3.5 w-3.5 rotate-180" />
+                    All Clinics
+                </button>
+                <AppIcon name="chevron-right" className="h-3.5 w-3.5 text-gray-300" />
+                <h1 className="text-xl font-bold text-gray-900">{clinic?.name || `Clinic #${id}`}</h1>
+                {clinic?.status && <StatusBadge status={clinic.status} />}
+            </div>
+
+            {/* Trial period banner */}
+            {clinic?.trial_ends_at && (() => {
+                const endsAt = new Date(clinic.trial_ends_at);
+                const daysLeft = Math.ceil((endsAt - new Date()) / (1000 * 60 * 60 * 24));
+                const expired = endsAt <= new Date();
+                const bg = expired ? 'bg-red-50 border-red-200' : daysLeft <= 3 ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100';
+                const text = expired ? 'text-red-700' : daysLeft <= 3 ? 'text-amber-700' : 'text-blue-700';
+                const label = expired
+                    ? 'Trial has expired.'
+                    : `Trial period · ${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining — ends ${formatDate(clinic.trial_ends_at)}`;
+                return (
+                    <div className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium ${bg} ${text}`}>
+                        <AppIcon name={expired || daysLeft <= 3 ? 'alert-triangle' : 'info'} className="h-4 w-4 flex-shrink-0" />
+                        {label}
+                    </div>
+                );
+            })()}
+
+            {/* Tab bar */}
+            <div className="flex overflow-x-auto rounded-xl border border-gray-200 bg-gray-100 p-1 gap-1">
+                {TABS.map((tab) => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                            activeTab === tab.key
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        <AppIcon name={tab.icon} className="h-4 w-4" />
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab content */}
+            <div>
+                {activeTab === 'overview' && (
+                    <OverviewTab clinic={clinic} clinicId={id} onEditClinic={() => setEditSheet(true)} />
+                )}
+                {activeTab === 'branches'  && <BranchesTab clinicId={id} />}
+                {activeTab === 'domains'   && <DomainsTab clinicId={id} />}
+                {activeTab === 'doctors'   && <DoctorsTab clinicId={id} />}
+                {activeTab === 'services'  && <ServicesTab clinicId={id} />}
+                {activeTab === 'staff'     && <StaffTab clinicId={id} />}
+                {activeTab === 'settings'  && <SettingsTab clinicId={id} />}
+            </div>
+
+            {/* Edit clinic sheet (from Overview tab) */}
+            <EditClinicSheet
+                open={editSheet}
+                clinic={clinic}
+                onClose={() => setEditSheet(false)}
+                onSaved={loadClinic}
+            />
+        </div>
+    );
+}

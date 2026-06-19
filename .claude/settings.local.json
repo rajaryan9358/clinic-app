@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --input-type=module)",
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5173/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5173/resources/js/admin/main.jsx)",
+      "Bash(kill 68604 68571)",
+      "Bash(php -l app/Models/FollowupTask.php)",
+      "Bash(php -l app/Http/Controllers/Api/Clinic/FollowupTaskController.php)",
+      "Bash(php -l app/Http/Controllers/Api/SuperAdmin/FollowupTaskController.php)",
+      "Bash(php -l app/Http/Controllers/Api/Clinic/AppointmentController.php)",
+      "Bash(php -l app/Http/Controllers/Api/SuperAdmin/AppointmentController.php)",
+      "Bash(php artisan:*)",
+      "Bash(php -r \"require 'vendor/autoload.php'; new \\\\App\\\\Http\\\\Controllers\\\\Api\\\\Clinic\\\\PatientProfileController\\(\\);\")",
+      "Bash(php -l app/Services/PatientGlobalSummaryService.php)",
+      "Bash(php -l app/Http/Controllers/Api/Clinic/PatientProfileController.php)",
+      "Bash(php -l app/Http/Controllers/Api/SuperAdmin/PatientProfileController.php)",
+      "Bash(grep -n \"Sidebar\\\\|NavItem\\\\|menu\" /Users/aryanraj/Documents/Projects/clinic/resources/js/admin/src/components/*.jsx)",
+      "Bash(grep -n \"navigationByRole\\\\|clinic_admin\" /Users/aryanraj/Documents/Projects/clinic/resources/js/admin/src/config/*.js)",
+      "Bash(grep -n \"context\\\\|clinic_name\\\\|useScope\\\\|ScopeContext\" /Users/aryanraj/Documents/Projects/clinic/resources/js/admin/src/context/*.jsx)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Services/ClinicCreationService.php)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Http/Controllers/Api/Clinic/ClinicProfileController.php)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Console/Commands/ExpireTrialClinics.php)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Models/Clinic.php)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Http/Requests/UpdateClinicRequest.php)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Http/Controllers/Api/Clinic/MeController.php)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Http/Controllers/Api/Clinic/DoctorProfileController.php)",
+      "Bash(php -l /Users/aryanraj/Documents/Projects/clinic/app/Http/Controllers/Api/SuperAdmin/DoctorProfileController.php)",
+      "Bash(xxd)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --version)",
+      "Bash(node_modules/.bin/eslint --version)"
+    ]
+  }
+}

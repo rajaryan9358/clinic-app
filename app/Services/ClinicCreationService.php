@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Branch;
+use App\Models\BranchSetting;
+use App\Models\Clinic;
+use App\Models\ClinicSetting;
+use App\Models\Domain;
+use App\Models\SystemSetting;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+
+class ClinicCreationService
+{
+    public function __construct(private readonly AuditLogService $auditLogService) {}
+
+    public function create(array $data, ?int $actorUserId = null): Clinic
+    {
+        return DB::transaction(function () use ($data, $actorUserId) {
+            $clinicData = collect($data)->except(['main_branch', 'clinic_admin', 'domain'])->all();
+
+            $trialEndsAt = null;
+            $trialEnabled = SystemSetting::query()->where('key', 'trial_enabled')->first();
+            if (! $trialEnabled || $trialEnabled->value !== '0') {
+                $trialDaysSetting = SystemSetting::query()->where('key', 'trial_days')->first();
+                $trialDays = $trialDaysSetting ? (int) $trialDaysSetting->value : 14;
+                $trialEndsAt = now()->addDays($trialDays);
+            }
+
+            $clinic = Clinic::create([
+                ...$clinicData,
+                'uuid' => (string) Str::uuid(),
+                'trial_ends_at' => $trialEndsAt,
+            ]);
+
+            $mainBranch = null;
+            if (! empty($data['main_branch'])) {
+                $mainBranch = Branch::create([
+                    ...$data['main_branch'],
+                    'clinic_id' => $clinic->id,
+                    'uuid' => (string) Str::uuid(),
+                    'is_main_branch' => true,
+                    'status' => $data['main_branch']['status'] ?? 'active',
+                ]);
+            }
+
+            if (! empty($data['clinic_admin'])) {
+                $admin = User::create([
+                    'clinic_id' => $clinic->id,
+                    'uuid' => (string) Str::uuid(),
+                    'full_name' => $data['clinic_admin']['full_name'],
+                    'email' => $data['clinic_admin']['email'] ?? null,
+                    'phone' => $data['clinic_admin']['phone'] ?? null,
+                    'password' => Hash::make($data['clinic_admin']['password']),
+                    'role' => 'clinic_admin',
+                    'status' => 'active',
+                    'login_type' => 'password',
+                ]);
+
+                $admin->assignRole('clinic_admin');
+            }
+
+            ClinicSetting::firstOrCreate(['clinic_id' => $clinic->id], ['clinic_id' => $clinic->id]);
+
+            if ($mainBranch) {
+                BranchSetting::firstOrCreate(
+                    ['branch_id' => $mainBranch->id],
+                    ['clinic_id' => $clinic->id, 'branch_id' => $mainBranch->id]
+                );
+            }
+
+            if (! empty($data['domain'])) {
+                Domain::create([
+                    ...$data['domain'],
+                    'clinic_id' => $clinic->id,
+                    'branch_id' => $mainBranch?->id,
+                ]);
+            }
+
+            $this->auditLogService->log(
+                module: 'clinics',
+                entityType: Clinic::class,
+                entityId: $clinic->id,
+                action: 'create',
+                clinicId: $clinic->id,
+                userId: $actorUserId,
+                newValues: $clinic->toArray(),
+            );
+
+            return $clinic;
+        });
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo -e \"\\\\nSUPER_ADMIN_EMAIL=admin@gmail.com\\\\nSUPER_ADMIN_PASSWORD=Qwerty1@\" >> /Users/aryanraj/Documents/Projects/clinic/.env)"
+    ],
+    "additionalDirectories": [
+      "/Users/aryanraj/Documents/Projects/clinic"
+    ]
+  }
+}
