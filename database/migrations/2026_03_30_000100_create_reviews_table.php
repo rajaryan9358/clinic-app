@@ -11,7 +11,6 @@ return new class extends Migration
         Schema::create('reviews', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->constrained('branches')->cascadeOnDelete();
 
             $table->string('reviewer_name')->nullable();
             $table->text('message');
@@ -28,7 +27,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index(['clinic_id', 'branch_id', 'review_date']);
+            $table->index(['clinic_id', 'review_date']);
             $table->index(['clinic_id', 'sentiment']);
         });
     }

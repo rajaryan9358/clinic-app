@@ -12,7 +12,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
             $table->uuid('uuid')->unique();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->string('first_name');
             $table->string('last_name')->nullable();
             $table->string('full_name');
@@ -45,7 +44,6 @@ return new class extends Migration
 
             $table->index(['clinic_id', 'phone']);
             $table->index(['clinic_id', 'status_tag']);
-            $table->index(['clinic_id', 'branch_id']);
         });
 
         Schema::create('patient_medical_profiles', function (Blueprint $table) {
@@ -67,7 +65,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('doctor_id')->nullable()->constrained('doctors')->nullOnDelete();
             $table->foreignId('created_by_user_id')->constrained('users')->cascadeOnDelete();
             $table->enum('note_type', ['general', 'doctor_note', 'reception_note', 'followup_note']);

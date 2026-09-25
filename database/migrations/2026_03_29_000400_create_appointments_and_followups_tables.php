@@ -23,7 +23,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
             $table->uuid('uuid')->unique();
-            $table->foreignId('branch_id')->constrained('branches')->cascadeOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->foreignId('doctor_id')->constrained('doctors')->cascadeOnDelete();
             $table->foreignId('service_id')->nullable()->constrained('services')->nullOnDelete();
@@ -55,9 +54,8 @@ return new class extends Migration
                 ->on('appointments')
                 ->nullOnDelete();
 
-            $table->index(['clinic_id', 'appointment_date']);
+            $table->index(['clinic_id', 'appointment_date'], 'appt_clinic_date_idx');
             $table->index(['clinic_id', 'doctor_id', 'appointment_date'], 'appt_clinic_doc_date_idx');
-            $table->index(['clinic_id', 'branch_id', 'appointment_date'], 'appt_clinic_branch_date_idx');
             $table->index(['clinic_id', 'status']);
         });
 
@@ -90,7 +88,6 @@ return new class extends Migration
         Schema::create('followup_tasks', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
             $table->foreignId('assigned_to_user_id')->nullable()->constrained('users')->nullOnDelete();

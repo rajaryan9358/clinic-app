@@ -11,7 +11,6 @@ return new class extends Migration
         Schema::create('whatsapp_accounts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->string('business_name')->nullable();
             $table->string('phone_number', 20);
             $table->enum('provider', ['meta', 'twilio', 'gupshup', 'interakt', 'other']);
@@ -28,7 +27,6 @@ return new class extends Migration
         Schema::create('whatsapp_templates', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('whatsapp_account_id')->nullable()->constrained('whatsapp_accounts')->nullOnDelete();
             $table->string('name');
             $table->string('template_key')->nullable();
@@ -47,7 +45,6 @@ return new class extends Migration
         Schema::create('whatsapp_conversations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('patient_id')->nullable()->constrained('patients')->nullOnDelete();
             $table->foreignId('whatsapp_account_id')->nullable()->constrained('whatsapp_accounts')->nullOnDelete();
             $table->string('customer_phone', 20);
@@ -67,7 +64,6 @@ return new class extends Migration
         Schema::create('whatsapp_messages', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('conversation_id')->constrained('whatsapp_conversations')->cascadeOnDelete();
             $table->foreignId('patient_id')->nullable()->constrained('patients')->nullOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
@@ -91,7 +87,6 @@ return new class extends Migration
         Schema::create('whatsapp_flow_sessions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('conversation_id')->constrained('whatsapp_conversations')->cascadeOnDelete();
             $table->foreignId('patient_id')->nullable()->constrained('patients')->nullOnDelete();
             $table->enum('flow_type', ['appointment_booking', 'confirmation', 'reschedule', 'cancellation', 'review_request', 'support']);

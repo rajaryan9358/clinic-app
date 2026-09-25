@@ -35,23 +35,10 @@ return new class extends Migration
             $table->index(['clinic_id', 'specialization']);
         });
 
-        Schema::create('doctor_branch_map', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('doctor_id')->constrained('doctors')->cascadeOnDelete();
-            $table->foreignId('branch_id')->constrained('branches')->cascadeOnDelete();
-            $table->boolean('is_primary')->default(false);
-            $table->timestamp('created_at')->useCurrent();
-
-            $table->unique(['doctor_id', 'branch_id']);
-            $table->index(['clinic_id', 'doctor_id']);
-        });
-
         Schema::create('doctor_schedules', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
             $table->foreignId('doctor_id')->constrained('doctors')->cascadeOnDelete();
-            $table->foreignId('branch_id')->constrained('branches')->cascadeOnDelete();
             $table->unsignedTinyInteger('day_of_week');
             $table->time('start_time');
             $table->time('end_time');
@@ -62,14 +49,12 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['clinic_id', 'doctor_id', 'day_of_week'], 'ds_clinic_doc_day_idx');
-            $table->index(['clinic_id', 'branch_id'], 'ds_clinic_branch_idx');
         });
 
         Schema::create('doctor_schedule_exceptions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
             $table->foreignId('doctor_id')->constrained('doctors')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->date('exception_date');
             $table->enum('type', ['leave', 'blocked', 'special_hours']);
             $table->time('start_time')->nullable();
@@ -113,7 +98,6 @@ return new class extends Migration
         Schema::dropIfExists('services');
         Schema::dropIfExists('doctor_schedule_exceptions');
         Schema::dropIfExists('doctor_schedules');
-        Schema::dropIfExists('doctor_branch_map');
         Schema::dropIfExists('doctors');
     }
 };

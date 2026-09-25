@@ -19,28 +19,19 @@ return new class extends Migration
             $table->unsignedInteger('reschedule_cutoff_hours')->default(2);
             $table->unsignedInteger('cancel_cutoff_hours')->default(2);
             $table->unsignedInteger('default_slot_duration_minutes')->default(15);
+            $table->boolean('walkin_enabled')->default(true);
+            $table->boolean('token_system_enabled')->default(false);
+            $table->unsignedInteger('max_advance_booking_days')->default(30);
+            $table->unsignedInteger('min_booking_notice_minutes')->default(30);
             $table->text('booking_notice_text')->nullable();
             $table->text('terms_text')->nullable();
             $table->text('privacy_policy_text')->nullable();
             $table->timestamps();
         });
 
-        Schema::create('branch_settings', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->unique()->constrained('branches')->cascadeOnDelete();
-            $table->boolean('booking_enabled')->default(true);
-            $table->boolean('walkin_enabled')->default(true);
-            $table->boolean('token_system_enabled')->default(false);
-            $table->unsignedInteger('max_advance_booking_days')->default(30);
-            $table->unsignedInteger('min_booking_notice_minutes')->default(30);
-            $table->timestamps();
-        });
-
         Schema::create('invoices', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
             $table->string('invoice_number')->unique();
@@ -80,7 +71,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('clinic_id')->nullable()->constrained('clinics')->nullOnDelete();
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->string('module');
             $table->string('entity_type');
             $table->unsignedBigInteger('entity_id')->nullable();
@@ -112,7 +102,6 @@ return new class extends Migration
         Schema::create('file_uploads', function (Blueprint $table) {
             $table->id();
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('patient_id')->nullable()->constrained('patients')->nullOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
             $table->foreignId('uploaded_by_user_id')->nullable()->constrained('users')->nullOnDelete();
@@ -135,7 +124,6 @@ return new class extends Migration
         Schema::dropIfExists('audit_logs');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('invoices');
-        Schema::dropIfExists('branch_settings');
         Schema::dropIfExists('clinic_settings');
     }
 };
