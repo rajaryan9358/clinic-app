@@ -166,6 +166,50 @@ class RoleAssignmentTest extends TestCase
             ->assertJsonFragment(['message' => "You can't change your own access."]);
     }
 
+    public function test_staff_editor_can_resave_own_record_with_unchanged_doctor_ids(): void
+    {
+        $role = $this->customRole('staff', ['limit_to_assigned_doctors' => true]);
+        $role->syncPermissions(['staff.view', 'staff.edit']);
+        $editor = $this->makeUser($role->name);
+
+        $doctorA = \App\Models\Doctor::create(['clinic_id' => $this->clinic->id, 'full_name' => 'Dr A']);
+        $doctorB = \App\Models\Doctor::create(['clinic_id' => $this->clinic->id, 'full_name' => 'Dr B']);
+        $editor->assignedDoctors()->attach($doctorA->id, ['clinic_id' => $this->clinic->id]);
+        $editor->assignedDoctors()->attach($doctorB->id, ['clinic_id' => $this->clinic->id]);
+
+        Sanctum::actingAs($editor);
+
+        // Same assignment, submitted in a different order, alongside an unrelated field change.
+        $this->putJson("/api/clinic/users/{$editor->id}", [
+            'full_name' => 'Renamed Self',
+            'doctor_ids' => [$doctorB->id, $doctorA->id],
+        ])->assertOk();
+
+        $this->assertSame('Renamed Self', $editor->refresh()->full_name);
+        $this->assertEqualsCanonicalizing(
+            [$doctorA->id, $doctorB->id],
+            $editor->assignedDoctors->pluck('id')->all()
+        );
+    }
+
+    public function test_staff_editor_cannot_add_a_doctor_to_own_assignment(): void
+    {
+        $role = $this->customRole('staff', ['limit_to_assigned_doctors' => true]);
+        $role->syncPermissions(['staff.view', 'staff.edit']);
+        $editor = $this->makeUser($role->name);
+
+        $doctorA = \App\Models\Doctor::create(['clinic_id' => $this->clinic->id, 'full_name' => 'Dr A']);
+        $doctorB = \App\Models\Doctor::create(['clinic_id' => $this->clinic->id, 'full_name' => 'Dr B']);
+        $editor->assignedDoctors()->attach($doctorA->id, ['clinic_id' => $this->clinic->id]);
+
+        Sanctum::actingAs($editor);
+
+        $this->putJson("/api/clinic/users/{$editor->id}", [
+            'doctor_ids' => [$doctorA->id, $doctorB->id],
+        ])->assertStatus(403)
+            ->assertJsonFragment(['message' => "You can't change your own access."]);
+    }
+
     public function test_restore_respects_admin_protection_and_manageable_roles(): void
     {
         $editor = $this->staffEditor(['staff.view', 'staff.create', 'staff.edit', 'staff.delete']);

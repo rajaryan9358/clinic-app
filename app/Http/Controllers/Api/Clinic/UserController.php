@@ -49,9 +49,11 @@ class UserController extends BaseClinicCrudController
     }
 
     /**
-     * A non-admin editor may not change their own `role` or `doctor_ids` — the latter
-     * would let a role with limit_to_assigned_doctors widen its own data scope.
-     * clinic_admin/super_admin actors are unrestricted.
+     * A non-admin editor may not change their own `role`, nor widen the set of doctors
+     * they're assigned to (a role with limit_to_assigned_doctors would otherwise be able
+     * to grant itself a broader data scope). Resubmitting the same doctor_ids (e.g. a
+     * full-form save that also changes full_name) is fine — only a genuine set change
+     * is rejected. clinic_admin/super_admin actors are unrestricted.
      */
     private function assertNotWideningOwnAccess(User $actor, User $target, array $data): void
     {
@@ -64,11 +66,27 @@ class UserController extends BaseClinicCrudController
         }
 
         $changingRole = array_key_exists('role', $data) && $data['role'] !== $target->role;
-        $changingDoctorIds = array_key_exists('doctor_ids', $data);
+
+        $changingDoctorIds = false;
+        if (array_key_exists('doctor_ids', $data)) {
+            $submitted = $this->normalizeDoctorIds(is_array($data['doctor_ids']) ? $data['doctor_ids'] : []);
+            $current = $this->normalizeDoctorIds($target->assignedDoctors->pluck('id')->all());
+            $changingDoctorIds = $submitted !== $current;
+        }
 
         if ($changingRole || $changingDoctorIds) {
             abort(403, "You can't change your own access.");
         }
+    }
+
+    /** @param array<int, int|string> $ids */
+    private function normalizeDoctorIds(array $ids): array
+    {
+        $ids = array_map('intval', $ids);
+        $ids = array_values(array_unique($ids));
+        sort($ids);
+
+        return $ids;
     }
 
     protected function baseQuery(Request $request): Builder
