@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Doctor;
 use App\Models\User;
+use App\Services\Billing\PlanLimits;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -12,6 +13,8 @@ class DoctorManagementService
 {
     public function create(array $data): Doctor
     {
+        app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'doctors');
+
         return DB::transaction(function () use ($data) {
             $doctorUserId = null;
 

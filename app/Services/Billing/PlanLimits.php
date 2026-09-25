@@ -4,11 +4,29 @@ namespace App\Services\Billing;
 
 use App\Models\Appointment;
 use App\Models\Clinic;
+use App\Models\ClinicSubscription;
 use App\Models\Doctor;
 use App\Models\User;
+use Illuminate\Validation\ValidationException;
 
 class PlanLimits
 {
+    public function assertCanAdd(int $clinicId, string $resource): void
+    {
+        $sub = ClinicSubscription::query()->with('plan')->where('clinic_id', $clinicId)->first();
+        $limit = $sub?->plan?->limitFor($resource);
+        if ($limit === null) {
+            return;
+        }
+
+        if ($this->count($clinicId, $resource) >= $limit) {
+            $label = ['doctors' => 'doctors', 'staff' => 'staff users', 'appointments' => 'appointments per month'][$resource];
+            throw ValidationException::withMessages([
+                'plan' => "Your {$sub->plan->name} plan allows {$limit} {$label}. Upgrade your plan to add more.",
+            ]);
+        }
+    }
+
     public function count(int $clinicId, string $resource): int
     {
         return match ($resource) {

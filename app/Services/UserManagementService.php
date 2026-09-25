@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Doctor;
 use App\Models\User;
+use App\Services\Billing\PlanLimits;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -12,6 +13,10 @@ class UserManagementService
 {
     public function create(array $data): User
     {
+        if (! empty($data['clinic_id']) && ($data['role'] ?? null) !== 'doctor') {
+            app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'staff');
+        }
+
         return DB::transaction(function () use ($data) {
             $user = User::create([
                 'clinic_id' => $data['clinic_id'] ?? null,

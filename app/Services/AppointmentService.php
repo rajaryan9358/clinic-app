@@ -10,6 +10,7 @@ use App\Models\Doctor;
 use App\Models\DoctorSchedule;
 use App\Models\DoctorScheduleException;
 use App\Models\Patient;
+use App\Services\Billing\PlanLimits;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -272,6 +273,8 @@ class AppointmentService
 
     public function create(array $data): Appointment
     {
+        app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'appointments');
+
         return DB::transaction(function () use ($data) {
             $patientId = $data['patient_id'] ?? null;
 
