@@ -220,4 +220,11 @@ class SuperAdminSubscriptionTest extends TestCase
         $this->assertContains(['subscriptionId' => 'sub_link', 'atCycleEnd' => true], $this->gw->cancelled);
         $this->assertContains(['subscriptionId' => 'sub_pend', 'atCycleEnd' => false], $this->gw->cancelled);
     }
+
+    public function test_extend_grace_never_ends_a_paid_period_early(): void
+    {
+        $this->linked(['status' => 'cancelled', 'cancelled_at' => now(), 'current_period_end' => now()->addDays(20)]);
+        $this->postJson($this->base().'/extend-grace', ['days' => 2])->assertOk();
+        $this->assertEqualsWithDelta(now()->addDays(22)->timestamp, ClinicSubscription::first()->grace_ends_at->timestamp, 5);
+    }
 }

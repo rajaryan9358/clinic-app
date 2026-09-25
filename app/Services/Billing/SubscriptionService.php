@@ -121,7 +121,10 @@ class SubscriptionService
 
     public function extendGrace(ClinicSubscription $sub, int $days): ClinicSubscription
     {
-        $base = $sub->grace_ends_at && $sub->grace_ends_at->isFuture() ? $sub->grace_ends_at->copy() : now();
+        // Grace extends from the latest of now, the current grace end and any still-paid period end,
+        // so extending grace never shortens access a clinic has already paid for.
+        $base = collect([now(), $sub->grace_ends_at, $sub->current_period_end])
+            ->filter()->map(fn ($d) => $d->copy())->sortDesc()->first();
         $status = in_array($sub->status, ['expired', 'trialing', 'cancelled'], true) ? 'past_due' : $sub->status;
         $attrs = ['status' => $status, 'grace_ends_at' => $base->addDays($days)];
         $terminatedLink = null;
@@ -207,7 +210,9 @@ class SubscriptionService
             return $sub->refresh();
         }
 
-        if ($sub->status === 'trialing' && $sub->trial_ends_at && $sub->trial_ends_at->isFuture()) {
+        // While a trial end is still ahead, Razorpay only took a refundable authorisation (the subscription
+        // starts at trial end). Autopay is now set up, but access is unchanged until the first real charge.
+        if ($sub->trial_ends_at && $sub->trial_ends_at->isFuture()) {
             return $sub->refresh();
         }
 

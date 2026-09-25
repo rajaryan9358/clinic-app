@@ -419,4 +419,21 @@ class ClinicCheckoutTest extends TestCase
 
         $this->assertSame($end, $this->sub->refresh()->current_period_end->timestamp);
     }
+
+    public function test_authorisation_only_verify_with_future_trial_grants_no_month(): void
+    {
+        // Super admin moved a trialing clinic into grace (past_due) while its trial end is still ahead.
+        $this->sub->update(['status' => 'past_due', 'trial_ends_at' => now()->addDays(10), 'grace_ends_at' => now()->addDays(2),
+            'pending_razorpay_subscription_id' => 'sub_future']);
+        $this->actingAsRole('clinic_admin');
+
+        // Razorpay only takes a refundable authorisation for a future-start subscription.
+        $this->postJson('/api/clinic/subscription/verify', ['razorpay_payment_id' => 'pay_auth', 'razorpay_subscription_id' => 'sub_future', 'razorpay_signature' => 'valid'])
+            ->assertOk();
+
+        $this->sub->refresh();
+        $this->assertSame('past_due', $this->sub->status);
+        $this->assertNull($this->sub->current_period_end);
+        $this->assertSame('sub_future', $this->sub->razorpay_subscription_id); // autopay is set up; the first charge activates
+    }
 }
