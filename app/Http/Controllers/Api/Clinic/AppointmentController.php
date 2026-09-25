@@ -15,6 +15,7 @@ use App\Models\WhatsappMessage;
 use App\Services\AppointmentService;
 use App\Services\AppointmentPrescriptionAiService;
 use App\Services\AppointmentSummaryAiService;
+use App\Support\PermissionCatalogue;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -130,8 +131,12 @@ class AppointmentController extends BaseClinicCrudController
 
     public function lifecycle(StatusChangeRequest $request, int $id)
     {
-        $appointment = $this->findModel($id);
         $status = AppointmentStatus::from($request->validated('status'));
+        $needed = $status === AppointmentStatus::CANCELLED ? 'appointments.cancel' : 'appointments.check_in';
+        if (! $request->user()->can($needed)) {
+            return response()->json(['success' => false, 'message' => "You don't have permission to ".PermissionCatalogue::label($needed).'.'], 403);
+        }
+        $appointment = $this->findModel($id);
         $force = $request->validated('force') ?? false;
         $forceAllowed = (bool) $force && $request->user()?->roleKind() === 'clinic_admin';
         $updated = $this->appointmentService->changeStatus(

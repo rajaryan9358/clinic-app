@@ -17,9 +17,6 @@ class DoctorController extends BaseClinicCrudController
 
     public function store(Request $request)
     {
-        $role = (string) ($request->user()?->role ?? '');
-        abort_if($role !== 'clinic_admin', 403, 'Not allowed.');
-
         $request->merge([
             'clinic_id' => $request->attributes->get('clinic_id'),
         ]);

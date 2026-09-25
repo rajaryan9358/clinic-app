@@ -27,8 +27,6 @@ class ClinicSettingController extends BaseClinicCrudController
 
     public function store(Request $request)
     {
-        $this->authorizeWrite($request);
-
         $clinicId = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
         $clinicId = (int) $clinicId;
 
@@ -49,8 +47,6 @@ class ClinicSettingController extends BaseClinicCrudController
 
     public function update(Request $request, int $id)
     {
-        $this->authorizeWrite($request);
-
         $model = $this->findModel($id);
         $validated = $request->validate(ClinicSetting::validationRules());
         $model->update($validated);
@@ -61,11 +57,5 @@ class ClinicSettingController extends BaseClinicCrudController
     public function destroy(int $id)
     {
         return $this->error('Clinic settings cannot be deleted directly', null, 403);
-    }
-
-    private function authorizeWrite(Request $request): void
-    {
-        $role = (string) ($request->user()?->role ?? '');
-        abort_if($role !== 'clinic_admin', 403, 'Not allowed.');
     }
 }

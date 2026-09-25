@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'clinic.subscription' => \App\Http\Middleware\EnsureClinicSubscription::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'perm' => \App\Http\Middleware\EnsurePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

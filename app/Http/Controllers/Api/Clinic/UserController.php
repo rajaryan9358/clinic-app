@@ -17,31 +17,22 @@ class UserController extends BaseClinicCrudController
 
     public function __construct(private readonly UserManagementService $userManagementService) {}
 
-    private function assertCanManageUsers(Request $request): void
+    /**
+     * Roles a staff manager may list/create/edit. The route's staff.* permission
+     * decides who may manage staff at all; Task 4 replaces this list with the
+     * clinic's assignable roles.
+     */
+    private function allowedTargetRoles(): array
     {
-        $role = (string) ($request->user()?->role ?? '');
-        abort_if(in_array($role, ['receptionist', 'assistant', 'doctor'], true), 403, 'Not allowed.');
-    }
-
-    private function allowedTargetRoles(string $actorRole): array
-    {
-        return match ($actorRole) {
-            'clinic_admin' => ['receptionist', 'assistant'],
-            default => [],
-        };
+        return ['receptionist', 'assistant'];
     }
 
     protected function baseQuery(Request $request): Builder
     {
         $query = parent::baseQuery($request);
 
-        $this->assertCanManageUsers($request);
-
-        $actorRole = (string) ($request->user()?->role ?? '');
-        $allowedRoles = $this->allowedTargetRoles($actorRole);
-        if (count($allowedRoles) > 0) {
-            $query->whereIn('role', $allowedRoles);
-        }
+        $allowedRoles = $this->allowedTargetRoles();
+        $query->whereIn('role', $allowedRoles);
 
         return $query;
     }
@@ -51,30 +42,15 @@ class UserController extends BaseClinicCrudController
         /** @var \App\Models\User $user */
         $user = parent::findModel($id);
 
-        $request = request();
-        $this->assertCanManageUsers($request);
-
-        $actorRole = (string) ($request->user()?->role ?? '');
-        $allowedManageRoles = $this->allowedTargetRoles($actorRole);
+        $allowedManageRoles = $this->allowedTargetRoles();
         abort_if(! in_array((string) $user->role, $allowedManageRoles, true), 403, 'Not allowed.');
 
         return $user;
     }
 
-    public function index(Request $request)
-    {
-        $this->assertCanManageUsers($request);
-
-        return parent::index($request);
-    }
-
     public function store(Request $request)
     {
-            $this->assertCanManageUsers($request);
-
-            $actorRole = (string) ($request->user()?->role ?? '');
-            $allowedRoles = $this->allowedTargetRoles($actorRole);
-            abort_if(count($allowedRoles) === 0, 403, 'Not allowed.');
+            $allowedRoles = $this->allowedTargetRoles();
 
             $data = validator($request->all(), [
                 'full_name' => ['required', 'string', 'max:255'],
@@ -95,8 +71,6 @@ class UserController extends BaseClinicCrudController
 
     public function show(int $id)
     {
-            $this->assertCanManageUsers(request());
-
         /** @var \App\Models\User $user */
         $user = $this->findModel($id);
         $user->loadMissing('assignedDoctors:id');
@@ -109,13 +83,10 @@ class UserController extends BaseClinicCrudController
 
     public function update(Request $request, int $id)
     {
-            $this->assertCanManageUsers($request);
-
         /** @var \App\Models\User $user */
         $user = $this->findModel($id);
 
-            $actorRole = (string) ($request->user()?->role ?? '');
-            $allowedManageRoles = $this->allowedTargetRoles($actorRole);
+            $allowedManageRoles = $this->allowedTargetRoles();
             abort_if(! in_array((string) $user->role, $allowedManageRoles, true), 403, 'Not allowed.');
 
             $data = validator($request->all(), [
@@ -139,10 +110,4 @@ class UserController extends BaseClinicCrudController
         return $this->success('Record updated successfully', $data);
     }
 
-        public function destroy(int $id)
-        {
-            $this->assertCanManageUsers(request());
-
-            return parent::destroy($id);
-        }
 }

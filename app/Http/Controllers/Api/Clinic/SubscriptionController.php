@@ -60,7 +60,6 @@ class SubscriptionController
 
     public function checkout(Request $request)
     {
-        abort_unless($request->user()->role === 'clinic_admin', 403, 'Only the clinic admin can manage the subscription.');
         $data = $request->validate(['plan_id' => ['required', 'integer'], 'billing_cycle' => ['required', 'in:monthly,yearly']]);
         $clinic = $this->clinic($request);
         $plan = Plan::query()->find($data['plan_id']);
@@ -78,7 +77,6 @@ class SubscriptionController
 
     public function verify(Request $request)
     {
-        abort_unless($request->user()->role === 'clinic_admin', 403);
         $data = $request->validate([
             'razorpay_payment_id' => ['required', 'string'],
             'razorpay_subscription_id' => ['required', 'string'],

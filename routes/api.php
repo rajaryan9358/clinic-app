@@ -60,17 +60,18 @@ use App\Http\Controllers\Api\UploadController;
 use Illuminate\Support\Facades\Route;
 
 if (! function_exists('registerCrudRoutes')) {
-    function registerCrudRoutes(string $prefix, string $controller): void {
-        Route::prefix($prefix)->group(function () use ($controller) {
-            Route::get('/', [$controller, 'index']);
-            Route::post('/', [$controller, 'store']);
-            Route::get('/{id}', [$controller, 'show']);
-            Route::put('/{id}', [$controller, 'update']);
-            Route::delete('/{id}', [$controller, 'destroy']);
-            Route::post('/{id}/restore', [$controller, 'restore']);
-            Route::post('/{id}/status', [$controller, 'changeStatus']);
-            Route::post('/{id}/block', [$controller, 'block']);
-            Route::post('/{id}/unblock', [$controller, 'unblock']);
+    function registerCrudRoutes(string $prefix, string $controller, ?string $module = null): void {
+        $p = fn (string $action) => $module ? ["perm:{$module}.{$action}"] : [];
+        Route::prefix($prefix)->group(function () use ($controller, $p) {
+            Route::get('/', [$controller, 'index'])->middleware($p('view'));
+            Route::post('/', [$controller, 'store'])->middleware($p('create'));
+            Route::get('/{id}', [$controller, 'show'])->middleware($p('view'));
+            Route::put('/{id}', [$controller, 'update'])->middleware($p('edit'));
+            Route::delete('/{id}', [$controller, 'destroy'])->middleware($p('delete'));
+            Route::post('/{id}/restore', [$controller, 'restore'])->middleware($p('edit'));
+            Route::post('/{id}/status', [$controller, 'changeStatus'])->middleware($p('edit'));
+            Route::post('/{id}/block', [$controller, 'block'])->middleware($p('edit'));
+            Route::post('/{id}/unblock', [$controller, 'unblock'])->middleware($p('edit'));
         });
     }
 }
@@ -171,75 +172,84 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
 Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.subscription'])->prefix('clinic')->group(function () {
     Route::get('me/context', [ClinicMeController::class, 'context']);
 
-    Route::get('subscription', [ClinicSubscriptionController::class, 'show']);
-    Route::post('subscription/checkout', [ClinicSubscriptionController::class, 'checkout']);
-    Route::post('subscription/verify', [ClinicSubscriptionController::class, 'verify']);
+    Route::get('subscription', [ClinicSubscriptionController::class, 'show'])->middleware('perm:subscription.view');
+    Route::post('subscription/checkout', [ClinicSubscriptionController::class, 'checkout'])->middleware('perm:subscription.manage');
+    Route::post('subscription/verify', [ClinicSubscriptionController::class, 'verify'])->middleware('perm:subscription.manage');
 
     Route::get('dashboard/summary', [ClinicDashboardController::class, 'summary']);
     Route::get('dashboard/clinic-admin', [ClinicDashboardController::class, 'clinicAdmin']);
     Route::get('dashboard/receptionist', [ClinicDashboardController::class, 'receptionist']);
     Route::get('dashboard/assistant', [ClinicDashboardController::class, 'assistant']);
 
-    Route::get('reports/appointments.pdf', [ClinicReportController::class, 'appointmentsPdf']);
-    Route::get('reports/patients.pdf', [ClinicReportController::class, 'patientsPdf']);
-    Route::get('reports/doctors.pdf', [ClinicReportController::class, 'doctorsPdf']);
+    Route::get('reports/appointments.pdf', [ClinicReportController::class, 'appointmentsPdf'])->middleware('perm:reports.view');
+    Route::get('reports/patients.pdf', [ClinicReportController::class, 'patientsPdf'])->middleware('perm:reports.view');
+    Route::get('reports/doctors.pdf', [ClinicReportController::class, 'doctorsPdf'])->middleware('perm:reports.view');
 
-    registerCrudRoutes('domains', ClinicDomainController::class);
-    registerCrudRoutes('users', ClinicUserController::class);
-    registerCrudRoutes('doctors', ClinicDoctorController::class);
-    registerCrudRoutes('services', ClinicServiceController::class);
-    registerCrudRoutes('patients', ClinicPatientController::class);
-    Route::get('appointments/availability', [ClinicAppointmentController::class, 'availability']);
-    Route::post('appointments/generate-tokens', [ClinicAppointmentController::class, 'generateTokens']);
-    registerCrudRoutes('appointments', ClinicAppointmentController::class);
-    registerCrudRoutes('followups', ClinicFollowupTaskController::class);
-    registerCrudRoutes('reminders', ClinicReminderLogController::class);
-    registerCrudRoutes('whatsapp/accounts', ClinicWhatsappAccountController::class);
-    registerCrudRoutes('whatsapp/templates', ClinicWhatsappTemplateController::class);
-    registerCrudRoutes('whatsapp/conversations', ClinicWhatsappConversationController::class);
-    registerCrudRoutes('whatsapp/messages', ClinicWhatsappMessageController::class);
-    registerCrudRoutes('whatsapp/sessions', ClinicWhatsappFlowSessionController::class);
-    registerCrudRoutes('invoices', ClinicInvoiceController::class);
-    registerCrudRoutes('payments', ClinicPaymentController::class);
-    registerCrudRoutes('settings/clinic', ClinicClinicSettingController::class);
-    registerCrudRoutes('audit-logs', ClinicAuditLogController::class);
-    registerCrudRoutes('reviews', ClinicReviewController::class);
+    registerCrudRoutes('domains', ClinicDomainController::class, 'clinic_settings');
+    registerCrudRoutes('users', ClinicUserController::class, 'staff');
+    registerCrudRoutes('doctors', ClinicDoctorController::class, 'doctors');
+    registerCrudRoutes('services', ClinicServiceController::class, 'services');
+    registerCrudRoutes('patients', ClinicPatientController::class, 'patients');
+    Route::get('appointments/availability', [ClinicAppointmentController::class, 'availability'])->middleware('perm:appointments.view');
+    Route::post('appointments/generate-tokens', [ClinicAppointmentController::class, 'generateTokens'])->middleware('perm:appointments.edit');
+    registerCrudRoutes('appointments', ClinicAppointmentController::class, 'appointments');
+    registerCrudRoutes('followups', ClinicFollowupTaskController::class, 'followups');
+    registerCrudRoutes('reminders', ClinicReminderLogController::class, 'reminders');
+    registerCrudRoutes('whatsapp/accounts', ClinicWhatsappAccountController::class, 'whatsapp');
+    registerCrudRoutes('whatsapp/templates', ClinicWhatsappTemplateController::class, 'whatsapp');
+    registerCrudRoutes('whatsapp/conversations', ClinicWhatsappConversationController::class, 'whatsapp');
+    registerCrudRoutes('whatsapp/messages', ClinicWhatsappMessageController::class, 'whatsapp');
+    registerCrudRoutes('whatsapp/sessions', ClinicWhatsappFlowSessionController::class, 'whatsapp');
+    registerCrudRoutes('invoices', ClinicInvoiceController::class, 'billing');
+    registerCrudRoutes('payments', ClinicPaymentController::class, 'billing');
+    Route::prefix('settings/clinic')->group(function () {
+        // Clinic settings are a singleton per clinic: "create" counts as edit.
+        Route::get('/', [ClinicClinicSettingController::class, 'index'])->middleware('perm:clinic_settings.view');
+        Route::post('/', [ClinicClinicSettingController::class, 'store'])->middleware('perm:clinic_settings.edit');
+        Route::get('/{id}', [ClinicClinicSettingController::class, 'show'])->middleware('perm:clinic_settings.view');
+        Route::put('/{id}', [ClinicClinicSettingController::class, 'update'])->middleware('perm:clinic_settings.edit');
+        Route::delete('/{id}', [ClinicClinicSettingController::class, 'destroy'])->middleware('perm:clinic_settings.delete');
+        Route::post('/{id}/restore', [ClinicClinicSettingController::class, 'restore'])->middleware('perm:clinic_settings.edit');
+        Route::post('/{id}/status', [ClinicClinicSettingController::class, 'changeStatus'])->middleware('perm:clinic_settings.edit');
+        Route::post('/{id}/block', [ClinicClinicSettingController::class, 'block'])->middleware('perm:clinic_settings.edit');
+        Route::post('/{id}/unblock', [ClinicClinicSettingController::class, 'unblock'])->middleware('perm:clinic_settings.edit');
+    });
+    registerCrudRoutes('audit-logs', ClinicAuditLogController::class, 'audit_logs');
+    registerCrudRoutes('reviews', ClinicReviewController::class, 'reviews');
 
-    Route::post('appointments/{id}/lifecycle', [ClinicAppointmentController::class, 'lifecycle']);
-    Route::post('reviews/{id}/generate-reply', [ClinicReviewController::class, 'generateReply']);
-    Route::post('reviews/{id}/reply', [ClinicReviewController::class, 'saveReply']);
-    Route::post('appointments/{id}/reschedule', [ClinicAppointmentController::class, 'reschedule']);
-    Route::get('appointments/{id}/detail', [ClinicAppointmentController::class, 'detail']);
-    Route::get('appointments/{id}/prescription', [ClinicAppointmentController::class, 'prescription']);
-    Route::get('appointments/{id}/report.pdf', [ClinicAppointmentController::class, 'reportPdf']);
-    Route::get('appointments/{id}/prescription.pdf', [ClinicAppointmentController::class, 'prescriptionPdf']);
-    Route::post('appointments/{id}/prescription/voice', [ClinicAppointmentController::class, 'generatePrescriptionFromVoice']);
-    Route::get('appointments/{id}/summary', [ClinicAppointmentController::class, 'summary']);
-    Route::post('appointments/{id}/summary/voice', [ClinicAppointmentController::class, 'generateSummaryFromVoice']);
+    Route::post('appointments/{id}/lifecycle', [ClinicAppointmentController::class, 'lifecycle'])->middleware('perm:appointments.view');
+    Route::post('reviews/{id}/generate-reply', [ClinicReviewController::class, 'generateReply'])->middleware('perm:reviews.edit');
+    Route::post('reviews/{id}/reply', [ClinicReviewController::class, 'saveReply'])->middleware('perm:reviews.edit');
+    Route::post('appointments/{id}/reschedule', [ClinicAppointmentController::class, 'reschedule'])->middleware('perm:appointments.edit');
+    Route::get('appointments/{id}/detail', [ClinicAppointmentController::class, 'detail'])->middleware('perm:appointments.view');
+    Route::get('appointments/{id}/prescription', [ClinicAppointmentController::class, 'prescription'])->middleware('perm:appointments.view');
+    Route::get('appointments/{id}/report.pdf', [ClinicAppointmentController::class, 'reportPdf'])->middleware('perm:appointments.view');
+    Route::get('appointments/{id}/prescription.pdf', [ClinicAppointmentController::class, 'prescriptionPdf'])->middleware('perm:appointments.view');
+    Route::post('appointments/{id}/prescription/voice', [ClinicAppointmentController::class, 'generatePrescriptionFromVoice'])->middleware('perm:appointments.prescribe');
+    Route::get('appointments/{id}/summary', [ClinicAppointmentController::class, 'summary'])->middleware('perm:appointments.view');
+    Route::post('appointments/{id}/summary/voice', [ClinicAppointmentController::class, 'generateSummaryFromVoice'])->middleware('perm:appointments.prescribe');
 
-    Route::get('patients/{id}/profile', [ClinicPatientProfileController::class, 'profile']);
-    Route::get('patients/{id}/notes', [ClinicPatientProfileController::class, 'notes']);
-    Route::post('patients/{id}/notes', [ClinicPatientProfileController::class, 'storeNote']);
-    Route::put('patients/{id}/medical-profile', [ClinicPatientProfileController::class, 'updateMedicalProfile']);
-    Route::get('patients/{id}/activity', [ClinicPatientProfileController::class, 'activity']);
-    Route::get('patients/{id}/global-summary', [ClinicPatientProfileController::class, 'globalSummary']);
-    Route::post('patients/{id}/global-summary', [ClinicPatientProfileController::class, 'generateGlobalSummary']);
-    Route::get('patients/{id}/report.pdf', [ClinicPatientProfileController::class, 'reportPdf']);
+    Route::get('patients/{id}/profile', [ClinicPatientProfileController::class, 'profile'])->middleware('perm:patients.view');
+    Route::get('patients/{id}/notes', [ClinicPatientProfileController::class, 'notes'])->middleware('perm:patients.view');
+    Route::post('patients/{id}/notes', [ClinicPatientProfileController::class, 'storeNote'])->middleware('perm:patients.edit');
+    Route::put('patients/{id}/medical-profile', [ClinicPatientProfileController::class, 'updateMedicalProfile'])->middleware('perm:patients.edit');
+    Route::get('patients/{id}/activity', [ClinicPatientProfileController::class, 'activity'])->middleware('perm:patients.view');
+    Route::get('patients/{id}/global-summary', [ClinicPatientProfileController::class, 'globalSummary'])->middleware('perm:patients.view');
+    Route::post('patients/{id}/global-summary', [ClinicPatientProfileController::class, 'generateGlobalSummary'])->middleware('perm:patients.edit');
+    Route::get('patients/{id}/report.pdf', [ClinicPatientProfileController::class, 'reportPdf'])->middleware('perm:patients.view');
 
-    Route::get('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'profile']);
-    Route::put('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'updateProfile']);
-    Route::post('doctors/{id}/schedules', [ClinicDoctorProfileController::class, 'storeSchedule']);
-    Route::put('doctors/{id}/schedules/{scheduleId}', [ClinicDoctorProfileController::class, 'updateSchedule']);
-    Route::delete('doctors/{id}/schedules/{scheduleId}', [ClinicDoctorProfileController::class, 'destroySchedule']);
-    Route::post('doctors/{id}/exceptions', [ClinicDoctorProfileController::class, 'storeException']);
-    Route::delete('doctors/{id}/exceptions/{exceptionId}', [ClinicDoctorProfileController::class, 'destroyException']);
+    Route::get('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'profile'])->middleware('perm:doctors.view');
+    Route::put('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'updateProfile'])->middleware('perm:doctors.edit');
+    Route::post('doctors/{id}/schedules', [ClinicDoctorProfileController::class, 'storeSchedule'])->middleware('perm:doctor_schedules.create');
+    Route::put('doctors/{id}/schedules/{scheduleId}', [ClinicDoctorProfileController::class, 'updateSchedule'])->middleware('perm:doctor_schedules.edit');
+    Route::delete('doctors/{id}/schedules/{scheduleId}', [ClinicDoctorProfileController::class, 'destroySchedule'])->middleware('perm:doctor_schedules.delete');
+    Route::post('doctors/{id}/exceptions', [ClinicDoctorProfileController::class, 'storeException'])->middleware('perm:doctor_schedules.create');
+    Route::delete('doctors/{id}/exceptions/{exceptionId}', [ClinicDoctorProfileController::class, 'destroyException'])->middleware('perm:doctor_schedules.delete');
 
-    Route::get('roles', [ClinicRolePermissionController::class, 'roles']);
-    Route::get('permissions', [ClinicRolePermissionController::class, 'permissions']);
-    Route::post('roles/{roleId}/permissions', [ClinicRolePermissionController::class, 'syncRolePermissions']);
+    Route::get('roles', [ClinicRolePermissionController::class, 'roles'])->middleware('perm:staff.view');
 
     Route::post('uploads/image', [UploadController::class, 'storeImage']);
 
-    Route::get('clinic/profile', [ClinicClinicProfileController::class, 'show']);
-    Route::put('clinic/profile', [ClinicClinicProfileController::class, 'update']);
+    Route::get('clinic/profile', [ClinicClinicProfileController::class, 'show'])->middleware('perm:clinic_profile.view');
+    Route::put('clinic/profile', [ClinicClinicProfileController::class, 'update'])->middleware('perm:clinic_profile.edit');
 });

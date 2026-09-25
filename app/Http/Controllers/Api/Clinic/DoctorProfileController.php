@@ -15,17 +15,6 @@ class DoctorProfileController extends Controller
 {
     use ApiResponse;
 
-    private function role(Request $request): string
-    {
-        return (string) ($request->user()?->role ?? '');
-    }
-
-    private function assertCanManageDoctorProfile(Request $request): void
-    {
-        $role = $this->role($request);
-        abort_if(in_array($role, ['receptionist', 'assistant'], true), 403, 'Not allowed.');
-    }
-
     private function clinicId(Request $request): int
     {
         return (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
@@ -68,12 +57,10 @@ class DoctorProfileController extends Controller
 
     public function updateProfile(Request $request, int $id)
     {
-        $this->assertCanManageDoctorProfile($request);
-
         $doctor = $this->findDoctor($request, $id);
         $clinicId = $this->clinicId($request);
 
-        $role = $this->role($request);
+        $isClinicAdmin = $request->user()?->roleKind() === 'clinic_admin';
 
         $rules = [
             'full_name' => ['sometimes', 'string', 'max:255'],
@@ -112,8 +99,8 @@ class DoctorProfileController extends Controller
             $rules = array_intersect_key($rules, array_flip($allowedKeys));
         }
 
-        // Only clinic_admin can update service mappings.
-        if ($role !== 'clinic_admin') {
+        // Only clinic admins can update service mappings and status.
+        if (! $isClinicAdmin) {
             unset($rules['service_ids'], $rules['service_ids.*'], $rules['status']);
         }
 
@@ -122,7 +109,7 @@ class DoctorProfileController extends Controller
         $doctor->fill(collect($data)->except(['service_ids'])->all());
         $doctor->save();
 
-        if (array_key_exists('service_ids', $data) && $role === 'clinic_admin') {
+        if (array_key_exists('service_ids', $data) && $isClinicAdmin) {
             $serviceIds = array_values(array_unique(array_map('intval', $data['service_ids'] ?? [])));
             $payload = [];
             foreach ($serviceIds as $serviceId) {
@@ -141,8 +128,6 @@ class DoctorProfileController extends Controller
 
     public function storeSchedule(Request $request, int $id)
     {
-        $this->assertCanManageDoctorProfile($request);
-
         $doctor = $this->findDoctor($request, $id);
         $clinicId = $this->clinicId($request);
 
@@ -175,8 +160,6 @@ class DoctorProfileController extends Controller
 
     public function updateSchedule(Request $request, int $id, int $scheduleId)
     {
-        $this->assertCanManageDoctorProfile($request);
-
         $doctor = $this->findDoctor($request, $id);
         $clinicId = $this->clinicId($request);
 
@@ -203,8 +186,6 @@ class DoctorProfileController extends Controller
 
     public function destroySchedule(Request $request, int $id, int $scheduleId)
     {
-        $this->assertCanManageDoctorProfile($request);
-
         $doctor = $this->findDoctor($request, $id);
         $clinicId = $this->clinicId($request);
 
@@ -220,8 +201,6 @@ class DoctorProfileController extends Controller
 
     public function storeException(Request $request, int $id)
     {
-        $this->assertCanManageDoctorProfile($request);
-
         $doctor = $this->findDoctor($request, $id);
         $clinicId = $this->clinicId($request);
 
@@ -248,8 +227,6 @@ class DoctorProfileController extends Controller
 
     public function destroyException(Request $request, int $id, int $exceptionId)
     {
-        $this->assertCanManageDoctorProfile($request);
-
         $doctor = $this->findDoctor($request, $id);
         $clinicId = $this->clinicId($request);
 
