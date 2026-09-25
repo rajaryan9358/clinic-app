@@ -113,8 +113,7 @@ export default function ModuleListPage({ forcedModuleKey } = {}) {
         open: false,
         busy: false,
         error: '',
-        values: { branch_id: '', reviewer_name: '', message: '', rating: '5' },
-        branches: { loading: false, items: [], error: '' },
+        values: { reviewer_name: '', message: '', rating: '5' },
     });
 
     const [replyDialog, setReplyDialog] = useState({
@@ -175,10 +174,6 @@ export default function ModuleListPage({ forcedModuleKey } = {}) {
                     type: 'relation',
                     resource: 'doctors',
                 };
-            }
-
-            if (moduleKey === 'doctors' && key === 'branch_id') {
-                return { key, label: 'Branch', type: 'relation', resource: 'branches' };
             }
 
             if (moduleKey === 'doctors' && key === 'status') {
@@ -252,7 +247,7 @@ export default function ModuleListPage({ forcedModuleKey } = {}) {
     const [relationState, setRelationState] = useState({});
 
     const queryKeyFor = (resource) => {
-        if ((resource === 'branches' || resource === 'doctors') && user?.role === 'super_admin') {
+        if (resource === 'doctors' && user?.role === 'super_admin') {
             return `clinic:${filters?.clinic_id ?? ''}`;
         }
         return 'default';
@@ -260,7 +255,7 @@ export default function ModuleListPage({ forcedModuleKey } = {}) {
 
     const paramsFor = (resource) => {
         const params = { per_page: 200 };
-        if ((resource === 'branches' || resource === 'doctors') && user?.role === 'super_admin') {
+        if (resource === 'doctors' && user?.role === 'super_admin') {
             if (!filters?.clinic_id) return null;
             params.clinic_id = filters.clinic_id;
         }
@@ -498,34 +493,6 @@ Review Details:
 
 Write an appropriate reply.`;
 
-    useEffect(() => {
-        if (moduleKey !== 'reviews') return;
-        if (!reviewCreate.open) return;
-        if (reviewCreate.branches.loading) return;
-        if (reviewCreate.branches.items.length) return;
-
-        let cancelled = false;
-        const load = async () => {
-            setReviewCreate((p) => ({ ...p, branches: { ...p.branches, loading: true, error: '' } }));
-            try {
-                const res = await client.get(`${base}/branches`, { params: { per_page: 200 } });
-                if (cancelled) return;
-                const items = Array.isArray(res?.data?.data) ? res.data.data : [];
-                setReviewCreate((p) => ({ ...p, branches: { loading: false, error: '', items } }));
-            } catch (e) {
-                if (cancelled) return;
-                const msg = e?.response?.data?.message || e?.message || 'Failed to load branches';
-                setReviewCreate((p) => ({ ...p, branches: { loading: false, error: msg, items: [] } }));
-            }
-        };
-
-        load();
-        return () => {
-            cancelled = true;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [moduleKey, reviewCreate.open, base]);
-
     const runAction = async (fn) => {
         setActionError('');
         try {
@@ -579,7 +546,7 @@ Write an appropriate reply.`;
                     {moduleKey === 'reviews' ? (
                         <button
                             type="button"
-                            onClick={() => setReviewCreate((p) => ({ ...p, open: true, error: '', busy: false, values: { branch_id: '', reviewer_name: '', message: '', rating: '5' } }))}
+                            onClick={() => setReviewCreate((p) => ({ ...p, open: true, error: '', busy: false, values: { reviewer_name: '', message: '', rating: '5' } }))}
                             className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
                         >
                             Add Review
@@ -652,22 +619,6 @@ Write an appropriate reply.`;
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <select
-                            value={String(filters?.branch_id ?? '')}
-                            onChange={(e) => setFilterAndFetch('branch_id', e.target.value)}
-                            disabled={user?.role === 'super_admin' && !String(filters?.clinic_id ?? '').trim()}
-                            className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 disabled:opacity-50"
-                        >
-                            <option value="">All Branches</option>
-                            {user?.role === 'super_admin' && !String(filters?.clinic_id ?? '').trim() ? (
-                                <option value="" disabled>Select Clinic in Filters</option>
-                            ) : null}
-                            {relationState?.branches?.loading ? <option disabled>Loading…</option> : null}
-                            {(relationState?.branches?.options || []).map((opt) => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
-
                         <div className="flex flex-wrap items-center gap-1">
                             {[{ label: 'All Ratings', value: '' }, { label: '5★', value: '5' }, { label: '4★', value: '4' }, { label: '3★', value: '3' }, { label: '2★', value: '2' }, { label: '1★', value: '1' }].map((opt) => {
                                 const active = String(filters?.rating ?? '') === String(opt.value);
@@ -744,7 +695,7 @@ Write an appropriate reply.`;
                                         onChange={(key, val) => setFilters((prev) => ({ ...prev, [key]: val }))}
                                         relationOptions={field.type === 'relation' ? (relationState?.[field.resource]?.options || []) : undefined}
                                         relationLoading={field.type === 'relation' ? Boolean(relationState?.[field.resource]?.loading) : false}
-                                        relationHint={field.type === 'relation' && (field.resource === 'branches' || field.resource === 'doctors') && user?.role === 'super_admin' && !filters?.clinic_id ? 'Select Clinic first' : ''}
+                                        relationHint={field.type === 'relation' && field.resource === 'doctors' && user?.role === 'super_admin' && !filters?.clinic_id ? 'Select Clinic first' : ''}
                                     />
                                 </div>
                             ))}
@@ -779,7 +730,7 @@ Write an appropriate reply.`;
                 <DataTable
                     rows={rows}
                     actionMode="buttons"
-                    buttonActions={moduleKey === 'branches' || moduleKey === 'users'
+                    buttonActions={moduleKey === 'users'
                         ? ['view', 'edit', 'delete', 'restore', 'block', 'unblock']
                         : (moduleKey === 'doctors' || moduleKey === 'services')
                             ? ['view', 'edit', 'delete', 'block', 'unblock']
@@ -832,19 +783,15 @@ Write an appropriate reply.`;
                             ? ['uuid', 'legal_name', 'trial_ends_at']
                         : moduleKey === 'doctors'
                             ? ['user_id', 'registration_number']
-                            : moduleKey === 'branches'
-                                ? ['uuid', 'address_line_1', 'address_line_2', 'pincode', 'latitude', 'longitude']
-                                : moduleKey === 'users'
-                                    ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
-                                    : moduleKey === 'reviews'
-                                        ? ['sentiment_message', 'improvement_suggestion', 'reply_text', 'reply_meta', 'replied_at', 'reply_category', 'reply_tone_used', 'reply_needs_human_review']
-                                    : []}
+                            : moduleKey === 'users'
+                                ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
+                                : moduleKey === 'reviews'
+                                    ? ['sentiment_message', 'improvement_suggestion', 'reply_text', 'reply_meta', 'replied_at', 'reply_category', 'reply_tone_used', 'reply_needs_human_review']
+                                : []}
                     columnLabels={moduleKey === 'doctors'
                         ? { full_name: 'Doctor Name' }
                         : moduleKey === 'clinicSettings'
                             ? { clinic: 'Clinic' }
-                            : moduleKey === 'branchSettings'
-                                ? { branch: 'Branch' }
                         : moduleKey === 'users'
                             ? { last_login_at: 'Last Login' }
                             : {}}
@@ -982,7 +929,7 @@ Write an appropriate reply.`;
                         setViewRecord(row);
                     }}
                     onEdit={isReadOnly ? undefined : (row) => navigate(`/modules/${moduleKey}/${row.id}/edit`)}
-                    onDelete={isReadOnly || moduleKey === 'clinicSettings' || moduleKey === 'branchSettings'
+                    onDelete={isReadOnly || moduleKey === 'clinicSettings'
                         ? undefined
                         : (row) => {
                             setConfirm({ open: true, row, busy: false });
@@ -1089,11 +1036,9 @@ Write an appropriate reply.`;
                     title={`${module.label} Details`}
                     variant="sheet"
                     record={viewRecord}
-                    hiddenKeys={moduleKey === 'branches'
-                        ? ['uuid', 'address_line_1', 'address_line_2', 'pincode', 'latitude', 'longitude']
-                        : moduleKey === 'users'
-                            ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
-                            : []}
+                    hiddenKeys={moduleKey === 'users'
+                        ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
+                        : []}
                     onClose={() => setViewRecord(null)}
                 />
             )}
@@ -1115,22 +1060,6 @@ Write an appropriate reply.`;
                                     {reviewCreate.error}
                                 </div>
                             ) : null}
-
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</label>
-                                <select
-                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                    value={reviewCreate.values.branch_id}
-                                    onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, branch_id: e.target.value } }))}
-                                >
-                                    <option value="">Select Branch</option>
-                                    {reviewCreate.branches.loading ? <option disabled>Loading…</option> : null}
-                                    {reviewCreate.branches.items.map((b) => (
-                                        <option key={b.id} value={String(b.id)}>{inferLabel(b)}</option>
-                                    ))}
-                                </select>
-                                {reviewCreate.branches.error ? <div className="mt-1 text-xs text-rose-600">{reviewCreate.branches.error}</div> : null}
-                            </div>
 
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div>
@@ -1180,10 +1109,6 @@ Write an appropriate reply.`;
                                 disabled={reviewCreate.busy}
                                 onClick={async () => {
                                     const v = reviewCreate.values;
-                                    if (!String(v.branch_id || '').trim()) {
-                                        setReviewCreate((p) => ({ ...p, error: 'Branch is required' }));
-                                        return;
-                                    }
                                     if (!String(v.message || '').trim()) {
                                         setReviewCreate((p) => ({ ...p, error: 'Review message is required' }));
                                         return;
@@ -1192,7 +1117,6 @@ Write an appropriate reply.`;
                                     setReviewCreate((p) => ({ ...p, busy: true, error: '' }));
                                     try {
                                         await client.post(`${base}/reviews`, {
-                                            branch_id: v.branch_id,
                                             reviewer_name: String(v.reviewer_name || '').trim() || null,
                                             message: String(v.message || '').trim(),
                                             rating: Number(v.rating || 5),

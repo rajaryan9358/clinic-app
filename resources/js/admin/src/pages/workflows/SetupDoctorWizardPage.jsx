@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -54,7 +54,7 @@ function SectionCard({ title, subtitle, children }) {
 const STEPS = [
     { num: 1, label: 'Profile' },
     { num: 2, label: 'Schedule & Fees' },
-    { num: 3, label: 'Branch & Login' },
+    { num: 3, label: 'Login' },
 ];
 
 export default function SetupDoctorWizardPage() {
@@ -78,22 +78,10 @@ export default function SetupDoctorWizardPage() {
         slot_duration_minutes: '15',
         buffer_time_minutes: '5',
         status: 'active',
-        branch_ids: [],
         password: '',
     });
-    const [branches, setBranches] = useState([]);
-    const [branchesLoading, setBranchesLoading] = useState(false);
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        if (!isClinic) return;
-        setBranchesLoading(true);
-        client.get(`${base}/branches`, { params: { per_page: 100 } })
-            .then((res) => setBranches(Array.isArray(res.data?.data) ? res.data.data : []))
-            .catch(() => {})
-            .finally(() => setBranchesLoading(false));
-    }, [base, isClinic]);
 
     if (!isClinic) {
         return (
@@ -109,14 +97,6 @@ export default function SetupDoctorWizardPage() {
 
     const set = (key) => (v) => setValues((p) => ({ ...p, [key]: v }));
 
-    const toggleBranch = (id) => {
-        setValues((p) => {
-            const ids = (p.branch_ids || []).map(String);
-            const sid = String(id);
-            return { ...p, branch_ids: ids.includes(sid) ? ids.filter((x) => x !== sid) : [...ids, sid] };
-        });
-    };
-
     const nextStep = (from) => {
         setError('');
         if (from === 1 && !values.full_name) { setError('Doctor name is required.'); return; }
@@ -125,7 +105,6 @@ export default function SetupDoctorWizardPage() {
 
     const submit = async () => {
         if (!values.full_name) { setError('Doctor name is required.'); return; }
-        if (!values.branch_ids.length) { setError('Please select at least one branch.'); return; }
         setSaving(true);
         setError('');
         try {
@@ -143,7 +122,6 @@ export default function SetupDoctorWizardPage() {
                 slot_duration_minutes: values.slot_duration_minutes !== '' ? Number(values.slot_duration_minutes) : 15,
                 buffer_time_minutes: values.buffer_time_minutes !== '' ? Number(values.buffer_time_minutes) : 5,
                 status: values.status,
-                branch_ids: values.branch_ids.map(Number).filter(Number.isFinite),
                 password: values.password || undefined,
             };
             await client.post(`${base}/doctors`, payload);
@@ -161,7 +139,7 @@ export default function SetupDoctorWizardPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
                 <div>
                     <h2 className="text-xl font-bold text-gray-900">Add Doctor</h2>
-                    <p className="mt-0.5 text-sm text-gray-500">Set up a doctor profile with schedule, fees, and branch assignment.</p>
+                    <p className="mt-0.5 text-sm text-gray-500">Set up a doctor profile with schedule and fees.</p>
                 </div>
                 <Link to="/dashboard" className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
                     ← Back
@@ -278,45 +256,9 @@ export default function SetupDoctorWizardPage() {
                 </SectionCard>
             )}
 
-            {/* Step 3 — Branch & Login */}
+            {/* Step 3 — Login */}
             {step === 3 && (
                 <div className="space-y-4">
-                    <SectionCard
-                        title="Branch Assignment"
-                        subtitle={values.branch_ids.length ? `${values.branch_ids.length} branch${values.branch_ids.length > 1 ? 'es' : ''} selected` : 'Select the branches this doctor works at.'}
-                    >
-                        {branchesLoading ? (
-                            <p className="text-sm text-gray-400">Loading branches…</p>
-                        ) : !branches.length ? (
-                            <p className="text-sm text-gray-400">No branches found. Create a branch first.</p>
-                        ) : (
-                            <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
-                                {branches.map((br) => {
-                                    const selected = values.branch_ids.map(String).includes(String(br.id));
-                                    return (
-                                        <label key={br.id} className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors ${selected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selected}
-                                                onChange={() => toggleBranch(br.id)}
-                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium text-gray-800">{br.name}</span>
-                                                    {br.is_main_branch && (
-                                                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Main</span>
-                                                    )}
-                                                </div>
-                                                {br.address && <p className="mt-0.5 truncate text-xs text-gray-500">{br.address}</p>}
-                                            </div>
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </SectionCard>
-
                     <SectionCard title="Doctor Login" subtitle="Optional — create login credentials so the doctor can access the portal.">
                         <Field label="Password" hint="Leave blank to skip login creation.">
                             <TextInput type="password" value={values.password} onChange={set('password')} placeholder="••••••••" />

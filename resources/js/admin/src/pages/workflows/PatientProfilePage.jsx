@@ -143,10 +143,9 @@ export default function PatientProfilePage() {
     const [notes, setNotes] = useState([]);
     const [notesLoading, setNotesLoading] = useState(false);
 
-    const [branchOptions, setBranchOptions] = useState([]);
     const [doctorOptions, setDoctorOptions] = useState([]);
 
-    const [noteDraft, setNoteDraft] = useState({ note_type: 'general', note: '', is_private: false, branch_id: '', doctor_id: '' });
+    const [noteDraft, setNoteDraft] = useState({ note_type: 'general', note: '', is_private: false, doctor_id: '' });
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteDialogOpen, setNoteDialogOpen] = useState(false);
 
@@ -187,24 +186,17 @@ export default function PatientProfilePage() {
         }
     };
 
-    const loadBranchesAndDoctors = async (clinicId) => {
+    const loadDoctors = async (clinicId) => {
         try {
-            const branchParams = { per_page: 200 };
             const doctorParams = { per_page: 200 };
             if (user?.role === 'super_admin' && clinicId) {
-                branchParams.clinic_id = clinicId;
                 doctorParams.clinic_id = clinicId;
             }
 
-            const [branchesRes, doctorsRes] = await Promise.all([
-                client.get(`${base}/branches`, { params: branchParams }),
-                client.get(`${base}/doctors`, { params: doctorParams }),
-            ]);
+            const doctorsRes = await client.get(`${base}/doctors`, { params: doctorParams });
 
-            setBranchOptions((branchesRes.data?.data || []).map((b) => ({ value: String(b.id), label: b.name || `#${b.id}` })));
             setDoctorOptions((doctorsRes.data?.data || []).map((d) => ({ value: String(d.id), label: d.full_name || `#${d.id}` })));
         } catch {
-            setBranchOptions([]);
             setDoctorOptions([]);
         }
     };
@@ -217,7 +209,7 @@ export default function PatientProfilePage() {
             setNotes(data?.data || []);
 
             const clinicId = profile?.patient?.clinic_id;
-            await loadBranchesAndDoctors(clinicId);
+            await loadDoctors(clinicId);
         } catch (e) {
             setError(e?.response?.data?.message || e?.message || 'Failed to load notes');
         } finally {
@@ -233,10 +225,9 @@ export default function PatientProfilePage() {
                 note_type: noteDraft.note_type,
                 note: noteDraft.note,
                 is_private: Boolean(noteDraft.is_private),
-                branch_id: noteDraft.branch_id ? Number(noteDraft.branch_id) : null,
                 doctor_id: noteDraft.doctor_id ? Number(noteDraft.doctor_id) : null,
             });
-            setNoteDraft({ note_type: 'general', note: '', is_private: false, branch_id: '', doctor_id: '' });
+            setNoteDraft({ note_type: 'general', note: '', is_private: false, doctor_id: '' });
             setNoteDialogOpen(false);
             await loadNotes();
         } catch (e) {
@@ -394,7 +385,7 @@ export default function PatientProfilePage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <div className="text-lg font-semibold text-slate-900">{patient.full_name}</div>
-                            <div className="mt-1 text-sm text-slate-600">Phone: <span className="font-medium text-slate-800">{patient.phone || '—'}</span> · Branch: <span className="font-medium text-slate-800">{patient.branch?.name || '—'}</span></div>
+                            <div className="mt-1 text-sm text-slate-600">Phone: <span className="font-medium text-slate-800">{patient.phone || '—'}</span></div>
                             <div className="mt-1 text-sm text-slate-600">Status: <span className="inline-block align-middle"><StatusBadge status={patient.status_tag} /></span></div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
@@ -454,7 +445,6 @@ export default function PatientProfilePage() {
                                     <div className="mt-2 text-xs text-slate-500">
                                         {n.created_by_user?.full_name ? `By ${n.created_by_user.full_name}` : null}
                                         {n.doctor?.full_name ? ` · Doctor: ${n.doctor.full_name}` : null}
-                                        {n.branch?.name ? ` · Branch: ${n.branch.name}` : null}
                                     </div>
                                 </div>
                             ))}
@@ -503,20 +493,6 @@ export default function PatientProfilePage() {
                                                 />
                                                 Private
                                             </label>
-                                        </div>
-
-                                        <div>
-                                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch (optional)</label>
-                                            <select
-                                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                                                value={noteDraft.branch_id}
-                                                onChange={(e) => setNoteDraft((p) => ({ ...p, branch_id: e.target.value }))}
-                                            >
-                                                <option value="">—</option>
-                                                {branchOptions.map((opt) => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                ))}
-                                            </select>
                                         </div>
 
                                         <div>

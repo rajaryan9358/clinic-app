@@ -214,7 +214,7 @@ export default function DoctorSetupFlowPage() {
         if (String(user?.role || '') === 'doctor') {
             return new Set(['calendar', 'availability', 'summary', 'profile']);
         }
-        return new Set(['calendar', 'availability', 'summary', 'profile', 'branches', 'services']);
+        return new Set(['calendar', 'availability', 'summary', 'profile', 'services']);
     }, [user?.role]);
     const initialTab = useMemo(() => {
         const t = String(searchParams.get('tab') || '').trim();
@@ -232,7 +232,6 @@ export default function DoctorSetupFlowPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const [branches, setBranches] = useState([]);
     const [services, setServices] = useState([]);
 
     const [savingProfile, setSavingProfile] = useState(false);
@@ -259,10 +258,9 @@ export default function DoctorSetupFlowPage() {
         status: 'active',
     });
 
-    const [mappingDraft, setMappingDraft] = useState({ branch_ids: [], primary_branch_id: '', service_ids: [] });
+    const [mappingDraft, setMappingDraft] = useState({ service_ids: [] });
 
     const [scheduleDraft, setScheduleDraft] = useState({
-        branch_id: '',
         day_of_week: '1',
         start_time: '10:00',
         end_time: '13:00',
@@ -277,7 +275,6 @@ export default function DoctorSetupFlowPage() {
     const [exceptionDraft, setExceptionDraft] = useState({
         exception_date: new Date().toISOString().slice(0, 10),
         type: 'leave',
-        branch_id: '',
         start_time: '',
         end_time: '',
         reason: '',
@@ -291,8 +288,6 @@ export default function DoctorSetupFlowPage() {
     const [apptConfirm, setApptConfirm] = useState({ open: false, date: '', time: '', endTime: '' });
 
     // Calendar
-    const [calendarBranchId, setCalendarBranchId] = useState('');
-
     const CALENDAR_PAST_DAYS = 30;
     const CALENDAR_FUTURE_DAYS_WANTED = 14;
     const CALENDAR_SHIFT_DAYS = 7;
@@ -310,7 +305,7 @@ export default function DoctorSetupFlowPage() {
     const [calendarAvailRangesByDate, setCalendarAvailRangesByDate] = useState({}); // { ymd: [{startMin,endMin}] }
     const [calendarBookedByDate, setCalendarBookedByDate] = useState({}); // { ymd: Set(start_time) }
     const [calendarApptsByDate, setCalendarApptsByDate] = useState({}); // { ymd: [{id,startMin,endMin,raw}] }
-    const [calendarMaxAdvanceDays, setCalendarMaxAdvanceDays] = useState(31);
+    const [calendarMaxAdvanceDays, setCalendarMaxAdvanceDays] = useState(30);
 
     const calendarScrollRef = useRef(null);
     const calendarDidInitScrollRef = useRef(false);
@@ -348,8 +343,6 @@ export default function DoctorSetupFlowPage() {
             setPhotoFile(null);
 
             setMappingDraft({
-                branch_ids: (res.data?.data?.branch_ids || []).map((x) => String(x)),
-                primary_branch_id: res.data?.data?.primary_branch_id ? String(res.data.data.primary_branch_id) : '',
                 service_ids: (res.data?.data?.service_ids || []).map((x) => String(x)),
             });
             setScheduleDraft((prev) => ({
@@ -369,15 +362,10 @@ export default function DoctorSetupFlowPage() {
             const params = { per_page: 200 };
             if (user?.role === 'super_admin' && clinicId) params.clinic_id = clinicId;
 
-            const [bRes, sRes] = await Promise.all([
-                client.get(`${base}/branches`, { params }),
-                client.get(`${base}/services`, { params }),
-            ]);
+            const sRes = await client.get(`${base}/services`, { params });
 
-            setBranches(bRes.data?.data || []);
             setServices(sRes.data?.data || []);
         } catch {
-            setBranches([]);
             setServices([]);
         }
     };
@@ -393,19 +381,9 @@ export default function DoctorSetupFlowPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data]);
 
-    // Default calendar branch (primary branch if present)
-    useEffect(() => {
-        if (!data?.doctor) return;
-        const primary = data?.primary_branch_id ? String(data.primary_branch_id) : '';
-        const first = (data?.branch_ids || []).length ? String(data.branch_ids[0]) : '';
-        setCalendarBranchId((prev) => prev || primary || first);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data?.doctor?.id]);
-
-    // Fetch Branch Setting for calendar future limit (max_advance_booking_days)
+    // Fetch clinic settings for calendar future limit (max_advance_booking_days)
     useEffect(() => {
         if (tab !== 'calendar') return;
-        if (!calendarBranchId) return;
         if (!data?.doctor) return;
 
         const controller = new AbortController();
@@ -413,22 +391,21 @@ export default function DoctorSetupFlowPage() {
             try {
                 const params = {
                     per_page: 1,
-                    branch_id: Number(calendarBranchId),
                     ...(user?.role === 'super_admin' ? { clinic_id: Number(data?.doctor?.clinic_id) } : {}),
                 };
-                const res = await client.get(`${base}/settings/branch`, { params, signal: controller.signal });
-                const row = Array.isArray(res.data?.data?.data) ? res.data.data.data[0] : (Array.isArray(res.data?.data) ? res.data.data[0] : null);
+                const res = await client.get(`${base}/settings/clinic`, { params, signal: controller.signal });
+                const row = Array.isArray(res.data?.data) ? res.data.data[0] : (Array.isArray(res.data?.data?.data) ? res.data.data.data[0] : null);
                 const days = Number(row?.max_advance_booking_days);
-                setCalendarMaxAdvanceDays(Number.isFinite(days) && days > 0 ? days : 31);
+                setCalendarMaxAdvanceDays(Number.isFinite(days) && days > 0 ? days : 30);
             } catch (e) {
                 if (e?.name === 'CanceledError' || e?.name === 'AbortError') return;
-                setCalendarMaxAdvanceDays(31);
+                setCalendarMaxAdvanceDays(30);
             }
         };
         run();
         return () => controller.abort();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tab, calendarBranchId, base, data?.doctor?.clinic_id]);
+    }, [tab, base, data?.doctor?.clinic_id]);
 
     const handlePhotoChange = (e) => {
         const file = e.target.files?.[0];
@@ -474,8 +451,6 @@ export default function DoctorSetupFlowPage() {
         setError('');
         try {
             const payload = {
-                branch_ids: mappingDraft.branch_ids.map((x) => Number(x)).filter((n) => Number.isFinite(n)),
-                primary_branch_id: mappingDraft.primary_branch_id ? Number(mappingDraft.primary_branch_id) : null,
                 service_ids: mappingDraft.service_ids.map((x) => Number(x)).filter((n) => Number.isFinite(n)),
             };
             await client.put(`${base}/doctors/${id}/profile`, payload);
@@ -492,7 +467,6 @@ export default function DoctorSetupFlowPage() {
         setError('');
         try {
             await client.post(`${base}/doctors/${id}/schedules`, {
-                branch_id: Number(scheduleDraft.branch_id),
                 day_of_week: Number(scheduleDraft.day_of_week),
                 start_time: scheduleDraft.start_time,
                 end_time: scheduleDraft.end_time,
@@ -527,7 +501,6 @@ export default function DoctorSetupFlowPage() {
             await client.post(`${base}/doctors/${id}/exceptions`, {
                 exception_date: exceptionDraft.exception_date,
                 type: exceptionDraft.type,
-                branch_id: exceptionDraft.branch_id ? Number(exceptionDraft.branch_id) : null,
                 start_time: exceptionDraft.start_time || null,
                 end_time: exceptionDraft.end_time || null,
                 reason: exceptionDraft.reason || null,
@@ -563,17 +536,6 @@ export default function DoctorSetupFlowPage() {
         }
         return map;
     }, [data]);
-
-    const toggleBranch = (branchId) => {
-        const sid = String(branchId);
-        setMappingDraft((p) => {
-            const ids = p.branch_ids;
-            const newIds = ids.includes(sid) ? ids.filter((x) => x !== sid) : [...ids, sid];
-            // If primary branch was deselected, clear it
-            const newPrimary = newIds.includes(p.primary_branch_id) ? p.primary_branch_id : (newIds[0] || '');
-            return { ...p, branch_ids: newIds, primary_branch_id: newPrimary };
-        });
-    };
 
     const toggleService = (serviceId) => {
         const sid = String(serviceId);
@@ -675,26 +637,21 @@ export default function DoctorSetupFlowPage() {
 
     const calendarExceptionsByDate = useMemo(() => {
         const ex = Array.isArray(data?.doctor?.exceptions) ? data.doctor.exceptions : [];
-        const branchId = calendarBranchId ? String(calendarBranchId) : '';
         const map = {};
         for (const e of ex) {
             const ymd = String(e.exception_date || '').slice(0, 10);
             if (!ymd) continue;
-            const applies = !e.branch_id || !branchId || String(e.branch_id) === branchId;
-            if (!applies) continue;
             if (!map[ymd]) map[ymd] = [];
             map[ymd].push(e);
         }
         return map;
-    }, [data, calendarBranchId]);
+    }, [data]);
 
     const calendarScheduleWindowsByDate = useMemo(() => {
         const schedules = Array.isArray(data?.doctor?.schedules) ? data.doctor.schedules : [];
-        const branchId = calendarBranchId ? String(calendarBranchId) : '';
 
         const scheduleDowValues = schedules
             .filter((s) => s?.is_active)
-            .filter((s) => !branchId || String(s.branch_id) === branchId)
             .map((s) => Number(s.day_of_week))
             .filter((n) => Number.isFinite(n));
 
@@ -713,7 +670,6 @@ export default function DoctorSetupFlowPage() {
         const byDow = {};
         for (const s of schedules) {
             if (!s?.is_active) continue;
-            if (branchId && String(s.branch_id) !== branchId) continue;
             const dow = String(Number(s.day_of_week));
             if (!byDow[dow]) byDow[dow] = [];
             byDow[dow].push(s);
@@ -734,7 +690,7 @@ export default function DoctorSetupFlowPage() {
             map[ymd] = dowSchedules.map((s) => ({ start_time: String(s.start_time).slice(0, 5), end_time: String(s.end_time).slice(0, 5) }));
         }
         return map;
-    }, [data, calendarBranchId, calendarDays, calendarExceptionsByDate]);
+    }, [data, calendarDays, calendarExceptionsByDate]);
 
     const calendarAvailRangesEffectiveByDate = useMemo(() => {
         const map = {};
@@ -866,7 +822,6 @@ export default function DoctorSetupFlowPage() {
     // Fetch week availability + booked appointments for calendar
     useEffect(() => {
         if (tab !== 'calendar') return;
-        if (!calendarBranchId) return;
         if (!data?.doctor) return;
 
         const controller = new AbortController();
@@ -878,12 +833,10 @@ export default function DoctorSetupFlowPage() {
                 const to = toYmd(addDays(calendarRangeStart, calendarVisibleDays - 1));
                 const clinicId = data?.doctor?.clinic_id;
                 const doctorId = Number(id);
-                const branchId = Number(calendarBranchId);
 
                 // Availability
                 const availParams = {
                     doctor_id: doctorId,
-                    branch_id: branchId,
                     from_date: from,
                     to_date: to,
                 };
@@ -898,7 +851,6 @@ export default function DoctorSetupFlowPage() {
                             sort_dir: 'asc',
                             ...(user?.role === 'super_admin' ? { clinic_id: Number(clinicId) } : {}),
                             doctor_id: doctorId,
-                            branch_id: branchId,
                             appointment_date_from: from,
                             appointment_date_to: to,
                         },
@@ -965,7 +917,7 @@ export default function DoctorSetupFlowPage() {
         run();
         return () => controller.abort();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tab, calendarBranchId, calendarRangeStart, calendarVisibleDays, base, id, data?.doctor?.clinic_id]);
+    }, [tab, calendarRangeStart, calendarVisibleDays, base, id, data?.doctor?.clinic_id]);
 
     // Initial horizontal scroll positioning: land on Today by default.
     useEffect(() => {
@@ -996,7 +948,7 @@ export default function DoctorSetupFlowPage() {
                     <AppIcon name="module" className="h-5 w-5 text-slate-700" />
                     <div>
                         <h2 className="text-xl font-semibold text-slate-900">Doctor Setup</h2>
-                        <p className="mt-0.5 text-sm text-slate-600">Profile, branches, services, schedules and exceptions.</p>
+                        <p className="mt-0.5 text-sm text-slate-600">Profile, services, schedules and exceptions.</p>
                     </div>
                 </div>
                 <Link to="/modules/doctors" className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back to Doctors</Link>
@@ -1025,9 +977,8 @@ export default function DoctorSetupFlowPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="grid grid-cols-2 gap-2 text-sm">
                             {[
-                                { label: 'Branches', ok: setup.has_branches },
                                 { label: 'Services', ok: setup.has_services },
                                 { label: 'Schedule', ok: setup.has_schedules },
                             ].map(({ label, ok }) => (
@@ -1050,7 +1001,6 @@ export default function DoctorSetupFlowPage() {
                     { key: 'availability', label: 'Availability' },
                     { key: 'summary',      label: 'Summary' },
                     { key: 'profile',      label: 'Profile' },
-                    { key: 'branches',     label: 'Branches' },
                     { key: 'services',     label: 'Services' },
                 ].filter(({ key }) => allowedTabs.has(key)).map(({ key, label }) => (
                     <button key={key} type="button" onClick={() => setTab(key)} className={tabButton(tab === key)}>
@@ -1062,28 +1012,8 @@ export default function DoctorSetupFlowPage() {
             {/* ── Summary Tab ── */}
             {tab === 'summary' && (
                 <div className="grid gap-4 lg:grid-cols-2">
-                    {/* Branches summary */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Branches</h3>
-                        {!(data?.doctor?.branches || []).length ? (
-                            <p className="text-sm text-slate-400">No branches assigned.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {data.doctor.branches.map((b) => (
-                                    <div key={b.id} className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                                        <AppIcon name="building" className="h-4 w-4 flex-shrink-0 text-slate-400" />
-                                        <span className="flex-1 text-sm font-medium text-slate-800">{b.name || `#${b.id}`}</span>
-                                        {b?.pivot?.is_primary && (
-                                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">Primary</span>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
                     {/* Services summary */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Services</h3>
                         {!(data?.doctor?.services || []).length ? (
                             <p className="text-sm text-slate-400">No services assigned.</p>
@@ -1276,75 +1206,6 @@ export default function DoctorSetupFlowPage() {
                 </div>
             )}
 
-            {/* ── Branches Tab ── */}
-            {tab === 'branches' && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                        <div>
-                            <h3 className="text-lg font-semibold">Branch Assignment</h3>
-                            <p className="mt-0.5 text-sm text-slate-500">
-                                {mappingDraft.branch_ids.length
-                                    ? `${mappingDraft.branch_ids.length} branch${mappingDraft.branch_ids.length > 1 ? 'es' : ''} selected`
-                                    : 'No branches selected'}
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={saveMappings}
-                            disabled={savingMappings}
-                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                        >
-                            {savingMappings ? 'Saving…' : 'Save'}
-                        </button>
-                    </div>
-
-                    {!branches.length ? (
-                        <p className="mt-4 text-sm text-slate-400">No branches available.</p>
-                    ) : (
-                        <div className="mt-4 space-y-2">
-                            {branches.map((b) => {
-                                const selected = mappingDraft.branch_ids.includes(String(b.id));
-                                const isPrimary = mappingDraft.primary_branch_id === String(b.id);
-                                return (
-                                    <div
-                                        key={b.id}
-                                        className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors ${selected ? 'border-slate-300 bg-slate-50' : 'border-slate-200 bg-white'}`}
-                                    >
-                                        <label className="flex flex-1 cursor-pointer items-center gap-3">
-                                            <input
-                                                type="checkbox"
-                                                checked={selected}
-                                                onChange={() => toggleBranch(b.id)}
-                                                className="h-4 w-4 rounded border-slate-300 text-slate-900"
-                                            />
-                                            <div>
-                                                <span className="text-sm font-medium text-slate-800">{b.name}</span>
-                                                {b.is_main_branch && (
-                                                    <span className="ml-2 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">Main</span>
-                                                )}
-                                            </div>
-                                        </label>
-                                        {selected && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setMappingDraft((p) => ({ ...p, primary_branch_id: String(b.id) }))}
-                                                className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                                                    isPrimary
-                                                        ? 'bg-blue-600 text-white'
-                                                        : 'border border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-                                                }`}
-                                            >
-                                                {isPrimary ? '★ Primary' : '☆ Set Primary'}
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
-
             {/* ── Services Tab ── */}
             {tab === 'services' && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1422,7 +1283,7 @@ export default function DoctorSetupFlowPage() {
                                 <button
                                     type="button"
                                     onClick={addSchedule}
-                                    disabled={scheduleSaving || !scheduleDraft.branch_id}
+                                    disabled={scheduleSaving}
                                     className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                                 >
                                     {scheduleSaving ? 'Saving…' : 'Add'}
@@ -1430,15 +1291,6 @@ export default function DoctorSetupFlowPage() {
                             </div>
 
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</label>
-                                    <select className={inputBase} value={scheduleDraft.branch_id} onChange={(e) => setScheduleDraft((p) => ({ ...p, branch_id: e.target.value }))}>
-                                        <option value="">Select branch</option>
-                                        {branches.map((b) => (
-                                            <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                        ))}
-                                    </select>
-                                </div>
                                 <div>
                                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Day</label>
                                     <select className={inputBase} value={scheduleDraft.day_of_week} onChange={(e) => setScheduleDraft((p) => ({ ...p, day_of_week: e.target.value }))}>
@@ -1520,14 +1372,12 @@ export default function DoctorSetupFlowPage() {
                                                         {daySchedules.map((s) => {
                                                             const effectiveDur = s.slot_duration_minutes || slotDur;
                                                             const slots = generateSlots(s.start_time, s.end_time, effectiveDur);
-                                                            const branchName = branches.find((b) => String(b.id) === String(s.branch_id))?.name || `Branch #${s.branch_id}`;
                                                             return (
                                                                 <div key={s.id} className={`rounded-xl border p-3 ${modeChipClass(s.consultation_mode)}`}>
                                                                     <div className="flex items-center justify-between gap-2">
                                                                         <div className="flex flex-wrap items-center gap-2">
                                                                             <span className="font-semibold text-sm">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</span>
                                                                             <span className="rounded-full border px-2 py-0.5 text-xs font-medium opacity-80">{modeLabel(s.consultation_mode)}</span>
-                                                                            <span className="text-xs opacity-70">{branchName}</span>
                                                                             {!s.is_active && <span className="text-xs opacity-60">(inactive)</span>}
                                                                         </div>
                                                                         <button type="button" onClick={() => removeSchedule(s.id)} className="rounded-lg border border-current px-2 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
@@ -1584,15 +1434,6 @@ export default function DoctorSetupFlowPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch (optional)</label>
-                                    <select className={inputBase} value={exceptionDraft.branch_id} onChange={(e) => setExceptionDraft((p) => ({ ...p, branch_id: e.target.value }))}>
-                                        <option value="">All branches</option>
-                                        {branches.map((b) => (
-                                            <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
                                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reason (optional)</label>
                                     <input className={inputBase} value={exceptionDraft.reason} onChange={(e) => setExceptionDraft((p) => ({ ...p, reason: e.target.value }))} placeholder="e.g. Public holiday" />
                                 </div>
@@ -1619,9 +1460,6 @@ export default function DoctorSetupFlowPage() {
                             ) : (
                                 <div className="space-y-2">
                                     {(data.doctor.exceptions).map((ex) => {
-                                        const branchName = ex.branch_id
-                                            ? (branches.find((b) => String(b.id) === String(ex.branch_id))?.name || `Branch #${ex.branch_id}`)
-                                            : 'All branches';
                                         const typeColors = {
                                             leave: 'border-red-200 bg-red-50 text-red-800',
                                             blocked: 'border-orange-200 bg-orange-50 text-orange-800',
@@ -1639,7 +1477,6 @@ export default function DoctorSetupFlowPage() {
                                                         <span className="font-semibold text-sm">{String(ex.exception_date).slice(0, 10)}</span>
                                                         <span className="ml-2 rounded-full border border-current bg-white/50 px-2 py-0.5 text-xs font-medium">{typeLabel[ex.type] || ex.type}</span>
                                                     </div>
-                                                    <span className="text-xs opacity-70">{branchName}</span>
                                                     {ex.start_time && ex.end_time && (
                                                         <span className="text-xs">
                                                             {fmtTime(ex.start_time)} – {fmtTime(ex.end_time)}
@@ -1670,17 +1507,7 @@ export default function DoctorSetupFlowPage() {
                             </div>
                         </div>
 
-                        <div className="mt-4 grid gap-3 md:grid-cols-3">
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</label>
-                                <select className={inputBase} value={calendarBranchId} onChange={(e) => setCalendarBranchId(e.target.value)}>
-                                    <option value="">Select branch</option>
-                                    {(data?.doctor?.branches || []).map((b) => (
-                                        <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                    ))}
-                                </select>
-                            </div>
-
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
                             <div>
                                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Dates</label>
                                 <div className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
@@ -1859,7 +1686,6 @@ export default function DoctorSetupFlowPage() {
                                                                 day_of_week: String(d.dow),
                                                                 start_time: clickedTime,
                                                                 end_time: fmtMinToTime(endMin),
-                                                                branch_id: calendarBranchId || p.branch_id,
                                                             }));
                                                             setAvailSheet({ open: true, mode: 'schedule' });
                                                         } else {
@@ -1868,7 +1694,6 @@ export default function DoctorSetupFlowPage() {
                                                                 exception_date: ymd,
                                                                 start_time: clickedTime,
                                                                 end_time: fmtMinToTime(endMin),
-                                                                branch_id: calendarBranchId || p.branch_id,
                                                                 type: 'blocked',
                                                             }));
                                                             setAvailSheet({ open: true, mode: 'exception' });
@@ -2112,15 +1937,6 @@ export default function DoctorSetupFlowPage() {
                         {availSheet.mode === 'schedule' ? (
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</label>
-                                    <select className={inputBase} value={scheduleDraft.branch_id} onChange={(e) => setScheduleDraft((p) => ({ ...p, branch_id: e.target.value }))}>
-                                        <option value="">Select branch</option>
-                                        {branches.map((b) => (
-                                            <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
                                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Day</label>
                                     <select className={inputBase} value={scheduleDraft.day_of_week} onChange={(e) => setScheduleDraft((p) => ({ ...p, day_of_week: e.target.value }))}>
                                         {DAY_NAMES.map((name, i) => <option key={i} value={String(i)}>{name}</option>)}
@@ -2193,15 +2009,6 @@ export default function DoctorSetupFlowPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch (optional)</label>
-                                    <select className={inputBase} value={exceptionDraft.branch_id} onChange={(e) => setExceptionDraft((p) => ({ ...p, branch_id: e.target.value }))}>
-                                        <option value="">All branches</option>
-                                        {branches.map((b) => (
-                                            <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
                                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reason (optional)</label>
                                     <input className={inputBase} value={exceptionDraft.reason} onChange={(e) => setExceptionDraft((p) => ({ ...p, reason: e.target.value }))} placeholder="e.g. Public holiday" />
                                 </div>
@@ -2232,7 +2039,7 @@ export default function DoctorSetupFlowPage() {
                             </button>
                             <button
                                 type="button"
-                                disabled={availSheet.mode === 'schedule' ? (scheduleSaving || !scheduleDraft.branch_id) : exceptionSaving}
+                                disabled={availSheet.mode === 'schedule' ? scheduleSaving : exceptionSaving}
                                 onClick={async () => {
                                     if (availSheet.mode === 'schedule') {
                                         await addSchedule();

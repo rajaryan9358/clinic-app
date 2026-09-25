@@ -496,7 +496,6 @@ export default function DashboardPage() {
 
         const bookingSources = (insights.booking_sources_30d || []).map((x) => ({ label: x.source, count: x.count }));
         const doctors = (insights.doctor_performance_30d || []).map((x) => ({ label: x.doctor_name, count: x.total }));
-        const branches = (insights.branch_performance_30d || []).map((x) => ({ label: x.branch_name, count: x.total }));
 
         return (
             <div className="space-y-6">
@@ -569,14 +568,6 @@ export default function DashboardPage() {
                         valueKey="count"
                         maxItems={8}
                     />
-                    <BarListChart
-                        title="Branch Performance (30d)"
-                        subtitle="Top by appointment volume."
-                        items={branches}
-                        labelKey="label"
-                        valueKey="count"
-                        maxItems={8}
-                    />
                     <DonutChart
                         title="New vs Repeat (30d)"
                         subtitle="Patient visit type breakdown."
@@ -642,7 +633,7 @@ export default function DashboardPage() {
                 {isSuperAdmin ? (
                     <ActionCard
                         title="Clinic Onboarding"
-                        description="Guided flow to create a clinic, branch, and admin access."
+                        description="Guided flow to create a clinic and admin access."
                         icon="hospital"
                         actions={[
                             { to: '/workflows/onboard-clinic', label: 'Onboard New Clinic' },
@@ -665,7 +656,7 @@ export default function DashboardPage() {
                 {!isSuperAdmin && (
                     <ActionCard
                         title="Team Management"
-                        description="Add staff and doctors with branch assignment."
+                        description="Add staff and doctors to your clinic."
                         icon="users"
                         actions={[
                             { to: '/workflows/create-staff', label: 'Add Staff' },
@@ -682,7 +673,6 @@ export default function DashboardPage() {
                         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                             <StatCard label="Total Clinics" value={data.total_clinics} />
                             <StatCard label="Onboarded Today" value={data.today_clinic_onboarding} />
-                            <StatCard label="Total Branches" value={data.total_branches} />
                             <StatCard label="Total Staff" value={data.total_staff} />
                             <StatCard label="Total Doctors" value={data.total_doctors} />
                         </div>

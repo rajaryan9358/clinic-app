@@ -7,7 +7,6 @@ import { useAuth } from '../../context/AuthContext';
 
 const text = (key, label, required = false) => ({ key, label, type: 'text', required });
 const select = (key, label, options, required = false) => ({ key, label, type: 'select', options, required });
-const relation = (key, label, resource, required = false, multiple = false) => ({ key, label, type: 'relation', resource, required, multiple });
 
 export default function CreateStaffWizardPage() {
     const { user } = useAuth();
@@ -20,7 +19,6 @@ export default function CreateStaffWizardPage() {
         return allowedStaffRolesForCreator(user?.role).filter((r) => !['super_admin', 'clinic_admin'].includes(String(r)));
     }, [user?.role]);
 
-    const [step, setStep] = useState(1);
     const [values, setValues] = useState({
         full_name: '',
         email: '',
@@ -28,7 +26,6 @@ export default function CreateStaffWizardPage() {
         password: '',
         role: 'receptionist',
         status: 'active',
-        branch_ids: [],
     });
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
@@ -63,35 +60,16 @@ export default function CreateStaffWizardPage() {
         select('status', 'Status', ['active', 'inactive', 'blocked']),
     ];
 
-    const branchFields = [
-        relation('branch_ids', 'Branches', 'branches', true, true),
-    ];
-
-    const next = () => {
-        setError('');
-        if (step === 1) {
-            const missing = staffDetailsFields.find((f) => f.required && (values[f.key] === '' || values[f.key] === null || values[f.key] === undefined));
-            if (missing) {
-                setError(`Please fill ${missing.label}.`);
-                return;
-            }
-            setStep(2);
-        }
-    };
-
     const submit = async () => {
-        setSaving(true);
         setError('');
+        const missing = staffDetailsFields.find((f) => f.required && (values[f.key] === '' || values[f.key] === null || values[f.key] === undefined));
+        if (missing) {
+            setError(`Please fill ${missing.label}.`);
+            return;
+        }
+        setSaving(true);
         try {
-            if (!Array.isArray(values.branch_ids) || values.branch_ids.length === 0) {
-                setError('Please select at least one branch.');
-                return;
-            }
-            const payload = {
-                ...values,
-                branch_ids: values.branch_ids.map((v) => Number(v)).filter((n) => Number.isFinite(n)),
-            };
-            await client.post(`${base}/users`, payload);
+            await client.post(`${base}/users`, values);
             navigate('/modules/users');
         } catch (e) {
             setError(e?.response?.data?.message || e?.message || 'Failed to create staff user');
@@ -105,42 +83,24 @@ export default function CreateStaffWizardPage() {
             <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <div>
                     <h2 className="text-xl font-semibold">Add Staff (Guided)</h2>
-                    <p className="mt-1 text-sm text-slate-600">Step {step} of 2</p>
+                    <p className="mt-1 text-sm text-slate-600">Staff Details</p>
                 </div>
                 <Link to="/dashboard" className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back</Link>
             </div>
 
-            {step === 1 ? (
-                <FormRenderer
-                    title="1) Staff Details"
-                    fields={staffDetailsFields}
-                    values={values}
-                    error={error}
-                    onChange={(k, v) => setValues((p) => ({ ...p, [k]: v }))}
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        next();
-                    }}
-                    onCancel={() => navigate('/dashboard')}
-                    submitLabel="Next"
-                />
-            ) : null}
-
-            {step === 2 ? (
-                <FormRenderer
-                    title="2) Branch Access"
-                    fields={branchFields}
-                    values={values}
-                    error={error}
-                    onChange={(k, v) => setValues((p) => ({ ...p, [k]: v }))}
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        submit();
-                    }}
-                    onCancel={() => setStep(1)}
-                    submitLabel={saving ? 'Creating…' : 'Create Staff'}
-                />
-            ) : null}
+            <FormRenderer
+                title="Staff Details"
+                fields={staffDetailsFields}
+                values={values}
+                error={error}
+                onChange={(k, v) => setValues((p) => ({ ...p, [k]: v }))}
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    submit();
+                }}
+                onCancel={() => navigate('/dashboard')}
+                submitLabel={saving ? 'Creating…' : 'Create Staff'}
+            />
         </div>
     );
 }

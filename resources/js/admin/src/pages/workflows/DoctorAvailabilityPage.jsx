@@ -49,12 +49,10 @@ export default function DoctorAvailabilityPage() {
     const base = '/clinic';
 
     const [data, setData] = useState(null);
-    const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     const [scheduleDraft, setScheduleDraft] = useState({
-        branch_id: '',
         day_of_week: '1',
         start_time: '10:00',
         end_time: '13:00',
@@ -69,7 +67,6 @@ export default function DoctorAvailabilityPage() {
     const [exceptionDraft, setExceptionDraft] = useState({
         exception_date: new Date().toISOString().slice(0, 10),
         type: 'leave',
-        branch_id: '',
         start_time: '',
         end_time: '',
         reason: '',
@@ -103,16 +100,6 @@ export default function DoctorAvailabilityPage() {
         loadProfile();
     }, [doctorId]);
 
-    useEffect(() => {
-        if (!data) return;
-        const clinicId = data?.doctor?.clinic_id;
-        const params = { per_page: 200 };
-        if (clinicId) params.clinic_id = clinicId;
-        client.get(`${base}/branches`, { params })
-            .then((r) => setBranches(r.data?.data || []))
-            .catch(() => setBranches([]));
-    }, [data?.doctor?.id]);
-
     const schedulesByDay = useMemo(() => {
         const map = {};
         for (const s of (data?.doctor?.schedules || [])) {
@@ -130,7 +117,6 @@ export default function DoctorAvailabilityPage() {
         setError('');
         try {
             await client.post(`${base}/doctors/${doctorId}/schedules`, {
-                branch_id: Number(scheduleDraft.branch_id),
                 day_of_week: Number(scheduleDraft.day_of_week),
                 start_time: scheduleDraft.start_time,
                 end_time: scheduleDraft.end_time,
@@ -165,7 +151,6 @@ export default function DoctorAvailabilityPage() {
             await client.post(`${base}/doctors/${doctorId}/exceptions`, {
                 exception_date: exceptionDraft.exception_date,
                 type: exceptionDraft.type,
-                branch_id: exceptionDraft.branch_id ? Number(exceptionDraft.branch_id) : null,
                 start_time: exceptionDraft.start_time || null,
                 end_time: exceptionDraft.end_time || null,
                 reason: exceptionDraft.reason || null,
@@ -226,7 +211,7 @@ export default function DoctorAvailabilityPage() {
                             <button
                                 type="button"
                                 onClick={addSchedule}
-                                disabled={scheduleSaving || !scheduleDraft.branch_id}
+                                disabled={scheduleSaving}
                                 className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                             >
                                 {scheduleSaving ? 'Saving…' : 'Add'}
@@ -234,15 +219,6 @@ export default function DoctorAvailabilityPage() {
                         </div>
 
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</label>
-                                <select className={inputBase} value={scheduleDraft.branch_id} onChange={(e) => setScheduleDraft((p) => ({ ...p, branch_id: e.target.value }))}>
-                                    <option value="">Select branch</option>
-                                    {branches.map((b) => (
-                                        <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                    ))}
-                                </select>
-                            </div>
                             <div>
                                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Day</label>
                                 <select className={inputBase} value={scheduleDraft.day_of_week} onChange={(e) => setScheduleDraft((p) => ({ ...p, day_of_week: e.target.value }))}>
@@ -322,14 +298,12 @@ export default function DoctorAvailabilityPage() {
                                                 {daySchedules.map((s) => {
                                                     const effectiveDur = s.slot_duration_minutes || slotDuration;
                                                     const slots = generateSlots(s.start_time, s.end_time, effectiveDur);
-                                                    const branchName = branches.find((b) => String(b.id) === String(s.branch_id))?.name || `Branch #${s.branch_id}`;
                                                     return (
                                                         <div key={s.id} className={`rounded-xl border p-3 ${modeChipClass(s.consultation_mode)}`}>
                                                             <div className="flex items-center justify-between gap-2">
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     <span className="font-semibold text-sm">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</span>
                                                                     <span className="rounded-full border px-2 py-0.5 text-xs font-medium opacity-80">{modeLabel(s.consultation_mode)}</span>
-                                                                    <span className="text-xs opacity-70">{branchName}</span>
                                                                     {!s.is_active && <span className="text-xs opacity-60">(inactive)</span>}
                                                                 </div>
                                                                 <button type="button" onClick={() => removeSchedule(s.id)} className="rounded-lg border border-current px-2 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
@@ -385,15 +359,6 @@ export default function DoctorAvailabilityPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch (optional)</label>
-                                <select className={inputBase} value={exceptionDraft.branch_id} onChange={(e) => setExceptionDraft((p) => ({ ...p, branch_id: e.target.value }))}>
-                                    <option value="">All branches</option>
-                                    {branches.map((b) => (
-                                        <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
                                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reason (optional)</label>
                                 <input className={inputBase} value={exceptionDraft.reason} onChange={(e) => setExceptionDraft((p) => ({ ...p, reason: e.target.value }))} placeholder="e.g. Public holiday" />
                             </div>
@@ -420,9 +385,6 @@ export default function DoctorAvailabilityPage() {
                         ) : (
                             <div className="space-y-2">
                                 {data.doctor.exceptions.map((ex) => {
-                                    const branchName = ex.branch_id
-                                        ? (branches.find((b) => String(b.id) === String(ex.branch_id))?.name || `Branch #${ex.branch_id}`)
-                                        : 'All branches';
                                     const typeColors = {
                                         leave: 'border-red-200 bg-red-50 text-red-800',
                                         blocked: 'border-orange-200 bg-orange-50 text-orange-800',
@@ -436,7 +398,6 @@ export default function DoctorAvailabilityPage() {
                                                     <span className="font-semibold text-sm">{String(ex.exception_date).slice(0, 10)}</span>
                                                     <span className="ml-2 rounded-full border border-current bg-white/50 px-2 py-0.5 text-xs font-medium">{typeLabel[ex.type] || ex.type}</span>
                                                 </div>
-                                                <span className="text-xs opacity-70">{branchName}</span>
                                                 {ex.start_time && ex.end_time && (
                                                     <span className="text-xs">{fmtTime(ex.start_time)} – {fmtTime(ex.end_time)}</span>
                                                 )}

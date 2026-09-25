@@ -80,8 +80,6 @@ export default function AppointmentsFlowPage() {
     });
     const [visitType, setVisitType] = useState('');
 
-    const [branchId, setBranchId] = useState('');
-    const [branchOptions, setBranchOptions] = useState({ loading: false, error: '', items: [] });
     const [pdfBusy, setPdfBusy] = useState(false);
 
     const [rows, setRows] = useState([]);
@@ -255,7 +253,6 @@ export default function AppointmentsFlowPage() {
             const nextRange = overrides.range ?? range;
             const nextSearch = overrides.search ?? search;
             const nextStatus = overrides.status ?? status;
-            const nextBranchId = overrides.branchId ?? branchId;
             const nextVisitType = overrides.visitType ?? visitType;
 
             const nextEffectiveDate = nextMode === 'today' ? todayYMD : nextDate;
@@ -276,7 +273,6 @@ export default function AppointmentsFlowPage() {
             if (String(nextSearch || '').trim()) params.search = String(nextSearch).trim();
             if (nextStatus) params.status = nextStatus;
             if (nextVisitType) params.visit_type = nextVisitType;
-            if (isClinicAdmin && String(nextBranchId || '').trim()) params.branch_id = String(nextBranchId).trim();
             const res = await client.get(`${base}/appointments`, { params });
             let nextRows = res.data.data || [];
             if (nextMode === 'upcoming') {
@@ -338,29 +334,6 @@ export default function AppointmentsFlowPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [date]);
 
-    useEffect(() => {
-        if (!isClinicAdmin) return;
-        fetchList({ branchId });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [branchId]);
-
-    useEffect(() => {
-        const loadBranches = async () => {
-            if (!isClinicAdmin) return;
-            setBranchOptions((p) => ({ ...p, loading: true, error: '' }));
-            try {
-                const res = await client.get(`${base}/branches`, { params: { per_page: 200 } });
-                const items = Array.isArray(res?.data?.data) ? res.data.data : [];
-                setBranchOptions({ loading: false, error: '', items });
-            } catch (e) {
-                setBranchOptions({ loading: false, error: e?.response?.data?.message || e?.message || 'Failed to load branches', items: [] });
-            }
-        };
-
-        loadBranches();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isClinicAdmin, base]);
-
     const downloadBlob = (data, filename) => {
         try {
             const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' });
@@ -397,7 +370,6 @@ export default function AppointmentsFlowPage() {
             }
             if (String(search || '').trim()) params.search = String(search).trim();
             if (status) params.status = status;
-            if (isClinicAdmin && String(branchId || '').trim()) params.branch_id = String(branchId).trim();
 
             const res = await client.get(`${base}/reports/appointments.pdf`, { params, responseType: 'blob' });
             downloadBlob(res.data, 'appointments-report.pdf');
@@ -560,7 +532,6 @@ export default function AppointmentsFlowPage() {
         setError('');
         try {
             const params = { appointment_date: effectiveDate };
-            if (isClinicAdmin && branchId) params.branch_id = branchId;
             await client.post(`${base}/appointments/generate-tokens`, params);
             await fetchList();
             setSortByToken(true);
@@ -589,10 +560,9 @@ export default function AppointmentsFlowPage() {
         return res?.data?.data?.appointment || null;
     };
 
-    const fetchAvailability = async ({ doctorId, branchId, fromDate, toDate, excludeAppointmentId }) => {
+    const fetchAvailability = async ({ doctorId, fromDate, toDate, excludeAppointmentId }) => {
         const params = {
             doctor_id: doctorId,
-            branch_id: branchId,
             from_date: fromDate,
             to_date: toDate,
         };
@@ -676,12 +646,11 @@ export default function AppointmentsFlowPage() {
 
         try {
             const appt = await fetchAppointmentDetail(appointmentId);
-            if (!appt?.doctor_id || !appt?.branch_id) throw new Error('Missing doctor/branch for availability');
+            if (!appt?.doctor_id) throw new Error('Missing doctor for availability');
             const fromDate = todayYMD;
             const toDate = addDaysYMD(todayYMD, 13);
             const days = await fetchAvailability({
                 doctorId: appt.doctor_id,
-                branchId: appt.branch_id,
                 fromDate,
                 toDate,
                 excludeAppointmentId: appointmentId,
@@ -754,11 +723,10 @@ export default function AppointmentsFlowPage() {
 
         const appt = completeDialog.appointment;
         const doctorId = appt?.doctor_id;
-        const branchId = appt?.branch_id;
-        if (!doctorId || !branchId) {
+        if (!doctorId) {
             setCompleteDialog((p) => ({
                 ...p,
-                availability: { loading: false, error: 'Missing doctor/branch for availability.', days: [] },
+                availability: { loading: false, error: 'Missing doctor for availability.', days: [] },
             }));
             return;
         }
@@ -778,7 +746,7 @@ export default function AppointmentsFlowPage() {
             target = String(completeDialog.followDate || '').slice(0, 10) || baseDate;
         }
 
-        const key = `${doctorId}|${branchId}|${mode}|${fromDate}|${toDate}`;
+        const key = `${doctorId}|${mode}|${fromDate}|${toDate}`;
         if (followLoadKeyRef.current === key) {
             if (String(completeDialog.slotDate || '') === String(target) && String(completeDialog.followDate || '') === String(target)) return;
             setCompleteDialog((p) => ({
@@ -801,7 +769,7 @@ export default function AppointmentsFlowPage() {
             }));
 
             try {
-                const days = await fetchAvailability({ doctorId, branchId, fromDate, toDate });
+                const days = await fetchAvailability({ doctorId, fromDate, toDate });
                 const hasTarget = (days || []).some((d) => String(d.date) === String(target));
                 const nextSlotDate = hasTarget ? target : (days?.[0]?.date || fromDate);
                 setCompleteDialog((p) => ({
@@ -827,7 +795,6 @@ export default function AppointmentsFlowPage() {
         completeDialog.followDays,
         completeDialog.followDate,
         completeDialog.appointment?.doctor_id,
-        completeDialog.appointment?.branch_id,
         completeDialog.appointment?.appointment_date,
         todayYMD,
     ]);
@@ -973,21 +940,6 @@ export default function AppointmentsFlowPage() {
                     </div>
                 ) : null}
 
-                {isClinicAdmin ? (
-                    <select
-                        value={branchId}
-                        onChange={(e) => setBranchId(e.target.value)}
-                        className="min-w-[220px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                    >
-                        <option value="">All branches</option>
-                        {branchOptions.loading ? <option disabled>Loading…</option> : null}
-                        {(branchOptions.items || []).map((b) => (
-                            <option key={String(b.id)} value={String(b.id)}>
-                                {b.name || `#${b.id}`}
-                            </option>
-                        ))}
-                    </select>
-                ) : null}
             </div>
 
             {error ? (
@@ -1851,7 +1803,6 @@ export default function AppointmentsFlowPage() {
                                             try {
                                                 const payload = {
                                                     clinic_id: appt.clinic_id,
-                                                    branch_id: appt.branch_id,
                                                     doctor_id: appt.doctor_id,
                                                     patient_id: appt.patient_id,
                                                     service_id: appt.service_id || null,

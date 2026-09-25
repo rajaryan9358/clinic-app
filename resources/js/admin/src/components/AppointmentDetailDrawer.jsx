@@ -374,7 +374,6 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                 <div><span className="text-slate-500">Patient:</span> {appt?.patient?.full_name || (appt.patient_id ? `Patient #${appt.patient_id}` : '—')}</div>
                                 <div><span className="text-slate-500">Phone:</span> {appt?.patient?.phone || '—'}</div>
                                 <div><span className="text-slate-500">Doctor:</span> {appt?.doctor?.full_name || (appt.doctor_id ? `Doctor #${appt.doctor_id}` : '—')}</div>
-                                <div><span className="text-slate-500">Branch:</span> {appt.branch_id ? `#${appt.branch_id}` : '—'}</div>
                                 <div><span className="text-slate-500">Service:</span> {appt.service_id ? `#${appt.service_id}` : '—'}</div>
                                 <div><span className="text-slate-500">Visit type:</span> {appt.visit_type || '—'}</div>
                                 <div><span className="text-slate-500">Consultation:</span> {appt.consultation_mode || '—'}</div>

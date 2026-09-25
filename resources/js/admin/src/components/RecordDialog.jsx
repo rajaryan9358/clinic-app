@@ -44,7 +44,7 @@ export default function RecordDialog({ title, open, record, onClose, hiddenKeys 
     if (!open) return null;
 
     const hidden = new Set([
-        'password', 'remember_token', 'clinic_id', 'branch_id',
+        'password', 'remember_token', 'clinic_id',
         'deleted_at', 'created_at', 'updated_at', ...(hiddenKeys || []),
     ]);
     const entries = Object.entries(record || {}).filter(([key]) => !hidden.has(key));

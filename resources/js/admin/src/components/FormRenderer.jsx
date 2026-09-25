@@ -178,7 +178,7 @@ export default function FormRenderer({ title, fields, values, onChange, onSubmit
     const relationControllersRef = useRef({});
 
     const queryKeyFor = (resource) => {
-        if ((resource === 'branches' || resource === 'doctors') && user?.role === 'super_admin') {
+        if (resource === 'doctors' && user?.role === 'super_admin') {
             return `clinic:${values?.clinic_id ?? ''}`;
         }
         return 'default';
@@ -186,7 +186,7 @@ export default function FormRenderer({ title, fields, values, onChange, onSubmit
 
     const paramsFor = (resource) => {
         const params = { per_page: 200 };
-        if ((resource === 'branches' || resource === 'doctors') && user?.role === 'super_admin') {
+        if (resource === 'doctors' && user?.role === 'super_admin') {
             if (!values?.clinic_id) return null;
             params.clinic_id = values.clinic_id;
         }
@@ -311,7 +311,7 @@ export default function FormRenderer({ title, fields, values, onChange, onSubmit
                                             relationOptions={field.type === 'relation' ? (relationState?.[field.resource]?.options || []) : undefined}
                                             relationLoading={field.type === 'relation' ? Boolean(relationState?.[field.resource]?.loading) : false}
                                             relationHint={
-                                                field.type === 'relation' && field.resource === 'branches' &&
+                                                field.type === 'relation' && field.resource === 'doctors' &&
                                                 user?.role === 'super_admin' && !values?.clinic_id
                                                     ? 'Select a Clinic first'
                                                     : ''

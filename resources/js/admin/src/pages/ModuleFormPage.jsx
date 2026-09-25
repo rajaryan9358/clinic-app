@@ -38,11 +38,9 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
         if (!isAppointmentCreate) return {};
         const pre = {};
         const qDoctor = searchParams.get('doctor_id');
-        const qBranch = searchParams.get('branch_id');
         const qDate   = searchParams.get('appointment_date');
         const qTime   = searchParams.get('start_time');
         if (qDoctor) pre.doctor_id = qDoctor;
-        if (qBranch) pre.branch_id = qBranch;
         if (qDate)   pre.appointment_date = qDate;
         if (qTime)   pre.start_time = qTime;
         return pre;
@@ -54,7 +52,6 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
     const [patientLookup, setPatientLookup] = useState({ loading: false, error: '', results: [] });
     const [createPatientInline, setCreatePatientInline] = useState(false);
     const [inlinePatient, setInlinePatient] = useState({
-        branch_id: '',
         first_name: '',
         last_name: '',
         phone: '',
@@ -64,14 +61,13 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
         age: '',
     });
 
-    // If doctor + branch are pre-filled, skip straight to the slot-picker step.
+    // If doctor is pre-filled, skip straight to the slot-picker step.
     const [appointmentStep, setAppointmentStep] = useState(() => {
         if (!isAppointmentCreate) return 1;
-        return (searchParams.get('doctor_id') && searchParams.get('branch_id')) ? 2 : 1;
+        return searchParams.get('doctor_id') ? 2 : 1;
     });
     const [stepError, setStepError] = useState('');
 
-    const [branchOptions, setBranchOptions] = useState({ loading: false, error: '', items: [] });
     const [doctorOptions, setDoctorOptions] = useState({ loading: false, error: '', items: [] });
     const [serviceOptions, setServiceOptions] = useState({ loading: false, error: '', items: [] });
 
@@ -120,7 +116,7 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
         }
 
         // Step 4: rest of selections
-        const step4Hidden = new Set([...alwaysHidden, 'clinic_id', 'branch_id', 'doctor_id', 'service_id']);
+        const step4Hidden = new Set([...alwaysHidden, 'clinic_id', 'doctor_id', 'service_id']);
         return fields.filter((f) => !step4Hidden.has(f.key));
     }, [fields, isAppointmentCreate, appointmentStep, user?.role, isUserModule, isEdit, values?.role]);
 
@@ -196,7 +192,6 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
 
         const clinicId = values?.clinic_id;
         if (user?.role === 'super_admin' && !clinicId) {
-            setBranchOptions({ loading: false, error: '', items: [] });
             setServiceOptions({ loading: false, error: '', items: [] });
             return;
         }
@@ -204,28 +199,21 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
         let cancelled = false;
         const load = async () => {
             try {
-                setBranchOptions((prev) => ({ ...prev, loading: true, error: '' }));
                 setServiceOptions((prev) => ({ ...prev, loading: true, error: '' }));
 
                 const params = { per_page: 200 };
                 if (user?.role === 'super_admin') params.clinic_id = clinicId;
 
-                const [branchesRes, servicesRes] = await Promise.all([
-                    client.get(`${base}/branches`, { params }),
-                    client.get(`${base}/services`, { params }),
-                ]);
+                const servicesRes = await client.get(`${base}/services`, { params });
 
                 if (cancelled) return;
 
-                const branches = Array.isArray(branchesRes?.data?.data) ? branchesRes.data.data : [];
                 const services = Array.isArray(servicesRes?.data?.data) ? servicesRes.data.data : [];
 
-                setBranchOptions({ loading: false, error: '', items: branches });
                 setServiceOptions({ loading: false, error: '', items: services });
             } catch (e) {
                 if (cancelled) return;
                 const msg = e?.response?.data?.message || e?.message || 'Failed to load options';
-                setBranchOptions({ loading: false, error: msg, items: [] });
                 setServiceOptions({ loading: false, error: msg, items: [] });
             }
         };
@@ -246,16 +234,11 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
             return;
         }
 
-        if (!values?.branch_id) {
-            setDoctorOptions({ loading: false, error: '', items: [] });
-            return;
-        }
-
         let cancelled = false;
         const load = async () => {
             try {
                 setDoctorOptions((prev) => ({ ...prev, loading: true, error: '' }));
-                const params = { per_page: 200, branch_id: values.branch_id };
+                const params = { per_page: 200 };
                 if (user?.role === 'super_admin') params.clinic_id = clinicId;
                 const res = await client.get(`${base}/doctors`, { params });
                 if (cancelled) return;
@@ -273,7 +256,7 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAppointmentCreate, base, user?.role, values?.clinic_id, values?.branch_id]);
+    }, [isAppointmentCreate, base, user?.role, values?.clinic_id]);
 
     useEffect(() => {
         const load = async () => {
@@ -284,24 +267,6 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                 next[field.key] = data.data?.[field.key] ?? '';
             });
 
-            if (moduleKey === 'doctors') {
-                try {
-                    const profileRes = await client.get(`${base}/doctors/${id}/profile`);
-                    const branchIds = Array.isArray(profileRes?.data?.data?.branch_ids) ? profileRes.data.data.branch_ids : [];
-                    next.branch_ids = branchIds.map((x) => String(x));
-                } catch {
-                    // ignore; form can still be edited without preselected branches
-                }
-            }
-
-            if (moduleKey === 'users') {
-                const rawBranchIds = Array.isArray(data?.data?.branch_ids)
-                    ? data.data.branch_ids
-                    : Array.isArray(data?.data?.branches)
-                        ? data.data.branches.map((b) => b?.id).filter((x) => x !== null && x !== undefined)
-                        : [];
-                next.branch_ids = rawBranchIds.map((x) => String(x));
-            }
             setValues(next);
         };
         load();
@@ -353,18 +318,17 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
 
     useEffect(() => {
         if (!isAppointmentCreate) return;
-        // Selecting a different doctor/branch should reset the chosen slot.
+        // Selecting a different doctor should reset the chosen slot.
         setValues((prev) => ({ ...prev, appointment_date: '', start_time: '', end_time: '' }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAppointmentCreate, values?.doctor_id, values?.branch_id]);
+    }, [isAppointmentCreate, values?.doctor_id]);
 
     useEffect(() => {
         if (!isAppointmentCreate) return;
         const doctorId = values?.doctor_id;
-        const branchId = values?.branch_id;
         const clinicId = values?.clinic_id;
 
-        if (!doctorId || !branchId) {
+        if (!doctorId) {
             setAvailability({ loading: false, error: '', days: [] });
             return;
         }
@@ -382,7 +346,6 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
             try {
                 const params = {
                     doctor_id: doctorId,
-                    branch_id: branchId,
                     from_date: availabilityRange.from,
                     to_date: availabilityRange.to,
                 };
@@ -400,7 +363,7 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
 
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAppointmentCreate, values?.doctor_id, values?.branch_id, values?.clinic_id, base, user?.role]);
+    }, [isAppointmentCreate, values?.doctor_id, values?.clinic_id, base, user?.role]);
 
     useEffect(() => {
         if (!isUserCreate) return;
@@ -463,9 +426,9 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                 <p className="text-sm font-semibold text-slate-900">Timeslot</p>
                 <p className="mt-0.5 text-sm text-slate-600">Pick an available slot for the selected doctor.</p>
 
-                {!values?.branch_id || !values?.doctor_id ? (
+                {!values?.doctor_id ? (
                     <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                        Select <span className="font-semibold">Branch</span> and <span className="font-semibold">Doctor</span> to load slots.
+                        Select <span className="font-semibold">Doctor</span> to load slots.
                     </div>
                 ) : null}
 
@@ -631,7 +594,6 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                         setInlinePatient((prev) => ({
                             ...prev,
                             phone: String(patientMobile || '').trim() || prev.phone,
-                            branch_id: prev.branch_id || String(values?.branch_id || ''),
                         }));
                     }}
                     className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -642,7 +604,7 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                     type="button"
                     onClick={() => {
                         setCreatePatientInline(false);
-                        setInlinePatient({ branch_id: '', first_name: '', last_name: '', phone: '', email: '', gender: '', dob: '', age: '' });
+                        setInlinePatient({ first_name: '', last_name: '', phone: '', email: '', gender: '', dob: '', age: '' });
                     }}
                     className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
@@ -663,19 +625,6 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                 <div className="mt-4">
                     <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">New Patient Details</div>
                     <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Branch</label>
-                            <select
-                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                                value={inlinePatient.branch_id ?? ''}
-                                onChange={(e) => setInlinePatient((p) => ({ ...p, branch_id: e.target.value }))}
-                            >
-                                <option value="">Select Branch</option>
-                                {(branchOptions.items || []).map((b) => (
-                                    <option key={b.id} value={String(b.id)}>{b.name || `#${b.id}`}</option>
-                                ))}
-                            </select>
-                        </div>
                     <div>
                         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">First Name *</label>
                         <input
@@ -768,8 +717,8 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
         }
 
         if (step === 2) {
-            if (!values?.branch_id || !values?.doctor_id) {
-                return 'Please select Branch and Doctor.';
+            if (!values?.doctor_id) {
+                return 'Please select Doctor.';
             }
         }
 
@@ -792,12 +741,11 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
 
         const steps = [
             { id: 1, label: 'Patient' },
-            { id: 2, label: 'Branch & Doctor' },
+            { id: 2, label: 'Doctor' },
             { id: 3, label: 'Timeslot' },
             { id: 4, label: 'Details' },
         ];
 
-        const branches = Array.isArray(branchOptions.items) ? branchOptions.items : [];
         const doctors = Array.isArray(doctorOptions.items) ? doctorOptions.items : [];
         const services = Array.isArray(serviceOptions.items) ? serviceOptions.items : [];
 
@@ -828,68 +776,8 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                 {appointmentStep === 2 ? (
                     <div className="space-y-4">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="text-sm font-semibold text-slate-900">Branch</p>
-                            <p className="mt-0.5 text-sm text-slate-600">Choose where the appointment will happen.</p>
-
-                            {branchOptions.error ? (
-                                <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{branchOptions.error}</div>
-                            ) : null}
-
-                            {branchOptions.loading ? (
-                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Loading branches…</div>
-                            ) : null}
-
-                            {!branchOptions.loading && branches.length ? (
-                                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                    {branches.map((b) => {
-                                        const isSelected = String(values?.branch_id || '') === String(b.id);
-                                        return (
-                                            <button
-                                                key={b.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setValues((prev) => ({ ...prev, branch_id: String(b.id), doctor_id: '' }));
-                                                    if (createPatientInline) {
-                                                        setInlinePatient((p) => ({ ...p, branch_id: p.branch_id || String(b.id) }));
-                                                    }
-                                                }}
-                                                className={isSelected
-                                                    ? 'text-left rounded-2xl border border-slate-900 bg-white p-3 shadow-sm'
-                                                    : 'text-left rounded-2xl border border-slate-200 bg-white p-3 hover:border-slate-300'
-                                                }
-                                            >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                        <div className="text-sm font-semibold text-slate-900">{b.name || `Branch #${b.id}`}</div>
-                                                        <div className="mt-0.5 text-sm text-slate-600">{[b.city, b.state].filter(Boolean).join(', ') || '—'}</div>
-                                                    </div>
-                                                    {isSelected ? (
-                                                        <div className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">Selected</div>
-                                                    ) : (
-                                                        <div className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">Select</div>
-                                                    )}
-                                                </div>
-                                                <div className="mt-3 text-xs text-slate-600">
-                                                    <span className="font-semibold text-slate-700">Phone:</span> {b.phone || '—'}
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            ) : null}
-
-                            {!branchOptions.loading && !branches.length ? (
-                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">No branches found.</div>
-                            ) : null}
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                             <p className="text-sm font-semibold text-slate-900">Doctor</p>
                             <p className="mt-0.5 text-sm text-slate-600">Choose the doctor for this appointment.</p>
-
-                            {!values?.branch_id ? (
-                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Select a branch to load doctors.</div>
-                            ) : null}
 
                             {doctorOptions.error ? (
                                 <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{doctorOptions.error}</div>
@@ -899,7 +787,7 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                                 <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Loading doctors…</div>
                             ) : null}
 
-                            {!doctorOptions.loading && values?.branch_id && doctors.length ? (
+                            {!doctorOptions.loading && doctors.length ? (
                                 <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
                                     {doctors.map((d) => {
                                         const isSelected = String(values?.doctor_id || '') === String(d.id);
@@ -952,8 +840,8 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                                 </div>
                             ) : null}
 
-                            {!doctorOptions.loading && values?.branch_id && !doctors.length ? (
-                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">No doctors found for this branch.</div>
+                            {!doctorOptions.loading && !doctors.length ? (
+                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">No doctors found.</div>
                             ) : null}
                         </div>
                     </div>
@@ -1137,7 +1025,6 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
                     full_name: fullName || firstName,
                     last_name: lastName || undefined,
                     email: String(inlinePatient.email || '').trim() || undefined,
-                    branch_id: String(inlinePatient.branch_id || values?.branch_id || '').trim() || undefined,
                     gender: String(inlinePatient.gender || '').trim() || undefined,
                     dob: String(inlinePatient.dob || '').trim() || undefined,
                     age: Number.isFinite(ageNum) ? ageNum : undefined,

@@ -18,10 +18,10 @@ export default function ModuleViewPage() {
     const [apptStatusReason, setApptStatusReason] = useState('');
     const [reschedule, setReschedule] = useState({ appointment_date: '', start_time: '', end_time: '', reason: '' });
 
-    const [waOptions, setWaOptions] = useState({ users: null, branches: null, doctors: null });
+    const [waOptions, setWaOptions] = useState({ users: null, doctors: null });
     const [waAssign, setWaAssign] = useState({ user_id: '' });
     const [waFollowup, setWaFollowup] = useState({ due_date: '', task_type: 'whatsapp', assigned_to_user_id: '', note: '' });
-    const [waAppt, setWaAppt] = useState({ branch_id: '', doctor_id: '', appointment_date: '', start_time: '', visit_type: 'followup', booking_channel: 'whatsapp' });
+    const [waAppt, setWaAppt] = useState({ doctor_id: '', appointment_date: '', start_time: '', visit_type: 'followup', booking_channel: 'whatsapp' });
     const [waActionMsg, setWaActionMsg] = useState({ assign: '', followup: '', appointment: '' });
 
     if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
@@ -58,7 +58,6 @@ export default function ModuleViewPage() {
         setWaAppt((p) => ({
             ...p,
             appointment_date: p.appointment_date || todayYMD,
-            branch_id: p.branch_id || record.branch_id || '',
         }));
 
         const loadOptions = async () => {
@@ -67,24 +66,21 @@ export default function ModuleViewPage() {
             const scopedParams = user?.role === 'super_admin' && clinicId ? { ...baseParams, clinic_id: clinicId } : baseParams;
 
             try {
-                const [usersRes, branchesRes, doctorsRes] = await Promise.all([
+                const [usersRes, doctorsRes] = await Promise.all([
                     client.get(`${base}/users`, { params: { ...scopedParams, status: 'active' } }),
-                    client.get(`${base}/branches`, { params: { ...scopedParams, status: 'active' } }),
                     client.get(`${base}/doctors`, { params: { ...scopedParams, status: 'active' } }),
                 ]);
 
                 const users = usersRes.data?.data || [];
-                const branches = branchesRes.data?.data || [];
                 const doctors = doctorsRes.data?.data || [];
-                setWaOptions({ users, branches, doctors });
+                setWaOptions({ users, doctors });
 
                 setWaAppt((p) => ({
                     ...p,
-                    branch_id: p.branch_id || record.branch_id || branches?.[0]?.id || '',
                     doctor_id: p.doctor_id || '',
                 }));
             } catch {
-                setWaOptions({ users: [], branches: [], doctors: [] });
+                setWaOptions({ users: [], doctors: [] });
             }
         };
 
@@ -116,7 +112,7 @@ export default function ModuleViewPage() {
 
     if (!module) return <div className="rounded border bg-white p-4">Unknown module.</div>;
 
-    const hiddenKeys = new Set(['password', 'remember_token', 'clinic_id', 'branch_id', 'deleted_at']);
+    const hiddenKeys = new Set(['password', 'remember_token', 'clinic_id', 'deleted_at']);
     const entries = Object.entries(record || {}).filter(([key]) => !hiddenKeys.has(key));
 
     const renderValue = (value) => {
@@ -230,7 +226,6 @@ export default function ModuleViewPage() {
             if (!record?.patient_id) throw new Error('This conversation is not linked to a patient');
             const payload = {
                 clinic_id: record?.clinic_id,
-                branch_id: record?.branch_id || null,
                 patient_id: record?.patient_id,
                 assigned_to_user_id: waFollowup.assigned_to_user_id ? Number(waFollowup.assigned_to_user_id) : null,
                 due_date: waFollowup.due_date,
@@ -261,7 +256,6 @@ export default function ModuleViewPage() {
 
             const payload = {
                 clinic_id: record?.clinic_id,
-                branch_id: waAppt.branch_id ? Number(waAppt.branch_id) : record?.branch_id,
                 patient_id: record?.patient_id,
                 doctor_id: waAppt.doctor_id ? Number(waAppt.doctor_id) : null,
                 appointment_date: waAppt.appointment_date,
@@ -418,12 +412,6 @@ export default function ModuleViewPage() {
                             <p className="mt-1 text-xs text-slate-600">Creates an appointment for the linked patient.</p>
                             {!record?.patient_id ? <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Link a patient to enable appointments.</div> : null}
                             <div className="mt-2 grid gap-2">
-                                <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waAppt.branch_id} onChange={(e) => setWaAppt((p) => ({ ...p, branch_id: e.target.value }))}>
-                                    <option value="">Select branch</option>
-                                    {(waOptions.branches || []).map((b) => (
-                                        <option key={b.id} value={b.id}>{b.name}</option>
-                                    ))}
-                                </select>
                                 <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waAppt.doctor_id} onChange={(e) => setWaAppt((p) => ({ ...p, doctor_id: e.target.value }))}>
                                     <option value="">Select doctor</option>
                                     {(waOptions.doctors || []).map((d) => (
@@ -444,7 +432,7 @@ export default function ModuleViewPage() {
                                 </div>
                                 <button
                                     type="button"
-                                    disabled={!record?.patient_id || !waAppt.branch_id || !waAppt.doctor_id || !waAppt.appointment_date || !waAppt.start_time || !waAppt.visit_type || !waAppt.booking_channel || actionSaving}
+                                    disabled={!record?.patient_id || !waAppt.doctor_id || !waAppt.appointment_date || !waAppt.start_time || !waAppt.visit_type || !waAppt.booking_channel || actionSaving}
                                     onClick={runCreateAppointment}
                                     className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                                 >

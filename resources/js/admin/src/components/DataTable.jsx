@@ -66,13 +66,12 @@ export default function DataTable({
     }
 
     const first = rows[0] || {};
-    const hidden = new Set(['password', 'remember_token', 'clinic_id', 'branch_id', 'deleted_at', 'created_at', 'updated_at', ...hiddenColumns]);
+    const hidden = new Set(['password', 'remember_token', 'clinic_id', 'deleted_at', 'created_at', 'updated_at', ...hiddenColumns]);
     const baseKeys = Object.keys(first).filter((key) => !hidden.has(key));
 
     const pinKeys = [];
     if (baseKeys.includes('status')) pinKeys.push('status');
     if (baseKeys.includes('clinic')) pinKeys.push('clinic');
-    if (baseKeys.includes('branch')) pinKeys.push('branch');
 
     const prioritySet = new Set(Array.isArray(priorityColumns) ? priorityColumns : []);
     const priorityBase = baseKeys.filter((k) => prioritySet.has(k) && !pinKeys.includes(k));
