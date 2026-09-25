@@ -1,7 +1,7 @@
 # Remove the Branch System — Design
 
 Date: 2026-09-25
-Status: Approved in chat, pending spec review
+Status: Approved
 
 ## Goal
 
@@ -61,7 +61,7 @@ Edit migrations in place.
 - `ResolveClinicContext`: delete the branch-scoped block (`allowed_branch_ids`, `active_branch_id`, `X-Branch-Id`, `branch_id` filter guard). Doctor and assistant→doctor scoping unchanged.
 - `BaseClinicCrudController`: delete branch filtering.
 - `MeController`: stop returning `active_branch_id` and `allowed_branches`.
-- `AppointmentService::getDoctorAvailability(int $clinicId, int $doctorId, string $fromDate, string $toDate, ?int $excludeAppointmentId = null)`: no branch argument or filters. Clamp the date range to `today + max_advance_booking_days` and exclude slots starting before `now + min_booking_notice_minutes`, both read from `clinic_settings`.
+- `AppointmentService::getDoctorAvailability(int $clinicId, int $doctorId, string $fromDate, string $toDate, ?int $excludeAppointmentId = null)`: no branch argument or filters. Booking-window limits (`max_advance_booking_days`, `min_booking_notice_minutes`) are stored but **not** enforced here: staff use this endpoint for walk-ins booked "now", which a notice limit would block. Enforcement belongs to the public booking page work.
 - `AppointmentService` create/reschedule and `patient` creation: no `branch_id`.
 - `ClinicCreationService`: create clinic (with location fields) → clinic settings → clinic admin. No branch.
 - `UserManagementService`, `DoctorManagementService`, Store/Update user, doctor, clinic, appointment requests: remove branch fields and role `branch_manager`.
