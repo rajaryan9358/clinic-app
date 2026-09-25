@@ -227,4 +227,12 @@ class SuperAdminSubscriptionTest extends TestCase
         $this->postJson($this->base().'/extend-grace', ['days' => 2])->assertOk();
         $this->assertEqualsWithDelta(now()->addDays(22)->timestamp, ClinicSubscription::first()->grace_ends_at->timestamp, 5);
     }
+
+    public function test_extend_grace_on_trialing_clinic_never_ends_access_before_trial_end(): void
+    {
+        ClinicSubscription::create(['clinic_id' => $this->clinic->id, 'plan_id' => $this->starter->id, 'billing_cycle' => 'monthly',
+            'status' => 'trialing', 'trial_ends_at' => now()->addDays(10)]);
+        $this->postJson($this->base().'/extend-grace', ['days' => 2])->assertOk();
+        $this->assertEqualsWithDelta(now()->addDays(12)->timestamp, ClinicSubscription::first()->grace_ends_at->timestamp, 5);
+    }
 }

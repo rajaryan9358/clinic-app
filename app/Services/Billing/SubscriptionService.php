@@ -121,9 +121,9 @@ class SubscriptionService
 
     public function extendGrace(ClinicSubscription $sub, int $days): ClinicSubscription
     {
-        // Grace extends from the latest of now, the current grace end and any still-paid period end,
+        // Grace extends from the latest of now, the current grace end, any still-paid period end and a future trial end,
         // so extending grace never shortens access a clinic has already paid for.
-        $base = collect([now(), $sub->grace_ends_at, $sub->current_period_end])
+        $base = collect([now(), $sub->grace_ends_at, $sub->current_period_end, $sub->trial_ends_at])
             ->filter()->map(fn ($d) => $d->copy())->sortDesc()->first();
         $status = in_array($sub->status, ['expired', 'trialing', 'cancelled'], true) ? 'past_due' : $sub->status;
         $attrs = ['status' => $status, 'grace_ends_at' => $base->addDays($days)];
