@@ -24,7 +24,7 @@ class AppointmentController extends BaseClinicCrudController
 {
     protected string $modelClass = Appointment::class;
     protected array $searchable = ['uuid', 'status', 'visit_type'];
-    protected array $filterable = ['branch_id', 'doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type'];
+    protected array $filterable = ['doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type'];
 
     public function __construct(
         private readonly AppointmentService $appointmentService,
@@ -38,11 +38,6 @@ class AppointmentController extends BaseClinicCrudController
         $query = Appointment::query()
             ->where('clinic_id', $clinicId)
             ->with(['patient:id,full_name,phone', 'doctor:id,full_name']);
-
-        $activeBranchId = $request->attributes->get('active_branch_id');
-        if ($activeBranchId) {
-            $query->where('branch_id', (int) $activeBranchId);
-        }
 
         $activeDoctorId = $request->attributes->get('active_doctor_id');
         if ($activeDoctorId) {
@@ -123,11 +118,6 @@ class AppointmentController extends BaseClinicCrudController
         $payload['clinic_id'] = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
         $data = validator($payload, (new StoreAppointmentRequest())->rules())->validate();
 
-        $activeBranchId = $request->attributes->get('active_branch_id');
-        if ($activeBranchId && (int) $data['branch_id'] !== (int) $activeBranchId) {
-            abort(403, 'Branch not allowed.');
-        }
-
         $activeDoctorId = $request->attributes->get('active_doctor_id');
         if ($activeDoctorId && (int) $data['doctor_id'] !== (int) $activeDoctorId) {
             abort(403, 'Doctor not allowed.');
@@ -185,7 +175,6 @@ class AppointmentController extends BaseClinicCrudController
 
         $data = $request->validate([
             'doctor_id' => ['required', 'integer'],
-            'branch_id' => ['required', 'integer'],
             'from_date' => ['required', 'date'],
             'to_date' => ['required', 'date'],
             'exclude_appointment_id' => ['nullable', 'integer'],
@@ -194,7 +183,6 @@ class AppointmentController extends BaseClinicCrudController
         $days = $this->appointmentService->getDoctorAvailability(
             (int) $clinicId,
             (int) $data['doctor_id'],
-            (int) $data['branch_id'],
             (string) $data['from_date'],
             (string) $data['to_date'],
             isset($data['exclude_appointment_id']) ? (int) $data['exclude_appointment_id'] : null,
@@ -296,7 +284,7 @@ class AppointmentController extends BaseClinicCrudController
 
         $appointment = Appointment::query()
             ->where('clinic_id', $clinicId)
-            ->with(['patient:id,full_name,phone', 'doctor:id,full_name', 'branch:id,name'])
+            ->with(['patient:id,full_name,phone', 'doctor:id,full_name'])
             ->findOrFail($id);
 
         $statusLogs = AppointmentStatusLog::query()
@@ -374,27 +362,16 @@ class AppointmentController extends BaseClinicCrudController
     {
         $request->validate([
             'appointment_date' => ['required', 'date'],
-            'branch_id' => ['nullable', 'integer'],
         ]);
 
         $clinicId = (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
         $date = $request->input('appointment_date');
-        $branchId = $request->input('branch_id');
 
         $query = Appointment::query()
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', $date)
             ->whereNotIn('status', ['cancelled', 'no_show'])
             ->orderBy('start_time');
-
-        if ($branchId) {
-            $query->where('branch_id', (int) $branchId);
-        }
-
-        $activeBranchId = $request->attributes->get('active_branch_id');
-        if ($activeBranchId) {
-            $query->where('branch_id', (int) $activeBranchId);
-        }
 
         $appointments = $query->get(['id', 'start_time']);
 

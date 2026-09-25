@@ -27,7 +27,7 @@ class AppointmentController extends BaseCrudController
 
     protected array $searchable = ['uuid', 'status', 'visit_type'];
 
-    protected array $filterable = ['clinic_id', 'branch_id', 'doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type'];
+    protected array $filterable = ['clinic_id', 'doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type'];
 
     public function __construct(
         private readonly AppointmentService $appointmentService,
@@ -139,7 +139,6 @@ class AppointmentController extends BaseCrudController
         $data = $request->validate([
             'clinic_id' => ['required', 'integer'],
             'doctor_id' => ['required', 'integer'],
-            'branch_id' => ['required', 'integer'],
             'from_date' => ['required', 'date'],
             'to_date' => ['required', 'date'],
             'exclude_appointment_id' => ['nullable', 'integer'],
@@ -148,7 +147,6 @@ class AppointmentController extends BaseCrudController
         $days = $this->appointmentService->getDoctorAvailability(
             (int) $data['clinic_id'],
             (int) $data['doctor_id'],
-            (int) $data['branch_id'],
             (string) $data['from_date'],
             (string) $data['to_date'],
             isset($data['exclude_appointment_id']) ? (int) $data['exclude_appointment_id'] : null,
@@ -253,7 +251,7 @@ class AppointmentController extends BaseCrudController
     public function reportPdf(Request $request, int $id)
     {
         $appointment = Appointment::query()
-            ->with(['patient:id,full_name,phone', 'doctor:id,full_name', 'branch:id,name'])
+            ->with(['patient:id,full_name,phone', 'doctor:id,full_name'])
             ->findOrFail($id);
 
         $statusLogs = AppointmentStatusLog::query()
@@ -363,22 +361,16 @@ class AppointmentController extends BaseCrudController
         $request->validate([
             'appointment_date' => ['required', 'date'],
             'clinic_id' => ['required', 'integer'],
-            'branch_id' => ['nullable', 'integer'],
         ]);
 
         $clinicId = (int) $request->input('clinic_id');
         $date = $request->input('appointment_date');
-        $branchId = $request->input('branch_id');
 
         $query = Appointment::query()
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', $date)
             ->whereNotIn('status', ['cancelled', 'no_show'])
             ->orderBy('start_time');
-
-        if ($branchId) {
-            $query->where('branch_id', (int) $branchId);
-        }
 
         $appointments = $query->get(['id', 'start_time']);
 

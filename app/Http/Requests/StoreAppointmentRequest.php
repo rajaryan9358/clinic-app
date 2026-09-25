@@ -15,7 +15,6 @@ class StoreAppointmentRequest extends FormRequest
     {
         return [
             'clinic_id' => ['required', 'exists:clinics,id'],
-            'branch_id' => ['required', 'exists:branches,id'],
             'doctor_id' => ['required', 'exists:doctors,id'],
             'patient_id' => ['nullable', 'exists:patients,id'],
             'service_id' => ['nullable', 'exists:services,id'],
@@ -30,7 +29,6 @@ class StoreAppointmentRequest extends FormRequest
             'patient.first_name' => ['required_with:patient', 'string'],
             'patient.last_name' => ['nullable', 'string'],
             'patient.email' => ['nullable', 'email'],
-            'patient.branch_id' => ['nullable', 'exists:branches,id'],
             'patient.gender' => ['nullable', 'in:male,female,other'],
             'patient.dob' => ['nullable', 'date'],
             'patient.age' => ['nullable', 'integer', 'min:0'],

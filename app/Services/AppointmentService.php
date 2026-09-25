@@ -54,7 +54,7 @@ class AppointmentService
     /**
      * @return array<int, array{date:string, slots:array<int, array{start_time:string, end_time:string, available:bool}>}>
      */
-    public function getDoctorAvailability(int $clinicId, int $doctorId, int $branchId, string $fromDate, string $toDate, ?int $excludeAppointmentId = null): array
+    public function getDoctorAvailability(int $clinicId, int $doctorId, string $fromDate, string $toDate, ?int $excludeAppointmentId = null): array
     {
         $from = Carbon::parse($fromDate)->startOfDay();
         $to = Carbon::parse($toDate)->startOfDay();
@@ -76,7 +76,6 @@ class AppointmentService
         $schedules = DoctorSchedule::query()
             ->forClinic($clinicId)
             ->where('doctor_id', $doctorId)
-            ->where('branch_id', $branchId)
             ->where('is_active', true)
             ->get()
             ->groupBy('day_of_week');
@@ -85,9 +84,6 @@ class AppointmentService
             ->forClinic($clinicId)
             ->where('doctor_id', $doctorId)
             ->whereBetween('exception_date', [$from->toDateString(), $to->toDateString()])
-            ->where(function ($q) use ($branchId) {
-                $q->whereNull('branch_id')->orWhere('branch_id', $branchId);
-            })
             ->get()
             ->groupBy(fn ($e) => Carbon::parse($e->exception_date)->toDateString());
 
@@ -155,7 +151,6 @@ class AppointmentService
             $appointmentsQuery = Appointment::query()
                 ->forClinic($clinicId)
                 ->where('doctor_id', $doctorId)
-                ->where('branch_id', $branchId)
                 ->whereDate('appointment_date', $ymd)
                 ->whereNotIn('status', [AppointmentStatus::CANCELLED->value, AppointmentStatus::RESCHEDULED->value])
                 ->select(['id', 'start_time', 'end_time']);
@@ -294,7 +289,6 @@ class AppointmentService
                         'full_name' => $data['patient']['full_name'] ?? $data['patient']['first_name'],
                         'last_name' => $data['patient']['last_name'] ?? null,
                         'email' => $data['patient']['email'] ?? null,
-                        'branch_id' => $data['patient']['branch_id'] ?? null,
                         'gender' => $data['patient']['gender'] ?? null,
                         'dob' => $data['patient']['dob'] ?? null,
                         'age' => $data['patient']['age'] ?? null,
@@ -407,7 +401,6 @@ class AppointmentService
             $conflictQuery = Appointment::query()
                 ->forClinic($appointment->clinic_id)
                 ->where('doctor_id', $appointment->doctor_id)
-                ->where('branch_id', $appointment->branch_id)
                 ->whereDate('appointment_date', $targetDate)
                 ->whereNotIn('status', [AppointmentStatus::CANCELLED->value, AppointmentStatus::RESCHEDULED->value])
                 ->whereKeyNot($appointment->id);
