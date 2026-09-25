@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Clinic\ReportController as ClinicReportController;
 use App\Http\Controllers\Api\Clinic\ReviewController as ClinicReviewController;
 use App\Http\Controllers\Api\Clinic\RolePermissionController as ClinicRolePermissionController;
 use App\Http\Controllers\Api\Clinic\ServiceController as ClinicServiceController;
+use App\Http\Controllers\Api\Clinic\SubscriptionController as ClinicSubscriptionController;
 use App\Http\Controllers\Api\Clinic\UserController as ClinicUserController;
 use App\Http\Controllers\Api\Clinic\WhatsappAccountController as ClinicWhatsappAccountController;
 use App\Http\Controllers\Api\Clinic\WhatsappConversationController as ClinicWhatsappConversationController;
@@ -157,6 +158,10 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
 
 Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.subscription'])->prefix('clinic')->group(function () {
     Route::get('me/context', [ClinicMeController::class, 'context']);
+
+    Route::get('subscription', [ClinicSubscriptionController::class, 'show']);
+    Route::post('subscription/checkout', [ClinicSubscriptionController::class, 'checkout']);
+    Route::post('subscription/verify', [ClinicSubscriptionController::class, 'verify']);
 
     Route::get('dashboard/summary', [ClinicDashboardController::class, 'summary']);
     Route::get('dashboard/clinic-admin', [ClinicDashboardController::class, 'clinicAdmin']);

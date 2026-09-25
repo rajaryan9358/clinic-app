@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class SubscriptionService
 {
+    public function __construct(private readonly RazorpayGateway $gateway)
+    {
+    }
+
     public function graceDays(): int
     {
         return max(0, (int) PlatformSettings::get('subscription_grace_days', 3));
@@ -105,5 +109,44 @@ class SubscriptionService
         $sub->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle]);
 
         return $sub->refresh();
+    }
+
+    public function beginCheckout(ClinicSubscription $sub, Plan $plan, string $cycle): array
+    {
+        if (! $this->gateway->isConfigured()) {
+            throw ValidationException::withMessages(['payments' => 'Online payments are not configured yet.']);
+        }
+        if (! $plan->is_active) {
+            throw ValidationException::withMessages(['plan_id' => 'This plan is not available.']);
+        }
+        $amount = $plan->priceFor($cycle);
+        if ($amount === null) {
+            throw ValidationException::withMessages(['billing_cycle' => 'This plan has no yearly price.']);
+        }
+
+        $column = $cycle === 'yearly' ? 'razorpay_plan_id_yearly' : 'razorpay_plan_id_monthly';
+        if (! $plan->{$column}) {
+            $plan->update([$column => $this->gateway->createPlan($cycle, $amount, "{$plan->name} ({$cycle})")]);
+        }
+
+        $startAt = $sub->status === 'trialing' && $sub->trial_ends_at && $sub->trial_ends_at->isFuture()
+            ? $sub->trial_ends_at->timestamp : null;
+
+        $created = $this->gateway->createSubscription($plan->{$column}, $cycle === 'yearly' ? 10 : 120, $startAt, [
+            'clinic_id' => (string) $sub->clinic_id, 'plan_id' => (string) $plan->id, 'billing_cycle' => $cycle,
+        ]);
+
+        $sub->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle, 'razorpay_subscription_id' => $created['id']]);
+
+        return ['subscription_id' => $created['id'], 'key_id' => (string) $this->gateway->keyId(), 'amount' => $amount];
+    }
+
+    public function confirmCheckout(ClinicSubscription $sub, string $paymentId, string $subscriptionId, string $signature): ClinicSubscription
+    {
+        if ($sub->razorpay_subscription_id !== $subscriptionId || ! $this->gateway->verifyPaymentSignature($paymentId, $subscriptionId, $signature)) {
+            throw ValidationException::withMessages(['razorpay_signature' => 'Payment could not be verified.']);
+        }
+
+        return $sub->status === 'trialing' ? $sub->refresh() : $this->activate($sub);
     }
 }
