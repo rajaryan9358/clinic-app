@@ -4,6 +4,7 @@ import AppIcon from '../AppIcon';
 import StatusBadge from '../StatusBadge';
 import { formatDate } from '../../utils/dateFormat';
 import { formatINR, toPaise } from '../../utils/money';
+import { offlineAmountForCycle, offlinePeriodMonthsForCycle } from '../../utils/planDefaults';
 import { Btn, Card, ErrorText, Field, SectionHeader, TextInput } from './ui.jsx';
 
 function limitLabel(value) {
@@ -80,7 +81,55 @@ function AssignPlanPanel({ clinicId, plans, onDone }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
+    // Default trial length comes from the platform setting, same as the onboarding
+    // Plan step; fall back to the 14-day default already in state if it can't load.
+    useEffect(() => {
+        let cancelled = false;
+        client.get('/super-admin/settings/system')
+            .then((res) => {
+                if (cancelled) return;
+                const days = res.data?.data?.trial_days;
+                if (days) setForm((p) => ({ ...p, trial_days: days }));
+            })
+            .catch(() => { /* keep the fallback default */ });
+        return () => { cancelled = true; };
+    }, []);
+
     const selectedPlan = plans.find((p) => p.id === form.plan_id) || null;
+
+    const selectPlan = (plan) => {
+        setForm((p) => {
+            const billing_cycle = p.billing_cycle === 'yearly' && !plan.yearly_price ? 'monthly' : p.billing_cycle;
+            return {
+                ...p,
+                plan_id: plan.id,
+                billing_cycle,
+                offline_amount: p.start_mode === 'paid_offline' ? offlineAmountForCycle(plan, billing_cycle) : p.offline_amount,
+            };
+        });
+    };
+
+    const selectCycle = (cycle) => {
+        setForm((p) => ({
+            ...p,
+            billing_cycle: cycle,
+            offline_amount: p.start_mode === 'paid_offline' && selectedPlan ? offlineAmountForCycle(selectedPlan, cycle) : p.offline_amount,
+            offline_period_months: p.start_mode === 'paid_offline' ? offlinePeriodMonthsForCycle(cycle) : p.offline_period_months,
+        }));
+    };
+
+    const selectStartMode = (mode) => {
+        setForm((p) => {
+            const next = { ...p, start_mode: mode };
+            if (mode === 'paid_offline') {
+                next.offline_period_months = offlinePeriodMonthsForCycle(next.billing_cycle);
+                if (!next.offline_amount && selectedPlan) {
+                    next.offline_amount = offlineAmountForCycle(selectedPlan, next.billing_cycle);
+                }
+            }
+            return next;
+        });
+    };
 
     const submit = async () => {
         if (!form.plan_id) { setError('Choose a plan.'); return; }
@@ -121,18 +170,14 @@ function AssignPlanPanel({ clinicId, plans, onDone }) {
                 plans={plans}
                 planId={form.plan_id}
                 billingCycle={form.billing_cycle}
-                onSelectPlan={(plan) => setForm((p) => ({
-                    ...p,
-                    plan_id: plan.id,
-                    billing_cycle: p.billing_cycle === 'yearly' && !plan.yearly_price ? 'monthly' : p.billing_cycle,
-                }))}
-                onSelectCycle={(cycle) => setForm((p) => ({ ...p, billing_cycle: cycle }))}
+                onSelectPlan={selectPlan}
+                onSelectCycle={selectCycle}
             />
 
             {selectedPlan && (
                 <div className="space-y-2">
                     <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input type="radio" checked={form.start_mode === 'trial'} onChange={() => setForm((p) => ({ ...p, start_mode: 'trial' }))} />
+                        <input type="radio" checked={form.start_mode === 'trial'} onChange={() => selectStartMode('trial')} />
                         Start a free trial
                     </label>
                     {form.start_mode === 'trial' && (
@@ -143,11 +188,11 @@ function AssignPlanPanel({ clinicId, plans, onDone }) {
                         </div>
                     )}
                     <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input type="radio" checked={form.start_mode === 'pending_payment'} onChange={() => setForm((p) => ({ ...p, start_mode: 'pending_payment' }))} />
+                        <input type="radio" checked={form.start_mode === 'pending_payment'} onChange={() => selectStartMode('pending_payment')} />
                         Payment pending (clinic admin pays on first login)
                     </label>
                     <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input type="radio" checked={form.start_mode === 'paid_offline'} onChange={() => setForm((p) => ({ ...p, start_mode: 'paid_offline' }))} />
+                        <input type="radio" checked={form.start_mode === 'paid_offline'} onChange={() => selectStartMode('paid_offline')} />
                         Paid offline
                     </label>
                     {form.start_mode === 'paid_offline' && (

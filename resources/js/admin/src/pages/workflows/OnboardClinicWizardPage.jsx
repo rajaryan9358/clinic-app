@@ -4,6 +4,7 @@ import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import { useAuth } from '../../context/AuthContext';
 import { formatINR, toPaise } from '../../utils/money';
+import { offlineAmountForCycle, offlinePeriodMonthsForCycle } from '../../utils/planDefaults';
 
 function Field({ label, required, children, hint }) {
     return (
@@ -73,23 +74,23 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
 
     const selectPlan = (plan) => {
         setSkipPlan(false);
-        setSubscription((p) => ({
-            ...p,
-            plan_id: plan.id,
-            billing_cycle: p.billing_cycle === 'yearly' && !plan.yearly_price ? 'monthly' : p.billing_cycle,
-            offline_amount: p.start_mode === 'paid_offline'
-                ? (p.billing_cycle === 'yearly' && plan.yearly_price ? String(plan.yearly_price / 100) : String(plan.monthly_price / 100))
-                : p.offline_amount,
-        }));
+        setSubscription((p) => {
+            const billing_cycle = p.billing_cycle === 'yearly' && !plan.yearly_price ? 'monthly' : p.billing_cycle;
+            return {
+                ...p,
+                plan_id: plan.id,
+                billing_cycle,
+                offline_amount: p.start_mode === 'paid_offline' ? offlineAmountForCycle(plan, billing_cycle) : p.offline_amount,
+            };
+        });
     };
 
     const setCycle = (cycle) => {
         setSubscription((p) => ({
             ...p,
             billing_cycle: cycle,
-            offline_amount: p.start_mode === 'paid_offline' && selectedPlan
-                ? (cycle === 'yearly' && selectedPlan.yearly_price ? String(selectedPlan.yearly_price / 100) : String(selectedPlan.monthly_price / 100))
-                : p.offline_amount,
+            offline_amount: p.start_mode === 'paid_offline' && selectedPlan ? offlineAmountForCycle(selectedPlan, cycle) : p.offline_amount,
+            offline_period_months: p.start_mode === 'paid_offline' ? offlinePeriodMonthsForCycle(cycle) : p.offline_period_months,
         }));
     };
 
@@ -97,11 +98,9 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
         setSubscription((p) => {
             const next = { ...p, start_mode: mode };
             if (mode === 'paid_offline') {
-                next.offline_period_months = next.billing_cycle === 'yearly' ? '12' : '1';
+                next.offline_period_months = offlinePeriodMonthsForCycle(next.billing_cycle);
                 if (!next.offline_amount && selectedPlan) {
-                    next.offline_amount = next.billing_cycle === 'yearly' && selectedPlan.yearly_price
-                        ? String(selectedPlan.yearly_price / 100)
-                        : String(selectedPlan.monthly_price / 100);
+                    next.offline_amount = offlineAmountForCycle(selectedPlan, next.billing_cycle);
                 }
             }
             return next;
