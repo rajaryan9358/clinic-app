@@ -2,9 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Role;
+use App\Support\PermissionCatalogue;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 class RolesAndPermissionsSeeder extends Seeder
@@ -13,61 +14,25 @@ class RolesAndPermissionsSeeder extends Seeder
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $modules = [
-            'clinics', 'domains', 'users', 'roles', 'permissions', 'doctors', 'schedules',
-            'services', 'patients', 'patient_notes', 'appointments', 'followups', 'reminders',
-            'whatsapp_accounts', 'whatsapp_templates', 'whatsapp_conversations', 'invoices', 'payments',
-            'settings', 'audit_logs',
+        foreach (PermissionCatalogue::all() as $name) {
+            Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+        }
+
+        $system = [
+            ['super_admin', 'Super Admin', 'super_admin', false],
+            ['clinic_admin', 'Clinic Admin', 'clinic_admin', false],
+            ['doctor', 'Doctor', 'doctor', false],
+            ['receptionist', 'Receptionist', 'staff', false],
+            ['assistant', 'Assistant', 'staff', true],
         ];
-
-        $actions = ['view_any', 'view', 'create', 'update', 'delete', 'restore', 'block', 'unblock', 'change_status'];
-
-        $allPermissions = [];
-        foreach ($modules as $module) {
-            foreach ($actions as $action) {
-                $allPermissions[] = Permission::firstOrCreate([
-                    'name' => "{$module}.{$action}",
-                    'guard_name' => 'web',
-                ]);
+        foreach ($system as [$name, $label, $kind, $limit]) {
+            $role = Role::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+            $role->fill(['label' => $label, 'kind' => $kind, 'limit_to_assigned_doctors' => $limit, 'is_system' => true])->save();
+            if ($name !== 'super_admin') {
+                $role->syncPermissions(PermissionCatalogue::defaults($name));
             }
         }
 
-        $roles = [
-            'super_admin',
-            'clinic_admin',
-            'doctor',
-            'receptionist',
-            'assistant',
-        ];
-
-        foreach ($roles as $roleName) {
-            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
-        }
-
-        Role::findByName('super_admin')->syncPermissions($allPermissions);
-
-        Role::findByName('clinic_admin')->syncPermissions(
-            Permission::whereNotIn('name', ['roles.delete', 'permissions.delete'])->get()
-        );
-
-        Role::findByName('doctor')->syncPermissions(Permission::where(function ($q) {
-            $q->where('name', 'like', 'appointments.%')
-                ->orWhere('name', 'like', 'patients.view%')
-                ->orWhere('name', 'like', 'patient_notes.%')
-                ->orWhere('name', 'like', 'schedules.%');
-        })->get());
-
-        Role::findByName('receptionist')->syncPermissions(Permission::where(function ($q) {
-            $q->where('name', 'like', 'appointments.%')
-                ->orWhere('name', 'like', 'patients.%')
-                ->orWhere('name', 'like', 'reminders.%')
-                ->orWhere('name', 'like', 'followups.%');
-        })->get());
-
-        Role::findByName('assistant')->syncPermissions(Permission::where(function ($q) {
-            $q->where('name', 'like', 'patients.view%')
-                ->orWhere('name', 'like', 'appointments.view%')
-                ->orWhere('name', 'like', 'followups.view%');
-        })->get());
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

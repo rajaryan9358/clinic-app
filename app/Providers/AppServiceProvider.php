@@ -19,6 +19,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        \Illuminate\Support\Facades\Gate::before(function ($user) {
+            return method_exists($user, 'roleKind') && in_array($user->roleKind(), ['super_admin', 'clinic_admin'], true) ? true : null;
+        });
     }
 }

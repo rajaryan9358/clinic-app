@@ -43,6 +43,11 @@ return new class extends Migration
             }
             $table->string('name');
             $table->string('guard_name');
+            $table->string('label')->nullable();
+            $table->enum('kind', ['super_admin', 'clinic_admin', 'staff', 'doctor'])->default('staff');
+            $table->boolean('limit_to_assigned_doctors')->default(false);
+            $table->boolean('is_system')->default(false);
+            $table->text('description')->nullable();
             $table->timestamps();
             if ($teams || config('permission.testing')) {
                 $table->unique([$columnNames['team_foreign_key'], 'name', 'guard_name']);

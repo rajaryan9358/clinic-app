@@ -64,4 +64,32 @@ class User extends Authenticatable
             ->withPivot(['clinic_id'])
             ->withTimestamps();
     }
+
+    private ?Role $resolvedRole = null;
+
+    private bool $roleResolved = false;
+
+    public function roleModel(): ?Role
+    {
+        if (! $this->roleResolved) {
+            $this->resolvedRole = $this->role ? Role::query()->where('name', $this->role)->where('guard_name', 'web')->first() : null;
+            $this->roleResolved = true;
+        }
+
+        return $this->resolvedRole;
+    }
+
+    public function roleKind(): string
+    {
+        if ($this->role === 'super_admin') {
+            return 'super_admin';
+        }
+
+        return $this->roleModel()?->kind ?? 'staff';
+    }
+
+    public function limitsToAssignedDoctors(): bool
+    {
+        return (bool) $this->roleModel()?->limit_to_assigned_doctors;
+    }
 }

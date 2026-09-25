@@ -22,7 +22,7 @@ return new class extends Migration
             $table->timestamp('phone_verified_at')->nullable();
             $table->string('password');
             $table->enum('login_type', ['password', 'otp', 'both'])->default('password');
-            $table->enum('role', ['super_admin', 'clinic_admin', 'doctor', 'receptionist', 'assistant']);
+            $table->string('role', 64);
             $table->enum('status', ['active', 'inactive', 'blocked'])->default('active');
             $table->timestamp('last_login_at')->nullable();
             $table->string('last_login_ip', 45)->nullable();
