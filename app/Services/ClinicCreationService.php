@@ -5,19 +5,25 @@ namespace App\Services;
 use App\Models\Clinic;
 use App\Models\ClinicSetting;
 use App\Models\Domain;
+use App\Models\Plan;
 use App\Models\User;
+use App\Services\Billing\SubscriptionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ClinicCreationService
 {
-    public function __construct(private readonly AuditLogService $auditLogService) {}
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+        private readonly SubscriptionService $subscriptions,
+    ) {}
 
     public function create(array $data, ?int $actorUserId = null): Clinic
     {
         return DB::transaction(function () use ($data, $actorUserId) {
-            $clinicData = collect($data)->except(['clinic_admin', 'settings', 'domain'])->all();
+            $clinicData = collect($data)->except(['clinic_admin', 'settings', 'domain', 'subscription'])->all();
 
             $clinic = Clinic::create([
                 ...$clinicData,
@@ -48,6 +54,20 @@ class ClinicCreationService
 
             if (! empty($data['domain'])) {
                 Domain::create([...$data['domain'], 'clinic_id' => $clinic->id]);
+            }
+
+            if (! empty($data['subscription'])) {
+                $s = $data['subscription'];
+                $plan = Plan::findOrFail($s['plan_id']);
+                if ($s['billing_cycle'] === 'yearly' && $plan->yearly_price === null) {
+                    throw ValidationException::withMessages(['subscription.billing_cycle' => 'This plan has no yearly price.']);
+                }
+                $this->subscriptions->start($clinic, $plan, $s['billing_cycle'], $s['start_mode'], [
+                    'trial_days' => $s['trial_days'] ?? null,
+                    'amount' => $s['offline_amount'] ?? null,
+                    'period_months' => $s['offline_period_months'] ?? null,
+                    'notes' => $s['offline_notes'] ?? null,
+                ], $actorUserId);
             }
 
             $this->auditLogService->log(

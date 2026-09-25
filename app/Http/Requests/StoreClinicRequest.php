@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreClinicRequest extends FormRequest
 {
@@ -46,6 +47,14 @@ class StoreClinicRequest extends FormRequest
             'settings.min_booking_notice_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
             'domain' => ['nullable', 'array'],
             'domain.host' => ['nullable', 'string', 'max:255', 'unique:domains,host'],
+            'subscription' => ['nullable', 'array'],
+            'subscription.plan_id' => ['required_with:subscription', 'integer', Rule::exists('plans', 'id')->where('is_active', true)->whereNull('deleted_at')],
+            'subscription.billing_cycle' => ['required_with:subscription', 'in:monthly,yearly'],
+            'subscription.start_mode' => ['required_with:subscription', 'in:trial,pending_payment,paid_offline'],
+            'subscription.trial_days' => ['sometimes', 'integer', 'min:1', 'max:365'],
+            'subscription.offline_amount' => ['required_if:subscription.start_mode,paid_offline', 'integer', 'min:1'],
+            'subscription.offline_period_months' => ['sometimes', 'integer', 'min:1', 'max:36'],
+            'subscription.offline_notes' => ['nullable', 'string', 'max:500'],
         ];
     }
 }
