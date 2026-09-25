@@ -84,29 +84,6 @@ abstract class BaseClinicCrudController extends BaseCrudController
             return $query;
         }
 
-        $allowedBranchIds = $request->attributes->get('allowed_branch_ids');
-        $activeBranchId = $request->attributes->get('active_branch_id');
-
-        if (is_array($allowedBranchIds) && $query->getModel()->getTable() === 'branches') {
-            $allowedBranchIds = array_values(array_unique(array_map('intval', $allowedBranchIds)));
-            if (count($allowedBranchIds) > 0) {
-                $query->whereIn('id', $allowedBranchIds);
-            }
-
-            return $query;
-        }
-
-        if (is_array($allowedBranchIds) && $this->modelHasColumn($query, 'branch_id')) {
-            $allowedBranchIds = array_values(array_unique(array_map('intval', $allowedBranchIds)));
-            if (count($allowedBranchIds) > 0) {
-                if ($activeBranchId) {
-                    $query->where('branch_id', (int) $activeBranchId);
-                } else {
-                    $query->whereIn('branch_id', $allowedBranchIds);
-                }
-            }
-        }
-
         $activeDoctorId = $request->attributes->get('active_doctor_id');
         if ($activeDoctorId && $this->modelHasColumn($query, 'doctor_id')) {
             $query->where('doctor_id', (int) $activeDoctorId);

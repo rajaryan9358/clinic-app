@@ -24,45 +24,6 @@ class ResolveClinicContext
 
         $clinicId = (int) ($request->attributes->get('clinic_id') ?? $user->clinic_id);
 
-        // Branch-scoped roles: only allow assigned branches.
-        if (in_array($user->role, [
-            UserRole::BRANCH_MANAGER->value,
-            UserRole::RECEPTIONIST->value,
-            UserRole::ASSISTANT->value,
-        ], true)) {
-            $branches = $user->branches()
-                ->select(['branches.id'])
-                ->orderByDesc('user_branch_map.is_default')
-                ->orderBy('branches.id')
-                ->get();
-
-            $allowedBranchIds = $branches->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
-            if (count($allowedBranchIds) === 0) {
-                abort(403, 'No branches assigned to user.');
-            }
-
-            $defaultBranchId = $branches->first()?->id;
-
-            $requestedBranchId = $this->intOrNull($request->header('X-Branch-Id'))
-                ?? $this->intOrNull($request->input('active_branch_id'));
-
-            $activeBranchId = $requestedBranchId ?: (int) $defaultBranchId;
-            if (! in_array($activeBranchId, $allowedBranchIds, true)) {
-                abort(403, 'Branch not allowed.');
-            }
-
-            // If request is explicitly filtering branch_id, ensure it is allowed.
-            if ($request->filled('branch_id')) {
-                $filterBranchId = (int) $request->input('branch_id');
-                if (! in_array($filterBranchId, $allowedBranchIds, true)) {
-                    abort(403, 'Branch filter not allowed.');
-                }
-            }
-
-            $request->attributes->set('allowed_branch_ids', $allowedBranchIds);
-            $request->attributes->set('active_branch_id', $activeBranchId);
-        }
-
         // Doctor context: doctor role is always scoped to the user's doctor record.
         if ($user->role === UserRole::DOCTOR->value) {
             $doctor = Doctor::query()

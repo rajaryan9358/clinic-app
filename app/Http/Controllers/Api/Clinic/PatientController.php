@@ -10,13 +10,12 @@ class PatientController extends BaseClinicCrudController
 {
     protected string $modelClass = Patient::class;
     protected array $searchable = ['full_name', 'first_name', 'last_name', 'phone', 'email'];
-    protected array $filterable = ['branch_id', 'status_tag', 'preferred_doctor_id'];
+    protected array $filterable = ['status_tag', 'preferred_doctor_id'];
 
     protected function baseQuery(Request $request): Builder
     {
         return parent::baseQuery($request)->with([
             'clinic:id,name',
-            'branch:id,name',
         ]);
     }
 
