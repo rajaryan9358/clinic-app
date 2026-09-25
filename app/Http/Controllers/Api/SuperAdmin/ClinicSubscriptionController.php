@@ -114,7 +114,13 @@ class ClinicSubscriptionController
             }
         }
 
-        $sub->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+        $pending = $sub->pending_razorpay_subscription_id;
+        $sub->update(['status' => 'cancelled', 'cancelled_at' => now(), 'pending_razorpay_subscription_id' => null]);
+
+        // A checkout still waiting for payment must not later revive the cancelled clinic.
+        if ($pending) {
+            $this->service->cancelQuietly($pending);
+        }
 
         return $this->success('Subscription cancelled', $sub->refresh());
     }

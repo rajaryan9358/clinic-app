@@ -180,4 +180,44 @@ class SuperAdminSubscriptionTest extends TestCase
         $row = collect($this->getJson('/api/super-admin/clinics')->assertOk()->json('data'))->firstWhere('id', $this->clinic->id);
         $this->assertSame('past_due', $row['subscription']['status']);
     }
+
+    public function test_extend_grace_on_terminated_linked_clinic_unlinks_and_cancels_old_subscription(): void
+    {
+        foreach (['cancelled', 'expired'] as $status) {
+            ClinicSubscription::query()->delete();
+            $this->gw->cancelled = [];
+            $this->linked(['status' => $status, 'cancelled_at' => $status === 'cancelled' ? now() : null]);
+
+            $this->postJson($this->base().'/extend-grace', ['days' => 2])->assertOk();
+
+            $sub = ClinicSubscription::first();
+            $this->assertSame('past_due', $sub->status, $status);
+            $this->assertNull($sub->razorpay_subscription_id, $status);
+            $this->assertSame([['subscriptionId' => 'sub_link', 'atCycleEnd' => false]], $this->gw->cancelled, $status);
+
+            // The super admin is no longer stuck: an offline payment can now be recorded.
+            $this->postJson($this->base().'/offline-payment', ['amount' => 1000, 'period_months' => 1])->assertOk();
+            $this->assertSame('active', ClinicSubscription::first()->status, $status);
+        }
+    }
+
+    public function test_extend_grace_on_live_subscription_keeps_link(): void
+    {
+        $this->linked(['status' => 'past_due', 'grace_ends_at' => now()->addDay()]);
+        $this->postJson($this->base().'/extend-grace', ['days' => 2])->assertOk();
+        $this->assertSame('sub_link', ClinicSubscription::first()->razorpay_subscription_id);
+        $this->assertSame([], $this->gw->cancelled);
+    }
+
+    public function test_cancel_also_cancels_pending_checkout(): void
+    {
+        $this->linked(['status' => 'active', 'pending_razorpay_subscription_id' => 'sub_pend']);
+        $this->postJson($this->base().'/cancel')->assertOk();
+
+        $sub = ClinicSubscription::first();
+        $this->assertSame('cancelled', $sub->status);
+        $this->assertNull($sub->pending_razorpay_subscription_id);
+        $this->assertContains(['subscriptionId' => 'sub_link', 'atCycleEnd' => true], $this->gw->cancelled);
+        $this->assertContains(['subscriptionId' => 'sub_pend', 'atCycleEnd' => false], $this->gw->cancelled);
+    }
 }

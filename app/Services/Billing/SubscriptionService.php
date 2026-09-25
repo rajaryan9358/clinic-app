@@ -77,7 +77,7 @@ class SubscriptionService
         return $tx;
     }
 
-    private function cancelQuietly(string $subscriptionId): void
+    public function cancelQuietly(string $subscriptionId): void
     {
         try {
             $this->gateway->cancelSubscription($subscriptionId, false);
@@ -124,10 +124,19 @@ class SubscriptionService
         $base = $sub->grace_ends_at && $sub->grace_ends_at->isFuture() ? $sub->grace_ends_at->copy() : now();
         $status = in_array($sub->status, ['expired', 'trialing', 'cancelled'], true) ? 'past_due' : $sub->status;
         $attrs = ['status' => $status, 'grace_ends_at' => $base->addDays($days)];
+        $terminatedLink = null;
         if (in_array($sub->status, ['expired', 'cancelled'], true)) {
             $attrs['cancelled_at'] = null;
+            // The linked Razorpay subscription is finished (or being wound down); detach it so the clinic can
+            // pay again or be paid offline, and so its later webhooks no longer match this clinic.
+            $terminatedLink = $sub->razorpay_subscription_id;
+            $attrs['razorpay_subscription_id'] = null;
         }
         $sub->update($attrs);
+
+        if ($terminatedLink) {
+            $this->cancelQuietly($terminatedLink);
+        }
 
         return $sub->refresh();
     }
@@ -192,7 +201,11 @@ class SubscriptionService
             throw ValidationException::withMessages(['razorpay_signature' => 'Payment could not be verified.']);
         }
 
-        $this->promotePending($sub, $subscriptionId);
+        // Only a newly confirmed checkout may change access. Re-verifying an already linked subscription
+        // (e.g. replaying an old, valid confirmation) grants nothing: webhooks drive its state.
+        if (! $this->promotePending($sub, $subscriptionId)) {
+            return $sub->refresh();
+        }
 
         if ($sub->status === 'trialing' && $sub->trial_ends_at && $sub->trial_ends_at->isFuture()) {
             return $sub->refresh();

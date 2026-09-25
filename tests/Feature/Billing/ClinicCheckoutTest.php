@@ -157,14 +157,18 @@ class ClinicCheckoutTest extends TestCase
     public function test_verify(): void
     {
         $this->actingAsRole('clinic_admin');
-        $this->sub->update(['razorpay_subscription_id' => 'sub_fake_1', 'status' => 'expired']);
+        // A checkout leaves the new Razorpay subscription pending until it is verified.
+        $this->sub->update(['pending_razorpay_subscription_id' => 'sub_fake_1', 'status' => 'expired', 'trial_ends_at' => null]);
 
         $this->gw->signatureValid = false;
         $this->postJson('/api/clinic/subscription/verify', ['razorpay_payment_id' => 'pay_1', 'razorpay_subscription_id' => 'sub_fake_1', 'razorpay_signature' => 'x'])->assertStatus(422);
 
         $this->gw->signatureValid = true;
         $this->postJson('/api/clinic/subscription/verify', ['razorpay_payment_id' => 'pay_1', 'razorpay_subscription_id' => 'sub_fake_1', 'razorpay_signature' => 'x'])->assertOk();
-        $this->assertSame('active', $this->sub->refresh()->status);
+        $this->sub->refresh();
+        $this->assertSame('active', $this->sub->status);
+        $this->assertSame('sub_fake_1', $this->sub->razorpay_subscription_id);
+        $this->assertNull($this->sub->pending_razorpay_subscription_id);
     }
 
     public function test_locked_clinic_can_still_reach_subscription_endpoints(): void
@@ -383,5 +387,36 @@ class ClinicCheckoutTest extends TestCase
         $this->assertSame(1000, $tx['amount']);
         $this->assertArrayNotHasKey('notes', $tx);
         $this->assertArrayNotHasKey('recorded_by', $tx);
+    }
+
+    public function test_replaying_verify_for_linked_subscription_grants_nothing(): void
+    {
+        // Expired clinic already linked to a Razorpay subscription whose paid period lapsed.
+        $this->sub->update(['status' => 'expired', 'trial_ends_at' => null, 'razorpay_subscription_id' => 'sub_linked',
+            'current_period_end' => now()->subDays(10)]);
+        $this->actingAsRole('clinic_admin');
+
+        // Re-sending an old but genuinely valid confirmation must not unlock the clinic.
+        $this->postJson('/api/clinic/subscription/verify', ['razorpay_payment_id' => 'pay_old', 'razorpay_subscription_id' => 'sub_linked', 'razorpay_signature' => 'valid'])
+            ->assertOk();
+
+        $this->sub->refresh();
+        $this->assertSame('expired', $this->sub->status);
+        $this->assertTrue($this->sub->current_period_end->isPast());
+        $this->getJson('/api/clinic/patients')->assertStatus(402);
+    }
+
+    public function test_verify_twice_for_new_checkout_grants_one_period_only(): void
+    {
+        $this->sub->update(['status' => 'expired', 'trial_ends_at' => null, 'pending_razorpay_subscription_id' => 'sub_new']);
+        $this->actingAsRole('clinic_admin');
+        $body = ['razorpay_payment_id' => 'pay_1', 'razorpay_subscription_id' => 'sub_new', 'razorpay_signature' => 'valid'];
+
+        $this->postJson('/api/clinic/subscription/verify', $body)->assertOk();
+        $end = $this->sub->refresh()->current_period_end->timestamp;
+        $this->travel(20)->days();
+        $this->postJson('/api/clinic/subscription/verify', $body)->assertOk();
+
+        $this->assertSame($end, $this->sub->refresh()->current_period_end->timestamp);
     }
 }
