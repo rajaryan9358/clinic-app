@@ -48,6 +48,29 @@ class UserController extends BaseClinicCrudController
         }
     }
 
+    /**
+     * A non-admin editor may not change their own `role` or `doctor_ids` — the latter
+     * would let a role with limit_to_assigned_doctors widen its own data scope.
+     * clinic_admin/super_admin actors are unrestricted.
+     */
+    private function assertNotWideningOwnAccess(User $actor, User $target, array $data): void
+    {
+        if ((int) $actor->id !== (int) $target->id) {
+            return;
+        }
+
+        if (in_array($actor->roleKind(), ['clinic_admin', 'super_admin'], true)) {
+            return;
+        }
+
+        $changingRole = array_key_exists('role', $data) && $data['role'] !== $target->role;
+        $changingDoctorIds = array_key_exists('doctor_ids', $data);
+
+        if ($changingRole || $changingDoctorIds) {
+            abort(403, "You can't change your own access.");
+        }
+    }
+
     protected function baseQuery(Request $request): Builder
     {
         $query = parent::baseQuery($request);
@@ -117,11 +140,7 @@ class UserController extends BaseClinicCrudController
             'doctor_ids.*' => ['integer', 'exists:doctors,id'],
         ])->validate();
 
-        if (array_key_exists('role', $data) && $data['role'] !== $user->role
-            && (int) $actor->id === (int) $user->id
-            && ! in_array($actor->roleKind(), ['clinic_admin', 'super_admin'], true)) {
-            abort(403, "You can't change your own role.");
-        }
+        $this->assertNotWideningOwnAccess($actor, $user, $data);
 
         $updated = $this->userManagementService->update($user, $data, $actor);
 
@@ -157,5 +176,16 @@ class UserController extends BaseClinicCrudController
         $this->assertCanMutate(request()->user(), $user);
 
         return parent::toggleBlock($id, $status);
+    }
+
+    public function restore(int $id)
+    {
+        /** @var \App\Models\User $user */
+        $user = $this->findModel($id);
+        $this->assertCanMutate(request()->user(), $user);
+
+        $user->restore();
+
+        return $this->success('Record restored successfully', $user->refresh());
     }
 }

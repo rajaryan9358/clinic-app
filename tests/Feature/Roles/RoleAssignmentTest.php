@@ -126,15 +126,67 @@ class RoleAssignmentTest extends TestCase
         $this->putJson("/api/clinic/users/{$editor->id}", [
             'role' => 'receptionist',
         ])->assertStatus(403)
-            ->assertJsonFragment(['message' => "You can't change your own role."]);
+            ->assertJsonFragment(['message' => "You can't change your own access."]);
 
-        // cannot delete or block a clinic admin either
+        // cannot delete, block or unblock a clinic admin either
         $this->deleteJson("/api/clinic/users/{$admin->id}")
             ->assertStatus(403)
             ->assertJsonFragment(['message' => "You can't change a clinic admin."]);
         $this->postJson("/api/clinic/users/{$admin->id}/block")
             ->assertStatus(403)
             ->assertJsonFragment(['message' => "You can't change a clinic admin."]);
+        $this->postJson("/api/clinic/users/{$admin->id}/unblock")
+            ->assertStatus(403)
+            ->assertJsonFragment(['message' => "You can't change a clinic admin."]);
+    }
+
+    public function test_staff_editor_cannot_promote_another_staff_user_to_clinic_admin(): void
+    {
+        $editor = $this->staffEditor(['staff.view', 'staff.create', 'staff.edit', 'staff.delete']);
+        $recep = $this->makeUser('receptionist');
+
+        Sanctum::actingAs($editor);
+
+        $this->putJson("/api/clinic/users/{$recep->id}", [
+            'role' => 'clinic_admin',
+        ])->assertStatus(403)
+            ->assertJsonFragment(['message' => "You can't assign the Clinic Admin role."]);
+    }
+
+    public function test_staff_editor_cannot_widen_own_doctor_scope(): void
+    {
+        $editor = $this->staffEditor(['staff.view', 'staff.create', 'staff.edit', 'staff.delete']);
+        $doctor = \App\Models\Doctor::create(['clinic_id' => $this->clinic->id, 'full_name' => 'Dr Other']);
+
+        Sanctum::actingAs($editor);
+
+        $this->putJson("/api/clinic/users/{$editor->id}", [
+            'doctor_ids' => [$doctor->id],
+        ])->assertStatus(403)
+            ->assertJsonFragment(['message' => "You can't change your own access."]);
+    }
+
+    public function test_restore_respects_admin_protection_and_manageable_roles(): void
+    {
+        $editor = $this->staffEditor(['staff.view', 'staff.create', 'staff.edit', 'staff.delete']);
+        $admin = $this->clinicAdmin();
+        $admin->delete();
+
+        Sanctum::actingAs($editor);
+        $this->postJson("/api/clinic/users/{$admin->id}/restore")
+            ->assertStatus(403)
+            ->assertJsonFragment(['message' => "You can't change a clinic admin."]);
+
+        $doctorUser = $this->makeUser('doctor');
+        $doctorUser->delete();
+        Sanctum::actingAs($this->clinicAdmin());
+        $this->postJson("/api/clinic/users/{$doctorUser->id}/restore")->assertStatus(404);
+
+        $recep = $this->makeUser('receptionist');
+        $recep->delete();
+        Sanctum::actingAs($this->clinicAdmin());
+        $this->postJson("/api/clinic/users/{$recep->id}/restore")->assertOk();
+        $this->assertNull($recep->refresh()->deleted_at);
     }
 
     public function test_super_admin_cannot_assign_super_admin_role_with_a_clinic(): void
