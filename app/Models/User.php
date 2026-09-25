@@ -58,13 +58,6 @@ class User extends Authenticatable
         return $this->belongsTo(Clinic::class);
     }
 
-    public function branches(): BelongsToMany
-    {
-        return $this->belongsToMany(Branch::class, 'user_branch_map')
-            ->withPivot(['clinic_id', 'is_default'])
-            ->withTimestamps();
-    }
-
     public function assignedDoctors(): BelongsToMany
     {
         return $this->belongsToMany(Doctor::class, 'assistant_doctor_map', 'assistant_user_id', 'doctor_id')

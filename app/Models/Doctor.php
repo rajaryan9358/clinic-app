@@ -39,12 +39,6 @@ class Doctor extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function branches(): BelongsToMany
-    {
-        return $this->belongsToMany(Branch::class, 'doctor_branch_map')
-            ->withPivot(['clinic_id', 'is_primary']);
-    }
-
     public function schedules(): HasMany
     {
         return $this->hasMany(DoctorSchedule::class);

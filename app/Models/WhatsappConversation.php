@@ -11,7 +11,7 @@ class WhatsappConversation extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'branch_id', 'patient_id', 'whatsapp_account_id', 'customer_phone', 'last_message_at',
+        'clinic_id', 'patient_id', 'whatsapp_account_id', 'customer_phone', 'last_message_at',
         'last_incoming_at', 'last_outgoing_at', 'conversation_status', 'current_owner_type',
         'current_owner_user_id', 'tags_json',
     ];

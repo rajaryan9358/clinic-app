@@ -13,7 +13,7 @@ class FileUpload extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'clinic_id', 'branch_id', 'patient_id', 'appointment_id', 'uploaded_by_user_id', 'module',
+        'clinic_id', 'patient_id', 'appointment_id', 'uploaded_by_user_id', 'module',
         'file_name', 'file_path', 'mime_type', 'file_size', 'visibility', 'created_at',
     ];
 

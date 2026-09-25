@@ -11,7 +11,7 @@ class WhatsappFlowSession extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'branch_id', 'conversation_id', 'patient_id', 'flow_type', 'current_step',
+        'clinic_id', 'conversation_id', 'patient_id', 'flow_type', 'current_step',
         'state_json', 'status', 'started_at', 'ended_at',
     ];
 

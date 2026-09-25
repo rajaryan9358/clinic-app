@@ -58,18 +58,20 @@ use App\Http\Controllers\Api\SuperAdmin\WhatsappTemplateController as SuperAdmin
 use App\Http\Controllers\Api\UploadController;
 use Illuminate\Support\Facades\Route;
 
-function registerCrudRoutes(string $prefix, string $controller): void {
-    Route::prefix($prefix)->group(function () use ($controller) {
-        Route::get('/', [$controller, 'index']);
-        Route::post('/', [$controller, 'store']);
-        Route::get('/{id}', [$controller, 'show']);
-        Route::put('/{id}', [$controller, 'update']);
-        Route::delete('/{id}', [$controller, 'destroy']);
-        Route::post('/{id}/restore', [$controller, 'restore']);
-        Route::post('/{id}/status', [$controller, 'changeStatus']);
-        Route::post('/{id}/block', [$controller, 'block']);
-        Route::post('/{id}/unblock', [$controller, 'unblock']);
-    });
+if (! function_exists('registerCrudRoutes')) {
+    function registerCrudRoutes(string $prefix, string $controller): void {
+        Route::prefix($prefix)->group(function () use ($controller) {
+            Route::get('/', [$controller, 'index']);
+            Route::post('/', [$controller, 'store']);
+            Route::get('/{id}', [$controller, 'show']);
+            Route::put('/{id}', [$controller, 'update']);
+            Route::delete('/{id}', [$controller, 'destroy']);
+            Route::post('/{id}/restore', [$controller, 'restore']);
+            Route::post('/{id}/status', [$controller, 'changeStatus']);
+            Route::post('/{id}/block', [$controller, 'block']);
+            Route::post('/{id}/unblock', [$controller, 'unblock']);
+        });
+    }
 }
 
 Route::prefix('auth')->group(function () {

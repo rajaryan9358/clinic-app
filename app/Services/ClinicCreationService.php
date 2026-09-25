@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Branch;
-use App\Models\BranchSetting;
 use App\Models\Clinic;
 use App\Models\ClinicSetting;
 use App\Models\Domain;
@@ -20,7 +18,7 @@ class ClinicCreationService
     public function create(array $data, ?int $actorUserId = null): Clinic
     {
         return DB::transaction(function () use ($data, $actorUserId) {
-            $clinicData = collect($data)->except(['main_branch', 'clinic_admin', 'domain'])->all();
+            $clinicData = collect($data)->except(['clinic_admin', 'settings', 'domain'])->all();
 
             $trialEndsAt = null;
             $trialEnabled = SystemSetting::query()->where('key', 'trial_enabled')->first();
@@ -35,17 +33,6 @@ class ClinicCreationService
                 'uuid' => (string) Str::uuid(),
                 'trial_ends_at' => $trialEndsAt,
             ]);
-
-            $mainBranch = null;
-            if (! empty($data['main_branch'])) {
-                $mainBranch = Branch::create([
-                    ...$data['main_branch'],
-                    'clinic_id' => $clinic->id,
-                    'uuid' => (string) Str::uuid(),
-                    'is_main_branch' => true,
-                    'status' => $data['main_branch']['status'] ?? 'active',
-                ]);
-            }
 
             if (! empty($data['clinic_admin'])) {
                 $admin = User::create([
@@ -63,21 +50,13 @@ class ClinicCreationService
                 $admin->assignRole('clinic_admin');
             }
 
-            ClinicSetting::firstOrCreate(['clinic_id' => $clinic->id], ['clinic_id' => $clinic->id]);
-
-            if ($mainBranch) {
-                BranchSetting::firstOrCreate(
-                    ['branch_id' => $mainBranch->id],
-                    ['clinic_id' => $clinic->id, 'branch_id' => $mainBranch->id]
-                );
-            }
+            ClinicSetting::firstOrCreate(
+                ['clinic_id' => $clinic->id],
+                [...($data['settings'] ?? []), 'clinic_id' => $clinic->id]
+            );
 
             if (! empty($data['domain'])) {
-                Domain::create([
-                    ...$data['domain'],
-                    'clinic_id' => $clinic->id,
-                    'branch_id' => $mainBranch?->id,
-                ]);
+                Domain::create([...$data['domain'], 'clinic_id' => $clinic->id]);
             }
 
             $this->auditLogService->log(

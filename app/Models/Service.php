@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Traits\BelongsToClinicScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Service extends Model
 {
@@ -18,11 +17,5 @@ class Service extends Model
     protected function casts(): array
     {
         return ['fee' => 'decimal:2'];
-    }
-
-    public function branches(): BelongsToMany
-    {
-        return $this->belongsToMany(Branch::class, 'branch_service_map')
-            ->withPivot(['clinic_id', 'created_at']);
     }
 }

@@ -12,7 +12,7 @@ class PatientNote extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'patient_id', 'branch_id', 'doctor_id', 'created_by_user_id', 'note_type', 'note', 'is_private',
+        'clinic_id', 'patient_id', 'doctor_id', 'created_by_user_id', 'note_type', 'note', 'is_private',
     ];
 
     protected function casts(): array
@@ -23,11 +23,6 @@ class PatientNote extends Model
     public function patient(): BelongsTo
     {
         return $this->belongsTo(Patient::class);
-    }
-
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
     }
 
     public function doctor(): BelongsTo

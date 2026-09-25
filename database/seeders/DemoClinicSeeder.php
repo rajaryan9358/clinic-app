@@ -18,12 +18,8 @@ class DemoClinicSeeder extends Seeder
             'status' => 'trial',
             'owner_name' => 'Demo Owner',
             'owner_email' => 'owner@demo-clinic.test',
-            'main_branch' => [
-                'name' => 'Main Branch',
-                'city' => 'Bengaluru',
-                'state' => 'Karnataka',
-                'status' => 'active',
-            ],
+            'city' => 'Bengaluru',
+            'state' => 'Karnataka',
             'clinic_admin' => [
                 'full_name' => 'Clinic Admin',
                 'email' => 'clinic-admin@demo-clinic.test',

@@ -13,7 +13,7 @@ class Appointment extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'uuid', 'branch_id', 'patient_id', 'doctor_id', 'service_id', 'appointment_date',
+        'clinic_id', 'uuid', 'patient_id', 'doctor_id', 'service_id', 'appointment_date',
         'start_time', 'end_time', 'token_number', 'visit_type', 'consultation_mode', 'booking_source_id',
         'booking_channel', 'status', 'payment_status', 'appointment_fee', 'discount_amount', 'final_amount',
         'booked_by_user_id', 'confirmed_at', 'checked_in_at', 'completed_at', 'cancelled_at',
@@ -47,11 +47,6 @@ class Appointment extends Model
     public function doctor(): BelongsTo
     {
         return $this->belongsTo(Doctor::class);
-    }
-
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
     }
 
     public function statusLogs(): HasMany

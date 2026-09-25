@@ -11,7 +11,7 @@ class DoctorScheduleException extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'doctor_id', 'branch_id', 'exception_date', 'type', 'start_time', 'end_time', 'reason',
+        'clinic_id', 'doctor_id', 'exception_date', 'type', 'start_time', 'end_time', 'reason',
     ];
 
     protected function casts(): array

@@ -14,7 +14,6 @@ class AuditLogService
         string $action,
         ?int $clinicId = null,
         ?int $userId = null,
-        ?int $branchId = null,
         ?array $oldValues = null,
         ?array $newValues = null,
         ?Request $request = null
@@ -22,7 +21,6 @@ class AuditLogService
         return AuditLog::create([
             'clinic_id' => $clinicId,
             'user_id' => $userId,
-            'branch_id' => $branchId,
             'module' => $module,
             'entity_type' => $entityType,
             'entity_id' => $entityId,

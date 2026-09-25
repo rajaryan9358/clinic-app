@@ -14,7 +14,7 @@ class RolesAndPermissionsSeeder extends Seeder
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $modules = [
-            'clinics', 'branches', 'domains', 'users', 'roles', 'permissions', 'doctors', 'schedules',
+            'clinics', 'domains', 'users', 'roles', 'permissions', 'doctors', 'schedules',
             'services', 'patients', 'patient_notes', 'appointments', 'followups', 'reminders',
             'whatsapp_accounts', 'whatsapp_templates', 'whatsapp_conversations', 'invoices', 'payments',
             'settings', 'audit_logs',
@@ -35,7 +35,6 @@ class RolesAndPermissionsSeeder extends Seeder
         $roles = [
             'super_admin',
             'clinic_admin',
-            'branch_manager',
             'doctor',
             'receptionist',
             'assistant',
@@ -50,14 +49,6 @@ class RolesAndPermissionsSeeder extends Seeder
         Role::findByName('clinic_admin')->syncPermissions(
             Permission::whereNotIn('name', ['roles.delete', 'permissions.delete'])->get()
         );
-
-        Role::findByName('branch_manager')->syncPermissions(Permission::where(function ($q) {
-            $q->where('name', 'like', 'branches.%')
-                ->orWhere('name', 'like', 'appointments.%')
-                ->orWhere('name', 'like', 'patients.%')
-                ->orWhere('name', 'like', 'followups.%')
-                ->orWhere('name', 'like', 'reminders.%');
-        })->get());
 
         Role::findByName('doctor')->syncPermissions(Permission::where(function ($q) {
             $q->where('name', 'like', 'appointments.%')

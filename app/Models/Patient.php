@@ -41,7 +41,7 @@ class Patient extends Model
     }
 
     protected $fillable = [
-        'clinic_id', 'uuid', 'branch_id', 'first_name', 'last_name', 'full_name', 'gender', 'dob', 'age',
+        'clinic_id', 'uuid', 'first_name', 'last_name', 'full_name', 'gender', 'dob', 'age',
         'phone', 'alternate_phone', 'email', 'blood_group', 'address_line_1', 'address_line_2', 'city',
         'state', 'pincode', 'occupation', 'referred_by', 'preferred_doctor_id', 'communication_consent',
         'whatsapp_opt_in', 'sms_opt_in', 'email_opt_in', 'first_visit_date', 'last_visit_date',
@@ -64,11 +64,6 @@ class Patient extends Model
     public function clinic(): BelongsTo
     {
         return $this->belongsTo(Clinic::class);
-    }
-
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
     }
 
     public function medicalProfile()

@@ -13,7 +13,6 @@ class Domain extends Model
 
     protected $fillable = [
         'clinic_id',
-        'branch_id',
         'host',
         'type',
         'is_primary',
@@ -31,10 +30,5 @@ class Domain extends Model
     public function clinic(): BelongsTo
     {
         return $this->belongsTo(Clinic::class);
-    }
-
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
     }
 }

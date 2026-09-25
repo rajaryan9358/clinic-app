@@ -12,7 +12,7 @@ class FollowupTask extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'branch_id', 'patient_id', 'appointment_id', 'assigned_to_user_id', 'doctor_id', 'due_date',
+        'clinic_id', 'patient_id', 'appointment_id', 'assigned_to_user_id', 'doctor_id', 'due_date',
         'due_time', 'task_type', 'status', 'priority', 'note', 'completed_at',
     ];
 

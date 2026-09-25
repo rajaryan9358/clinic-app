@@ -16,7 +16,6 @@ class Clinic extends Model
     {
         static::deleted(function (Clinic $clinic) {
             ClinicSetting::query()->where('clinic_id', $clinic->id)->delete();
-            BranchSetting::query()->where('clinic_id', $clinic->id)->delete();
         });
 
         static::restored(function (Clinic $clinic) {
@@ -32,6 +31,7 @@ class Clinic extends Model
         'owner_name',
         'owner_phone',
         'owner_email',
+        'address_line_1', 'address_line_2', 'city', 'state', 'pincode', 'latitude', 'longitude', 'phone', 'email',
         'logo_url',
         'primary_color',
         'secondary_color',
@@ -43,11 +43,6 @@ class Clinic extends Model
     protected $casts = [
         'trial_ends_at' => 'datetime',
     ];
-
-    public function branches(): HasMany
-    {
-        return $this->hasMany(Branch::class);
-    }
 
     public function users(): HasMany
     {

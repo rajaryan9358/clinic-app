@@ -8,7 +8,6 @@ class Review extends Model
 {
     protected $fillable = [
         'clinic_id',
-        'branch_id',
         'reviewer_name',
         'message',
         'rating',
@@ -31,10 +30,5 @@ class Review extends Model
     public function clinic()
     {
         return $this->belongsTo(Clinic::class);
-    }
-
-    public function branch()
-    {
-        return $this->belongsTo(Branch::class);
     }
 }

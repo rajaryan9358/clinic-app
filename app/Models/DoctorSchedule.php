@@ -11,7 +11,7 @@ class DoctorSchedule extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'doctor_id', 'branch_id', 'day_of_week', 'start_time', 'end_time',
+        'clinic_id', 'doctor_id', 'day_of_week', 'start_time', 'end_time',
         'consultation_mode', 'max_patients', 'slot_duration_minutes', 'buffer_time_minutes', 'is_active',
     ];
 

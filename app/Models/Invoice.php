@@ -11,7 +11,7 @@ class Invoice extends Model
     use HasFactory, BelongsToClinicScope;
 
     protected $fillable = [
-        'clinic_id', 'branch_id', 'patient_id', 'appointment_id', 'invoice_number', 'invoice_date',
+        'clinic_id', 'patient_id', 'appointment_id', 'invoice_number', 'invoice_date',
         'subtotal', 'discount_amount', 'tax_amount', 'total_amount', 'status', 'notes',
     ];
 
