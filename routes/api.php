@@ -47,7 +47,7 @@ use App\Http\Controllers\Api\SuperAdmin\PaymentController as SuperAdminPaymentCo
 use App\Http\Controllers\Api\SuperAdmin\ReminderLogController as SuperAdminReminderLogController;
 use App\Http\Controllers\Api\SuperAdmin\ReportController as SuperAdminReportController;
 use App\Http\Controllers\Api\SuperAdmin\ReviewController as SuperAdminReviewController;
-use App\Http\Controllers\Api\SuperAdmin\RolePermissionController as SuperAdminRolePermissionController;
+use App\Http\Controllers\Api\SuperAdmin\RoleController as SuperAdminRoleController;
 use App\Http\Controllers\Api\SuperAdmin\ServiceController as SuperAdminServiceController;
 use App\Http\Controllers\Api\SuperAdmin\SystemSettingController as SuperAdminSystemSettingController;
 use App\Http\Controllers\Api\SuperAdmin\UserController as SuperAdminUserController;
@@ -161,10 +161,11 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::post('doctors/{id}/exceptions', [SuperAdminDoctorProfileController::class, 'storeException']);
     Route::delete('doctors/{id}/exceptions/{exceptionId}', [SuperAdminDoctorProfileController::class, 'destroyException']);
 
-    Route::get('roles', [SuperAdminRolePermissionController::class, 'roles']);
-    Route::post('roles', [SuperAdminRolePermissionController::class, 'createRole']);
-    Route::post('roles/{roleId}/permissions', [SuperAdminRolePermissionController::class, 'syncRolePermissions']);
-    Route::get('permissions', [SuperAdminRolePermissionController::class, 'permissions']);
+    Route::get('roles', [SuperAdminRoleController::class, 'index']);
+    Route::post('roles', [SuperAdminRoleController::class, 'store']);
+    Route::put('roles/{id}', [SuperAdminRoleController::class, 'update']);
+    Route::delete('roles/{id}', [SuperAdminRoleController::class, 'destroy']);
+    Route::get('permission-catalogue', [SuperAdminRoleController::class, 'catalogue']);
 
     Route::post('uploads/image', [UploadController::class, 'storeImage']);
 });
