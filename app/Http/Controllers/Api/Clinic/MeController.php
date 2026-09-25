@@ -29,7 +29,7 @@ class MeController
                 ->get();
         }
 
-        $clinic = Clinic::query()->select(['id', 'name', 'status', 'trial_ends_at', 'logo_url'])->find($clinicId);
+        $clinic = Clinic::query()->select(['id', 'name', 'status', 'logo_url'])->find($clinicId);
 
         return $this->success('Context fetched', [
             'role' => (string) ($user?->role ?? ''),
@@ -39,7 +39,7 @@ class MeController
             'clinic_name' => $clinic?->name,
             'clinic_logo_url' => $clinic?->logo_url,
             'clinic_status' => $clinic?->status,
-            'clinic_trial_ends_at' => $clinic?->trial_ends_at?->toISOString(),
+            'clinic_trial_ends_at' => $clinic?->subscription?->trial_ends_at?->toISOString(),
         ]);
     }
 }

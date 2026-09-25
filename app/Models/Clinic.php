@@ -6,6 +6,7 @@ use App\Traits\BelongsToClinicScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Clinic extends Model
@@ -36,17 +37,17 @@ class Clinic extends Model
         'primary_color',
         'secondary_color',
         'status',
-        'trial_ends_at',
         'notes',
-    ];
-
-    protected $casts = [
-        'trial_ends_at' => 'datetime',
     ];
 
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(ClinicSubscription::class);
     }
 
     public function doctors(): HasMany

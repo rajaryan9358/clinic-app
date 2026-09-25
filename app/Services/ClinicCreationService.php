@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Clinic;
 use App\Models\ClinicSetting;
 use App\Models\Domain;
-use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -20,18 +19,10 @@ class ClinicCreationService
         return DB::transaction(function () use ($data, $actorUserId) {
             $clinicData = collect($data)->except(['clinic_admin', 'settings', 'domain'])->all();
 
-            $trialEndsAt = null;
-            $trialEnabled = SystemSetting::query()->where('key', 'trial_enabled')->first();
-            if (! $trialEnabled || $trialEnabled->value !== '0') {
-                $trialDaysSetting = SystemSetting::query()->where('key', 'trial_days')->first();
-                $trialDays = $trialDaysSetting ? (int) $trialDaysSetting->value : 14;
-                $trialEndsAt = now()->addDays($trialDays);
-            }
-
             $clinic = Clinic::create([
                 ...$clinicData,
                 'uuid' => (string) Str::uuid(),
-                'trial_ends_at' => $trialEndsAt,
+                'status' => $clinicData['status'] ?? 'active',
             ]);
 
             if (! empty($data['clinic_admin'])) {

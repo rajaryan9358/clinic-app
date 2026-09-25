@@ -31,7 +31,6 @@ class UpdateClinicRequest extends FormRequest
             'owner_phone' => ['nullable', 'string', 'max:20'],
             'owner_email' => ['nullable', 'email', 'max:255'],
             'status' => ['nullable', 'in:active,trial,suspended,inactive'],
-            'trial_ends_at' => ['nullable', 'date'],
             'logo_url' => ['nullable', 'string', 'max:500'],
             'primary_color' => ['nullable', 'string', 'max:20'],
             'secondary_color' => ['nullable', 'string', 'max:20'],
