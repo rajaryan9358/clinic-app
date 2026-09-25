@@ -28,7 +28,6 @@ export const navigationByRole = {
             section: 'Network',
             items: [
                 routeItem('/workflows/clinics', 'Clinics'),
-                moduleItem('doctors', { label: 'Doctors' }),
             ],
         },
         {

@@ -515,7 +515,12 @@ Write an appropriate reply.`;
                 ? 'New Service'
                 : moduleKey === 'appointments'
                     ? 'New Appointment'
+                : moduleKey === 'clinics'
+                    ? 'Onboard Clinic'
                 : 'Add New';
+
+    // Clinics are created through the onboarding wizard, not the generic form.
+    const addHref = moduleKey === 'clinics' ? '/workflows/onboard-clinic' : `/modules/${moduleKey}/new`;
 
     const canCreate = canCreateModule(user?.role, moduleKey);
     const isReadOnly = ['receptionist', 'doctor'].includes(user?.role) && moduleKey === 'services';
@@ -553,7 +558,7 @@ Write an appropriate reply.`;
                         </button>
                     ) : (
                         canCreate ? (
-                            <Link to={`/modules/${moduleKey}/new`} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">{addLabel}</Link>
+                            <Link to={addHref} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">{addLabel}</Link>
                         ) : null
                     )}
                 </div>

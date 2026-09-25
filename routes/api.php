@@ -89,6 +89,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::get('reports/doctors.pdf', [SuperAdminReportController::class, 'doctorsPdf']);
 
     registerCrudRoutes('clinics', SuperAdminClinicController::class);
+    Route::get('clinics/{id}/overview', [SuperAdminClinicController::class, 'overview']);
     registerCrudRoutes('domains', SuperAdminDomainController::class);
     registerCrudRoutes('users', SuperAdminUserController::class);
     registerCrudRoutes('doctors', SuperAdminDoctorController::class);

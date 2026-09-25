@@ -1,5 +1,6 @@
 // Modules the super_admin should not access directly (handled via clinic detail pages or workflows)
 export const SUPER_ADMIN_HIDDEN_MODULE_KEYS = [
+    'doctors', 'domains',
     'appointments', 'patients', 'followups', 'services', 'invoices', 'payments',
     'reviews', 'whatsappAccounts', 'whatsappTemplates', 'whatsappConversations',
     'reminders', 'whatsappMessages', 'whatsappSessions',

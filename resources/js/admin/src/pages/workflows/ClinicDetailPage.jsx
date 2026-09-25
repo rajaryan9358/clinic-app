@@ -7,7 +7,6 @@ import { formatDate } from '../../utils/dateFormat';
 
 const TABS = [
     { key: 'overview',  label: 'Overview',       icon: 'dashboard' },
-    { key: 'domains',   label: 'Domains',         icon: 'globe' },
     { key: 'doctors',   label: 'Doctors',         icon: 'stethoscope' },
     { key: 'services',  label: 'Services',        icon: 'clipboard-check' },
     { key: 'staff',     label: 'Staff Users',     icon: 'users' },
@@ -392,183 +391,129 @@ function Toggle({ checked, onChange, label }) {
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
-function OverviewTab({ clinic, clinicId, onEditClinic }) {
-    if (!clinic) return <LoadingState />;
+function yesNo(value) {
+    if (value == null) return null;
+    return value ? 'Yes' : 'No';
+}
+
+function ColorValue({ color }) {
     return (
-        <div className="grid gap-5 lg:grid-cols-2">
-            <Card className="p-5">
-                <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-gray-900">Clinic Information</h3>
-                    <Btn onClick={onEditClinic}>
-                        <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
-                    </Btn>
-                </div>
-                <InfoRow label="Name" value={clinic.name} />
-                <InfoRow label="Slug" value={clinic.slug} />
-                <InfoRow label="Legal Name" value={clinic.legal_name} />
-                <InfoRow label="Owner" value={clinic.owner_name} />
-                <InfoRow label="Owner Email" value={clinic.owner_email} />
-                <InfoRow label="Owner Phone" value={clinic.owner_phone} />
-                <InfoRow label="Status" value={<StatusBadge status={clinic.status} />} />
-                <InfoRow label="Created" value={formatDate(clinic.created_at)} />
-            </Card>
-        </div>
+        <span className="inline-flex items-center gap-2">
+            <span className="h-4 w-4 rounded border border-gray-200" style={{ backgroundColor: color }} />
+            <span className="font-mono text-xs">{color}</span>
+        </span>
     );
 }
 
-// ── Domains Tab ───────────────────────────────────────────────────────────────
-
-function DomainsTab({ clinicId }) {
-    const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(true);
+function OverviewTab({ clinic, clinicId, onEditClinic }) {
+    const [overview, setOverview] = useState(null);
     const [error, setError] = useState('');
-    const [sheet, setSheet] = useState({ open: false, domain: null });
-    const [form, setForm] = useState({});
-    const [saving, setSaving] = useState(false);
-    const [saveError, setSaveError] = useState('');
 
-    const load = async () => {
-        setLoading(true);
+    // Refetch whenever the clinic record changes (e.g. after the Edit sheet saves).
+    useEffect(() => {
         setError('');
-        try {
-            const domRes = await client.get('/super-admin/domains', { params: { clinic_id: clinicId, per_page: 100 } });
-            setItems(Array.isArray(domRes.data?.data) ? domRes.data.data : []);
-        } catch (e) {
-            setError(e?.response?.data?.message || 'Failed to load');
-        } finally {
-            setLoading(false);
-        }
-    };
+        client.get(`/super-admin/clinics/${clinicId}/overview`)
+            .then((res) => setOverview(res.data?.data || null))
+            .catch((e) => setError(e?.response?.data?.message || 'Could not load clinic overview.'));
+    }, [clinicId, clinic?.updated_at]);
 
-    useEffect(() => { load(); }, [clinicId]);
+    if (error) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>;
+    if (!overview) return <LoadingState />;
 
-    const openAdd = () => {
-        setForm({ clinic_id: clinicId, host: '', type: 'booking', is_primary: false, status: 'active' });
-        setSaveError('');
-        setSheet({ open: true, domain: null });
-    };
-
-    const openEdit = (domain) => {
-        setForm({ ...domain });
-        setSaveError('');
-        setSheet({ open: true, domain });
-    };
-
-    const closeSheet = () => setSheet({ open: false, domain: null });
-    const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
-
-    const handleSave = async () => {
-        setSaving(true);
-        setSaveError('');
-        try {
-            if (sheet.domain) {
-                await client.put(`/super-admin/domains/${sheet.domain.id}`, form);
-            } else {
-                await client.post('/super-admin/domains', form);
-            }
-            closeSheet();
-            load();
-        } catch (e) {
-            setSaveError(e?.response?.data?.message || 'Failed to save');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <LoadingState />;
-    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+    const c = overview.clinic || {};
+    const s = overview.settings || {};
+    const admins = overview.admins || [];
+    const counts = overview.counts || {};
+    const address = [c.address_line_1, c.address_line_2, c.city, c.state, c.pincode].filter(Boolean).join(', ');
 
     return (
-        <>
-            <SectionHeader
-                title="Domains & Links"
-                subtitle="Booking portals linked to this clinic."
-                action={
-                    <Btn variant="primary" onClick={openAdd}>
-                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Domain
-                    </Btn>
-                }
-            />
+        <div className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+                {[['Doctors', counts.doctors], ['Staff users', counts.staff], ['Services', counts.services]].map(([label, value]) => (
+                    <Card key={label} className="px-5 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900 tabular-nums">{value ?? 0}</p>
+                    </Card>
+                ))}
+            </div>
 
-            {!items.length ? <EmptyState icon="globe" text="No domains linked yet." /> : (
-                <div className="space-y-3">
-                    {items.map((domain) => (
-                        <Card key={domain.id} className="p-4">
-                            <div className="flex items-center justify-between gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <a
-                                            href={`https://${domain.host}`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-sm font-semibold text-blue-600 hover:underline"
-                                        >
-                                            {domain.host}
-                                        </a>
-                                        <StatusBadge status={domain.status} />
-                                        {domain.type && (
-                                            <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 capitalize">
-                                                {domain.type === 'booking' ? 'Booking Portal' : domain.type === 'portal' ? 'Patient Portal' : domain.type}
-                                            </span>
-                                        )}
-                                        {domain.is_primary && (
-                                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Primary</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Btn onClick={() => openEdit(domain)}>
-                                        <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
-                                    </Btn>
-                                    <DeleteBtn endpoint={`/super-admin/domains/${domain.id}`} onDeleted={load} label="domain" />
-                                </div>
-                            </div>
-                        </Card>
-                    ))}
-                </div>
-            )}
-
-            <Sheet
-                open={sheet.open}
-                title={sheet.domain ? `Edit Domain — ${sheet.domain.host}` : 'Add Domain'}
-                subtitle="Link a custom domain to this clinic's booking portal."
-                onClose={closeSheet}
-                footer={
-                    <div className="flex items-center justify-between gap-3">
-                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
-                        <div className="ml-auto flex gap-2">
-                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
-                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
-                                {saving ? 'Saving…' : 'Save'}
-                            </Btn>
-                        </div>
-                    </div>
-                }
-            >
-                <div className="space-y-4">
-                    <Field label="Host / Domain" required>
-                        <TextInput {...f('host')} placeholder="book.yourclinic.com" />
-                    </Field>
-                    <Field label="Type">
-                        <SelectInput {...f('type')} options={[
-                            { value: 'booking', label: 'Booking Portal' },
-                            { value: 'portal', label: 'Patient Portal' },
-                        ]} />
-                    </Field>
-                    <Field label="Status">
-                        <SelectInput {...f('status')} options={[
-                            { value: 'active', label: 'Active' },
-                            { value: 'inactive', label: 'Inactive' },
-                        ]} />
-                    </Field>
-                    <Toggle
-                        checked={form.is_primary}
-                        onChange={(v) => setForm((p) => ({ ...p, is_primary: v }))}
-                        label="Primary domain"
+            <div className="grid gap-5 lg:grid-cols-2">
+                <Card className="p-5">
+                    <SectionHeader
+                        title="Clinic"
+                        action={<Btn onClick={onEditClinic}><AppIcon name="edit" className="h-3.5 w-3.5" /> Edit</Btn>}
                     />
+                    {c.logo_url && (
+                        <div className="mb-3">
+                            <img src={c.logo_url} alt={`${c.name} logo`} className="h-14 w-14 rounded-lg border border-gray-200 object-contain" />
+                        </div>
+                    )}
+                    <InfoRow label="Name" value={c.name} />
+                    <InfoRow label="Legal name" value={c.legal_name} />
+                    <InfoRow label="Slug" value={c.slug} />
+                    <InfoRow label="Status" value={c.status && <StatusBadge status={c.status} />} />
+                    <InfoRow label="Trial ends" value={c.trial_ends_at && formatDate(c.trial_ends_at)} />
+                    <InfoRow label="Primary colour" value={c.primary_color && <ColorValue color={c.primary_color} />} />
+                    <InfoRow label="Secondary colour" value={c.secondary_color && <ColorValue color={c.secondary_color} />} />
+                    <InfoRow label="Created" value={formatDate(c.created_at)} />
+                    <InfoRow label="Notes" value={c.notes} />
+                </Card>
+
+                <div className="space-y-5">
+                    <Card className="p-5">
+                        <SectionHeader title="Owner" />
+                        <InfoRow label="Name" value={c.owner_name} />
+                        <InfoRow label="Email" value={c.owner_email} />
+                        <InfoRow label="Phone" value={c.owner_phone} />
+                        {!c.owner_name && !c.owner_email && !c.owner_phone && <p className="text-sm text-gray-400">No owner details recorded.</p>}
+                    </Card>
+
+                    <Card className="p-5">
+                        <SectionHeader title="Address and contact" />
+                        <InfoRow label="Address" value={address} />
+                        <InfoRow label="Phone" value={c.phone} />
+                        <InfoRow label="Email" value={c.email} />
+                        {!address && !c.phone && !c.email && <p className="text-sm text-gray-400">No address or contact recorded.</p>}
+                    </Card>
                 </div>
-            </Sheet>
-        </>
+
+                <Card className="p-5">
+                    <SectionHeader title="Booking settings" />
+                    {overview.settings ? (
+                        <>
+                            <InfoRow label="Online booking" value={yesNo(s.booking_enabled)} />
+                            <InfoRow label="WhatsApp booking" value={yesNo(s.whatsapp_booking_enabled)} />
+                            <InfoRow label="Walk-in" value={yesNo(s.walkin_enabled)} />
+                            <InfoRow label="Token system" value={yesNo(s.token_system_enabled)} />
+                            <InfoRow label="Auto-confirm" value={yesNo(s.auto_confirm_appointments)} />
+                            <InfoRow label="Max advance booking" value={s.max_advance_booking_days != null && `${s.max_advance_booking_days} days`} />
+                            <InfoRow label="Min booking notice" value={s.min_booking_notice_minutes != null && `${s.min_booking_notice_minutes} minutes`} />
+                        </>
+                    ) : (
+                        <p className="text-sm text-gray-400">No booking settings saved yet.</p>
+                    )}
+                </Card>
+
+                <Card className="p-5">
+                    <SectionHeader title="Clinic admins" subtitle="Logins created for this clinic's administrators." />
+                    {admins.length === 0 ? (
+                        <p className="text-sm text-gray-400">No clinic admin yet. Add one from Staff Users.</p>
+                    ) : (
+                        <ul className="divide-y divide-gray-100">
+                            {admins.map((a) => (
+                                <li key={a.id} className="flex items-start justify-between gap-3 py-2.5">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-900">{a.full_name}</p>
+                                        <p className="text-xs text-gray-500">{[a.email, a.phone].filter(Boolean).join(' · ')}</p>
+                                    </div>
+                                    {a.status && <StatusBadge status={a.status} />}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Card>
+            </div>
+        </div>
     );
 }
 
@@ -1534,7 +1479,6 @@ export default function ClinicDetailPage() {
                 {activeTab === 'overview' && (
                     <OverviewTab clinic={clinic} clinicId={id} onEditClinic={() => setEditSheet(true)} />
                 )}
-                {activeTab === 'domains'   && <DomainsTab clinicId={id} />}
                 {activeTab === 'doctors'   && <DoctorsTab clinicId={id} />}
                 {activeTab === 'services'  && <ServicesTab clinicId={id} />}
                 {activeTab === 'staff'     && <StaffTab clinicId={id} />}

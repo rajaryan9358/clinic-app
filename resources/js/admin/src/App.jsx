@@ -93,6 +93,7 @@ export default function App() {
 
                                 {/* ── Generic module CRUD ── */}
                                 <Route path="/modules/:moduleKey" element={<ModuleListPage />} />
+                                <Route path="/modules/clinics/new" element={<Navigate to="/workflows/onboard-clinic" replace />} />
                                 <Route path="/modules/:moduleKey/new" element={<ModuleFormPage />} />
                                 <Route path="/modules/:moduleKey/:id/edit" element={<ModuleFormPage />} />
                                 <Route path="/modules/:moduleKey/:id" element={<ModuleViewPage />} />

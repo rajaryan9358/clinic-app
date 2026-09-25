@@ -6,6 +6,10 @@ use App\Http\Controllers\Api\BaseCrudController;
 use App\Http\Requests\StoreClinicRequest;
 use App\Http\Requests\UpdateClinicRequest;
 use App\Models\Clinic;
+use App\Models\ClinicSetting;
+use App\Models\Doctor;
+use App\Models\Service;
+use App\Models\User;
 use App\Services\ClinicCreationService;
 use Illuminate\Http\Request;
 
@@ -35,6 +39,28 @@ class ClinicController extends BaseCrudController
         $clinic = $this->clinicCreationService->create($data, $request->user()?->id);
 
         return $this->success('Clinic created successfully', $clinic, 201);
+    }
+
+    public function overview(int $id)
+    {
+        $clinic = $this->findModel($id);
+
+        $admins = User::query()
+            ->where('clinic_id', $clinic->id)
+            ->where('role', 'clinic_admin')
+            ->orderBy('id')
+            ->get(['id', 'full_name', 'email', 'phone', 'status', 'last_login_at']);
+
+        return $this->success('Clinic overview fetched', [
+            'clinic' => $clinic,
+            'settings' => ClinicSetting::query()->where('clinic_id', $clinic->id)->first(),
+            'admins' => $admins,
+            'counts' => [
+                'doctors' => Doctor::query()->where('clinic_id', $clinic->id)->count(),
+                'staff' => User::query()->where('clinic_id', $clinic->id)->where('role', '!=', 'doctor')->count(),
+                'services' => Service::query()->where('clinic_id', $clinic->id)->count(),
+            ],
+        ]);
     }
 
     public function update(Request $request, int $id)
