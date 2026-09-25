@@ -9,6 +9,7 @@ use App\Models\Clinic;
 use App\Models\ClinicSetting;
 use App\Models\ClinicSubscription;
 use App\Models\Doctor;
+use App\Models\Role;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\ClinicCreationService;
@@ -65,7 +66,7 @@ class ClinicController extends BaseCrudController
             'admins' => $admins,
             'counts' => [
                 'doctors' => Doctor::query()->where('clinic_id', $clinic->id)->count(),
-                'staff' => User::query()->where('clinic_id', $clinic->id)->where('role', '!=', 'doctor')->count(),
+                'staff' => User::query()->where('clinic_id', $clinic->id)->whereNotIn('role', Role::where('kind', 'doctor')->pluck('name'))->count(),
                 'services' => Service::query()->where('clinic_id', $clinic->id)->count(),
             ],
         ]);

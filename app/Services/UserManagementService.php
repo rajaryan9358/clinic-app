@@ -14,7 +14,8 @@ class UserManagementService
 {
     public function create(array $data): User
     {
-        if (! empty($data['clinic_id']) && ($data['role'] ?? null) !== 'doctor') {
+        $roleKind = ! empty($data['role']) ? Role::where('name', $data['role'])->value('kind') : null;
+        if (! empty($data['clinic_id']) && $roleKind !== 'doctor') {
             app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'staff');
         }
 

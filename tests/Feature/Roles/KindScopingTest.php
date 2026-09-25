@@ -7,6 +7,7 @@ use App\Models\Doctor;
 use App\Models\DoctorSchedule;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Billing\PlanLimits;
 use App\Support\PermissionCatalogue;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -142,5 +143,46 @@ class KindScopingTest extends TestCase
         // Changing the role on the same instance must not keep serving the stale, memoized role.
         $user->role = 'doctor';
         $this->assertSame('doctor', $user->roleKind());
+    }
+
+    public function test_doctor_kind_custom_roles_are_excluded_from_staff_counts(): void
+    {
+        $clinic = Clinic::create(['uuid' => (string) Str::uuid(), 'name' => 'D', 'slug' => 'd', 'status' => 'active']);
+
+        $seniorDoctorRole = Role::create(['name' => 'senior_doctor', 'guard_name' => 'web', 'kind' => 'doctor', 'label' => 'Senior Doctor']);
+        $seniorDoctorRole->syncPermissions(PermissionCatalogue::defaults('doctor'));
+
+        $seniorDoctorUser = User::create([
+            'clinic_id' => $clinic->id, 'uuid' => (string) Str::uuid(), 'full_name' => 'Sr Doc',
+            'email' => 'srd@x.test', 'password' => 'x', 'role' => 'senior_doctor', 'status' => 'active',
+        ]);
+        $seniorDoctorUser->assignRole('senior_doctor');
+
+        $receptionist = User::create([
+            'clinic_id' => $clinic->id, 'uuid' => (string) Str::uuid(), 'full_name' => 'Rec',
+            'email' => 'recx@x.test', 'password' => 'x', 'role' => 'receptionist', 'status' => 'active',
+        ]);
+        $receptionist->assignRole('receptionist');
+
+        // PlanLimits::count('staff') must exclude every doctor-kind role, not just the literal 'doctor' role name.
+        $staffCount = app(PlanLimits::class)->count($clinic->id, 'staff');
+        $this->assertSame(1, $staffCount);
+
+        $superAdmin = User::create([
+            'clinic_id' => null, 'uuid' => (string) Str::uuid(), 'full_name' => 'Super',
+            'email' => 'super@x.test', 'password' => 'x', 'role' => 'super_admin', 'status' => 'active',
+        ]);
+        $superAdmin->assignRole('super_admin');
+        Sanctum::actingAs($superAdmin);
+
+        // Super admin clinic overview counts.staff must exclude doctor-kind custom roles too.
+        $overview = $this->getJson("/api/super-admin/clinics/{$clinic->id}/overview");
+        $overview->assertOk();
+        $this->assertSame(1, $overview->json('data.counts.staff'));
+
+        // SuperAdmin dashboard total_staff must also exclude the doctor-kind custom-role user.
+        $summary = $this->getJson('/api/super-admin/dashboard/summary');
+        $summary->assertOk();
+        $this->assertSame(1, $summary->json('data.total_staff'));
     }
 }
