@@ -30,7 +30,7 @@ class RazorpayWebhookTest extends TestCase
             'status' => 'pending_payment', 'grace_ends_at' => now()->addDay(), 'razorpay_subscription_id' => 'sub_1']);
     }
 
-    private function send(string $event, array $payload, string $eventId = null)
+    private function send(string $event, array $payload, ?string $eventId = null)
     {
         return $this->call('POST', '/api/webhooks/razorpay', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
@@ -109,5 +109,54 @@ class RazorpayWebhookTest extends TestCase
     {
         $this->send('subscription.activated', ['subscription' => ['entity' => ['id' => 'sub_unknown', 'status' => 'active']]])->assertOk();
         $this->assertSame('pending_payment', $this->sub->refresh()->status);
+    }
+
+    public function test_charged_on_cancelled_subscription_extends_period_but_stays_cancelled(): void
+    {
+        $this->sub->update(['status' => 'cancelled', 'cancelled_at' => now(), 'current_period_end' => now()->addDays(2)]);
+        $payload = $this->subEntity() + ['payment' => ['entity' => ['id' => 'pay_c1', 'amount' => 99900, 'method' => 'upi', 'invoice_id' => 'inv_c1']]];
+        $this->send('subscription.charged', $payload)->assertOk();
+
+        $this->sub->refresh();
+        $this->assertSame('cancelled', $this->sub->status);
+        $this->assertNotNull(SubscriptionTransaction::where('razorpay_payment_id', 'pay_c1')->first());
+        $this->assertEqualsWithDelta(now()->addMonth()->timestamp, $this->sub->current_period_end->timestamp, 5);
+    }
+
+    public function test_charged_on_expired_subscription_sets_cancelled_with_charged_period_end(): void
+    {
+        $this->sub->update(['status' => 'expired', 'current_period_end' => now()->subDay()]);
+        $payload = $this->subEntity() + ['payment' => ['entity' => ['id' => 'pay_e1', 'amount' => 99900, 'method' => 'upi', 'invoice_id' => 'inv_e1']]];
+        $this->send('subscription.charged', $payload)->assertOk();
+
+        $this->sub->refresh();
+        $this->assertSame('cancelled', $this->sub->status);
+        $this->assertNotNull(SubscriptionTransaction::where('razorpay_payment_id', 'pay_e1')->first());
+        $this->assertEqualsWithDelta(now()->addMonth()->timestamp, $this->sub->current_period_end->timestamp, 5);
+    }
+
+    public function test_activated_and_pending_on_terminated_subscription_are_ignored(): void
+    {
+        $this->sub->update(['status' => 'cancelled', 'cancelled_at' => now(), 'grace_ends_at' => null]);
+
+        $this->send('subscription.activated', $this->subEntity())->assertOk();
+        $this->assertSame('cancelled', $this->sub->refresh()->status);
+
+        $this->send('subscription.pending', $this->subEntity(['status' => 'pending']))->assertOk();
+        $this->sub->refresh();
+        $this->assertSame('cancelled', $this->sub->status);
+        $this->assertNull($this->sub->grace_ends_at);
+    }
+
+    public function test_charged_records_invoice_url_from_invoice_entity(): void
+    {
+        $payload = $this->subEntity() + [
+            'payment' => ['entity' => ['id' => 'pay_inv', 'amount' => 99900, 'method' => 'upi']],
+            'invoice' => ['entity' => ['id' => 'inv_2', 'short_url' => 'https://rzp.io/i/abc']],
+        ];
+        $this->send('subscription.charged', $payload)->assertOk();
+
+        $tx = SubscriptionTransaction::where('razorpay_payment_id', 'pay_inv')->firstOrFail();
+        $this->assertSame('https://rzp.io/i/abc', $tx->invoice_url);
     }
 }

@@ -28,13 +28,26 @@ class RazorpayWebhookHandler
         $end = isset($subEntity['current_end']) ? Carbon::createFromTimestamp($subEntity['current_end']) : null;
 
         match ($event) {
-            'subscription.activated' => $this->service->activate($sub, $start, $end),
+            'subscription.activated', 'subscription.pending', 'subscription.halted' => $this->lifecycle($event, $sub, $start, $end),
             'subscription.charged' => $this->charged($sub, $payment ?? [], $payload['invoice']['entity'] ?? null, $start, $end),
-            'subscription.pending', 'subscription.halted' => $this->service->markPastDue($sub, 'past_due'),
             'subscription.cancelled' => $sub->update(['status' => 'cancelled', 'cancelled_at' => now()]),
             'subscription.completed' => $sub->update(['status' => 'expired']),
             'payment.failed' => $this->failed($sub, $payment ?? []),
             default => null,
+        };
+    }
+
+    private function lifecycle(string $event, ClinicSubscription $sub, ?Carbon $start, ?Carbon $end): void
+    {
+        if (in_array($sub->status, ['cancelled', 'expired'], true)) {
+            Log::info('Ignoring Razorpay event for terminated subscription', ['event' => $event, 'subscription_id' => $sub->razorpay_subscription_id]);
+
+            return;
+        }
+
+        match ($event) {
+            'subscription.activated' => $this->service->activate($sub, $start, $end),
+            'subscription.pending', 'subscription.halted' => $this->service->markPastDue($sub, 'past_due'),
         };
     }
 
@@ -52,6 +65,24 @@ class RazorpayWebhookHandler
                 ],
             );
         }
+
+        if ($sub->status === 'cancelled') {
+            if ($end) {
+                $sub->update(['current_period_end' => $end]);
+            }
+
+            return;
+        }
+
+        if ($sub->status === 'expired') {
+            $sub->update(array_filter([
+                'status' => 'cancelled',
+                'current_period_end' => $end,
+            ], fn ($v) => $v !== null));
+
+            return;
+        }
+
         $this->service->activate($sub, $start, $end);
     }
 
