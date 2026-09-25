@@ -54,8 +54,7 @@ class AppointmentController extends BaseClinicCrudController
             'doctor:id,full_name',
         ])->withCount('prescriptions');
 
-        $role = (string) ($request->user()?->role ?? '');
-        if ($role === 'doctor') {
+        if ($request->user()?->roleKind() === 'doctor') {
             if (! $request->filled('appointment_date') && ! $request->filled('appointment_date_from') && ! $request->filled('appointment_date_to')) {
                 $query->whereDate('appointment_date', now()->toDateString());
             }
@@ -134,7 +133,7 @@ class AppointmentController extends BaseClinicCrudController
         $appointment = $this->findModel($id);
         $status = AppointmentStatus::from($request->validated('status'));
         $force = $request->validated('force') ?? false;
-        $forceAllowed = (bool) $force && (string) ($request->user()?->role ?? '') === 'clinic_admin';
+        $forceAllowed = (bool) $force && $request->user()?->roleKind() === 'clinic_admin';
         $updated = $this->appointmentService->changeStatus(
             $appointment,
             $status,

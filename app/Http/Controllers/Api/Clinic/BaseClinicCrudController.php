@@ -73,11 +73,9 @@ abstract class BaseClinicCrudController extends BaseCrudController
 
     private function applyAccessScopes(Request $request, Builder $query): Builder
     {
-        $role = (string) ($request->user()?->role ?? '');
-
         if ($query->getModel()->getTable() === 'doctors') {
             $activeDoctorId = $request->attributes->get('active_doctor_id');
-            if ($role === 'doctor' && $activeDoctorId) {
+            if ($request->user()?->roleKind() === 'doctor' && $activeDoctorId) {
                 $query->where('id', (int) $activeDoctorId);
             }
 

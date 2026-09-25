@@ -16,7 +16,7 @@ class EnsureClinicScope
             abort(401, 'Unauthenticated');
         }
 
-        if ($user->role === 'super_admin') {
+        if ($user->roleKind() === 'super_admin') {
             return $next($request);
         }
 

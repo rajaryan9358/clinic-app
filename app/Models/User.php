@@ -67,13 +67,13 @@ class User extends Authenticatable
 
     private ?Role $resolvedRole = null;
 
-    private bool $roleResolved = false;
+    private ?string $resolvedRoleName = null;
 
     public function roleModel(): ?Role
     {
-        if (! $this->roleResolved) {
+        if ($this->resolvedRoleName !== $this->role) {
             $this->resolvedRole = $this->role ? Role::query()->where('name', $this->role)->where('guard_name', 'web')->first() : null;
-            $this->roleResolved = true;
+            $this->resolvedRoleName = $this->role;
         }
 
         return $this->resolvedRole;

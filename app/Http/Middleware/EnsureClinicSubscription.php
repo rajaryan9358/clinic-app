@@ -19,7 +19,7 @@ class EnsureClinicSubscription
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        if (! $user || $user->role === 'super_admin') {
+        if (! $user || $user->roleKind() === 'super_admin') {
             return $next($request);
         }
 

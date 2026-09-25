@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\UserRole;
 use App\Models\Doctor;
 use Closure;
 use Illuminate\Http\Request;
@@ -18,14 +17,14 @@ class ResolveClinicContext
             abort(401, 'Unauthenticated');
         }
 
-        if ($user->role === UserRole::SUPER_ADMIN->value) {
+        if ($user->roleKind() === 'super_admin') {
             return $next($request);
         }
 
         $clinicId = (int) ($request->attributes->get('clinic_id') ?? $user->clinic_id);
 
-        // Doctor context: doctor role is always scoped to the user's doctor record.
-        if ($user->role === UserRole::DOCTOR->value) {
+        // Doctor context: doctor kind is always scoped to the user's doctor record.
+        if ($user->roleKind() === 'doctor') {
             $doctor = Doctor::query()
                 ->where('clinic_id', $clinicId)
                 ->where('user_id', $user->id)
@@ -43,8 +42,8 @@ class ResolveClinicContext
             }
         }
 
-        // Assistant context: assistants can be tagged to one or more doctors.
-        if ($user->role === UserRole::ASSISTANT->value) {
+        // Assistant context: roles that limit to assigned doctors can be tagged to one or more.
+        if ($user->limitsToAssignedDoctors()) {
             $assigned = $user->assignedDoctors()
                 ->select(['doctors.id'])
                 ->where('doctors.clinic_id', $clinicId)

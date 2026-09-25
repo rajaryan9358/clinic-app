@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api\SuperAdmin;
 
-use App\Enums\UserRole;
 use App\Http\Controllers\Api\BaseCrudController;
 use App\Models\Appointment;
 use App\Models\Clinic;
 use App\Models\Doctor;
 use App\Models\FollowupTask;
 use App\Models\Patient;
+use App\Models\Role;
 use App\Models\User;
 use App\Models\WhatsappConversation;
 
@@ -24,8 +24,7 @@ class DashboardController extends BaseCrudController
             'total_clinics' => Clinic::count(),
             'today_clinic_onboarding' => Clinic::whereDate('created_at', $today)->count(),
             'total_staff' => User::query()
-                ->where('role', '!=', UserRole::SUPER_ADMIN->value)
-                ->where('role', '!=', UserRole::DOCTOR->value)
+                ->whereNotIn('role', Role::whereIn('kind', ['super_admin', 'doctor'])->pluck('name'))
                 ->count(),
             'total_doctors' => Doctor::count(),
             'total_patients' => Patient::count(),

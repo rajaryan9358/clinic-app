@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Doctor;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\Billing\PlanLimits;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,9 @@ class UserManagementService
 
             $user->syncRoles([$data['role']]);
 
-            if (($data['role'] ?? null) === 'assistant' && array_key_exists('doctor_ids', $data)) {
+            $limitsToAssignedDoctors = ! empty($data['role']) && (bool) (Role::findByName($data['role'], 'web')?->limit_to_assigned_doctors);
+
+            if ($limitsToAssignedDoctors && array_key_exists('doctor_ids', $data)) {
                 $doctorIds = is_array($data['doctor_ids']) ? array_values($data['doctor_ids']) : [];
                 $doctorIds = array_values(array_unique(array_map('intval', $doctorIds)));
                 $allowedDoctorIds = Doctor::query()
@@ -91,7 +94,8 @@ class UserManagementService
             }
 
             $role = (string) ($user->role ?? '');
-            if ($role === 'assistant' && array_key_exists('doctor_ids', $data)) {
+            $limitsToAssignedDoctors = $role !== '' && (bool) (Role::findByName($role, 'web')?->limit_to_assigned_doctors);
+            if ($limitsToAssignedDoctors && array_key_exists('doctor_ids', $data)) {
                 $doctorIds = is_array($data['doctor_ids']) ? array_values($data['doctor_ids']) : [];
                 $doctorIds = array_values(array_unique(array_map('intval', $doctorIds)));
                 $allowedDoctorIds = Doctor::query()
@@ -109,7 +113,7 @@ class UserManagementService
                 $user->assignedDoctors()->sync($payload);
             }
 
-            if ($role !== 'assistant') {
+            if (! $limitsToAssignedDoctors) {
                 $user->assignedDoctors()->sync([]);
             }
 

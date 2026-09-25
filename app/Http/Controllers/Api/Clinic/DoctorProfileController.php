@@ -44,9 +44,8 @@ class DoctorProfileController extends Controller
                 'exceptions',
             ]);
 
-        $role = (string) ($request->user()?->role ?? '');
         $activeDoctorId = $request->attributes->get('active_doctor_id');
-        if ($role === 'doctor' && $activeDoctorId) {
+        if ($request->user()?->roleKind() === 'doctor' && $activeDoctorId) {
             $query->where('id', (int) $activeDoctorId);
         }
 
@@ -99,7 +98,7 @@ class DoctorProfileController extends Controller
         ];
 
         // Doctors can edit a limited subset of their own fields.
-        if ($role === 'doctor') {
+        if ($request->user()?->roleKind() === 'doctor') {
             $allowedKeys = [
                 'phone',
                 'email',
