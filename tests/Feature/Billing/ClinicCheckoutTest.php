@@ -73,6 +73,54 @@ class ClinicCheckoutTest extends TestCase
         $this->assertCount(1, $this->gw->createdPlans);
     }
 
+    public function test_checkout_blocked_when_already_active_and_linked(): void
+    {
+        $this->sub->update(['status' => 'active', 'razorpay_subscription_id' => 'sub_old']);
+        $this->actingAsRole('clinic_admin');
+        $this->postJson('/api/clinic/subscription/checkout', ['plan_id' => $this->plan->id, 'billing_cycle' => 'monthly'])
+            ->assertStatus(422)->assertJsonFragment(['message' => 'Your clinic already has an active subscription.']);
+        $this->assertSame([], $this->gw->createdSubscriptions);
+    }
+
+    public function test_checkout_cancels_previous_subscription_when_expired_and_linked(): void
+    {
+        $this->sub->update(['status' => 'expired', 'trial_ends_at' => null, 'razorpay_subscription_id' => 'sub_old']);
+        $this->actingAsRole('clinic_admin');
+        $this->postJson('/api/clinic/subscription/checkout', ['plan_id' => $this->plan->id, 'billing_cycle' => 'monthly'])->assertOk();
+
+        $this->assertSame([['subscriptionId' => 'sub_old', 'atCycleEnd' => false]], $this->gw->cancelled);
+        $this->assertSame('sub_fake_1', $this->sub->refresh()->razorpay_subscription_id);
+    }
+
+    public function test_checkout_cancels_previous_subscription_when_trialing_and_linked(): void
+    {
+        $this->sub->update(['razorpay_subscription_id' => 'sub_old']);
+        $this->actingAsRole('clinic_admin');
+        $this->postJson('/api/clinic/subscription/checkout', ['plan_id' => $this->plan->id, 'billing_cycle' => 'monthly'])->assertOk();
+
+        $this->assertSame([['subscriptionId' => 'sub_old', 'atCycleEnd' => false]], $this->gw->cancelled);
+        $this->assertSame('sub_fake_1', $this->sub->refresh()->razorpay_subscription_id);
+    }
+
+    public function test_checkout_proceeds_when_cancelling_previous_subscription_fails(): void
+    {
+        $this->sub->update(['status' => 'expired', 'trial_ends_at' => null, 'razorpay_subscription_id' => 'sub_old']);
+        $gw = new class extends FakeRazorpayGateway
+        {
+            public function cancelSubscription(string $subscriptionId, bool $atCycleEnd): void
+            {
+                throw new \RuntimeException('razorpay down');
+            }
+        };
+        $this->app->instance(RazorpayGateway::class, $gw);
+
+        $this->actingAsRole('clinic_admin');
+        $res = $this->postJson('/api/clinic/subscription/checkout', ['plan_id' => $this->plan->id, 'billing_cycle' => 'monthly'])->assertOk();
+
+        $res->assertJsonPath('data.subscription_id', 'sub_fake_1');
+        $this->assertSame('sub_fake_1', $this->sub->refresh()->razorpay_subscription_id);
+    }
+
     public function test_checkout_yearly_count_and_no_start_at_when_not_trialing(): void
     {
         $this->sub->update(['status' => 'expired', 'trial_ends_at' => null]);

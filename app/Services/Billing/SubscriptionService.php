@@ -9,6 +9,7 @@ use App\Models\SubscriptionTransaction;
 use App\Support\PlatformSettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class SubscriptionService
@@ -122,6 +123,19 @@ class SubscriptionService
         $amount = $plan->priceFor($cycle);
         if ($amount === null) {
             throw ValidationException::withMessages(['billing_cycle' => 'This plan has no yearly price.']);
+        }
+
+        if ($sub->status === 'active' && $sub->razorpay_subscription_id) {
+            throw ValidationException::withMessages(['subscription' => 'Your clinic already has an active subscription.']);
+        }
+
+        if ($sub->razorpay_subscription_id) {
+            $oldId = $sub->razorpay_subscription_id;
+            try {
+                $this->gateway->cancelSubscription($oldId, false);
+            } catch (\Throwable $e) {
+                Log::warning('Could not cancel previous Razorpay subscription', ['subscription_id' => $oldId, 'error' => $e->getMessage()]);
+            }
         }
 
         $column = $cycle === 'yearly' ? 'razorpay_plan_id_yearly' : 'razorpay_plan_id_monthly';
