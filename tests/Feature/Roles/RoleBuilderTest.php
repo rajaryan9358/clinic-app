@@ -219,9 +219,35 @@ class RoleBuilderTest extends TestCase
 
         $this->putJson("/api/super-admin/roles/{$receptionistId}", ['kind' => 'doctor'])
             ->assertStatus(422)
-            ->assertJsonFragment(['message' => "A system role's kind can't be changed."]);
+            ->assertJsonFragment(['message' => "A role's kind can't be changed after it's created."]);
 
         $this->assertDatabaseHas('roles', ['id' => $receptionistId, 'kind' => 'staff']);
+    }
+
+    public function test_custom_role_kind_is_immutable_even_when_in_use(): void
+    {
+        Sanctum::actingAs($this->superAdmin());
+        $roleId = $this->postJson('/api/super-admin/roles', ['label' => 'Front Desk', 'kind' => 'staff'])
+            ->assertCreated()->json('data.id');
+        $this->clinicUser('front_desk');
+
+        $this->putJson("/api/super-admin/roles/{$roleId}", ['kind' => 'doctor'])
+            ->assertStatus(422)
+            ->assertJsonFragment(['message' => "A role's kind can't be changed after it's created."]);
+
+        $this->assertDatabaseHas('roles', ['id' => $roleId, 'kind' => 'staff']);
+    }
+
+    public function test_update_with_same_kind_and_new_label_succeeds(): void
+    {
+        Sanctum::actingAs($this->superAdmin());
+        $roleId = $this->postJson('/api/super-admin/roles', ['label' => 'Front Desk', 'kind' => 'staff'])
+            ->assertCreated()->json('data.id');
+
+        $this->putJson("/api/super-admin/roles/{$roleId}", ['kind' => 'staff', 'label' => 'Front Desk Team'])
+            ->assertOk()
+            ->assertJsonPath('data.kind', 'staff')
+            ->assertJsonPath('data.label', 'Front Desk Team');
     }
 
     public function test_clinic_admin_role_permissions_cannot_be_edited(): void

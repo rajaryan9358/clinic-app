@@ -95,28 +95,24 @@ class RoleController extends Controller
             return $this->error('Clinic Admin always has full access.');
         }
 
-        if ($role->is_system && $request->has('kind') && $request->input('kind') !== $role->kind) {
-            return $this->error("A system role's kind can't be changed.");
+        if ($request->has('kind') && $request->input('kind') !== $role->kind) {
+            return $this->error("A role's kind can't be changed after it's created.");
         }
 
         $data = validator($request->all(), [
             'label' => ['sometimes', 'string', 'max:60'],
-            'kind' => ['sometimes', Rule::in(['staff', 'doctor'])],
             'limit_to_assigned_doctors' => ['sometimes', 'nullable', 'boolean'],
             'description' => ['sometimes', 'nullable', 'string', 'max:500'],
             'permissions' => ['sometimes', 'array'],
             'permissions.*' => [Rule::in(PermissionCatalogue::all())],
         ])->validate();
 
-        // name is set once at creation and is never touched here (immutable).
+        // name and kind are set once at creation and are never touched here (both immutable).
         if (array_key_exists('label', $data)) {
             $role->label = $data['label'];
         }
         if (array_key_exists('description', $data)) {
             $role->description = $data['description'];
-        }
-        if (! $role->is_system && array_key_exists('kind', $data)) {
-            $role->kind = $data['kind'];
         }
         if (array_key_exists('limit_to_assigned_doctors', $data)) {
             $role->limit_to_assigned_doctors = (bool) $data['limit_to_assigned_doctors'];
