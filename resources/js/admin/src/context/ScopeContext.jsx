@@ -13,9 +13,6 @@ export function ScopeProvider({ children }) {
             const { data } = await client.get('/clinic/me/context');
             setContext(data.data);
 
-            if (data?.data?.active_branch_id) {
-                localStorage.setItem('active_branch_id', String(data.data.active_branch_id));
-            }
             if (data?.data?.active_doctor_id) {
                 localStorage.setItem('active_doctor_id', String(data.data.active_doctor_id));
             }
@@ -33,7 +30,6 @@ export function ScopeProvider({ children }) {
                 refresh();
             } else {
                 setContext(null);
-                localStorage.removeItem('active_branch_id');
                 localStorage.removeItem('active_doctor_id');
             }
         };
@@ -43,12 +39,6 @@ export function ScopeProvider({ children }) {
         return () => window.removeEventListener('auth:changed', onAuthChanged);
     }, []);
 
-    const setActiveBranchId = (branchId) => {
-        if (!branchId) return;
-        localStorage.setItem('active_branch_id', String(branchId));
-        refresh();
-    };
-
     const setActiveDoctorId = (doctorId) => {
         if (!doctorId) return;
         localStorage.setItem('active_doctor_id', String(doctorId));
@@ -56,7 +46,7 @@ export function ScopeProvider({ children }) {
     };
 
     const value = useMemo(
-        () => ({ context, loading, refresh, setActiveBranchId, setActiveDoctorId }),
+        () => ({ context, loading, refresh, setActiveDoctorId }),
         [context, loading]
     );
 

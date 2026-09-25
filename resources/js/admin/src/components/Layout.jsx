@@ -20,7 +20,6 @@ const ROUTE_ICONS = {
 // Map module keys → icon names
 const MODULE_ICONS = {
     clinics: 'hospital',
-    branches: 'building',
     domains: 'globe',
     users: 'users',
     doctors: 'stethoscope',
@@ -39,7 +38,6 @@ const MODULE_ICONS = {
     payments: 'credit-card',
     auditLogs: 'shield',
     clinicSettings: 'settings',
-    branchSettings: 'settings',
     bookingSources: 'share',
 };
 
@@ -53,7 +51,6 @@ function roleLabel(role) {
     const map = {
         super_admin: 'Super Admin',
         clinic_admin: 'Clinic Admin',
-        branch_manager: 'Branch Manager',
         doctor: 'Doctor',
         receptionist: 'Receptionist',
         assistant: 'Assistant',
@@ -65,7 +62,6 @@ function roleBadgeColor(role) {
     const map = {
         super_admin: 'bg-violet-100 text-violet-700',
         clinic_admin: 'bg-blue-100 text-blue-700',
-        branch_manager: 'bg-sky-100 text-sky-700',
         doctor: 'bg-teal-100 text-teal-700',
         receptionist: 'bg-amber-100 text-amber-700',
         assistant: 'bg-gray-100 text-gray-600',
@@ -75,7 +71,7 @@ function roleBadgeColor(role) {
 
 export default function Layout({ children }) {
     const { user, logout } = useAuth();
-    const { context, setActiveBranchId, setActiveDoctorId } = useScope() || {};
+    const { context, setActiveDoctorId } = useScope() || {};
     const location = useLocation();
     const role = user?.role || 'assistant';
     const navSections = navigationByRole[role] || navigationByRole.assistant;
@@ -162,26 +158,6 @@ export default function Layout({ children }) {
 
                 {/* Right side */}
                 <div className="flex items-center gap-3">
-                    {/* Branch selector */}
-                    {context?.allowed_branches?.length > 0 && (
-                        <div className="hidden items-center gap-2 sm:flex">
-                            <AppIcon name="building" className="h-3.5 w-3.5 text-gray-400" />
-                            {context.allowed_branches.length === 1 ? (
-                                <span className="text-sm font-medium text-gray-700">{context.allowed_branches[0].name}</span>
-                            ) : (
-                                <select
-                                    className="rounded-lg border border-gray-200 bg-white py-1.5 pl-2 pr-7 text-sm font-medium text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                    value={context.active_branch_id || ''}
-                                    onChange={(e) => setActiveBranchId?.(e.target.value)}
-                                >
-                                    {context.allowed_branches.map((b) => (
-                                        <option key={b.id} value={b.id}>{b.name}</option>
-                                    ))}
-                                </select>
-                            )}
-                        </div>
-                    )}
-
                     {/* Doctor selector */}
                     {context?.allowed_doctors?.length > 0 && (
                         <div className="hidden items-center gap-2 sm:flex">

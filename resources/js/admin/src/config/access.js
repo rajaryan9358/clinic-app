@@ -11,7 +11,7 @@ export function isSuperAdminHiddenModuleKey(moduleKey) {
 }
 
 // Modules that cannot be created via the generic form
-export const NON_CREATABLE_MODULE_KEYS = ['clinicSettings', 'branchSettings', 'auditLogs'];
+export const NON_CREATABLE_MODULE_KEYS = ['clinicSettings', 'auditLogs'];
 
 export function canCreateModule(role, moduleKey) {
     if (!moduleKey) return false;
@@ -19,9 +19,6 @@ export function canCreateModule(role, moduleKey) {
     const r = String(role || '');
 
     if (NON_CREATABLE_MODULE_KEYS.includes(key)) return false;
-
-    // Branches: only super_admin can create (via clinic detail page)
-    if (key === 'branches') return r === 'super_admin';
 
     // Clinics: only super_admin
     if (key === 'clinics') return r === 'super_admin';
@@ -72,23 +69,12 @@ export function canAccessModule(role, moduleKey) {
             'whatsappConversations', 'reminders'].includes(key);
     }
 
-    // Branch manager: everything clinic-scoped except branches (no branch management)
-    if (r === 'branch_manager') {
-        return !['branches', 'clinics', 'domains', 'auditLogs', 'clinicSettings',
-            'branchSettings', 'followups'].includes(key);
-    }
-
     // Clinic admin: almost everything except audit (for clinic admins, restricted via backend)
     if (r === 'clinic_admin') {
         return !['clinics', 'domains', 'auditLogs', 'followups'].includes(key);
     }
 
     return true;
-}
-
-/** Whether this role should have branch auto-set (no branch selector in forms) */
-export function isAutoBranchRole(role) {
-    return ['branch_manager', 'receptionist', 'assistant', 'doctor'].includes(String(role || ''));
 }
 
 /** Whether doctor_id should be hidden (booking for self) */
@@ -101,8 +87,7 @@ export function allowedStaffRolesForCreator(actorRole) {
     const r = String(actorRole || '');
     // NOTE: creating doctor logins is handled via doctor onboarding (linked user),
     // not the generic staff user form.
-    if (r === 'super_admin') return ['super_admin', 'clinic_admin', 'branch_manager', 'receptionist', 'assistant'];
-    if (r === 'clinic_admin') return ['branch_manager', 'receptionist', 'assistant'];
-    if (r === 'branch_manager') return ['receptionist', 'assistant'];
+    if (r === 'super_admin') return ['super_admin', 'clinic_admin', 'receptionist', 'assistant'];
+    if (r === 'clinic_admin') return ['receptionist', 'assistant'];
     return [];
 }

@@ -65,7 +65,6 @@ export const navigationByRole = {
             items: [
                 moduleItem('doctors'),
                 moduleItem('services'),
-                moduleItem('branches'),
                 moduleItem('users', { label: 'Staff Users' }),
             ],
         },
@@ -80,44 +79,6 @@ export const navigationByRole = {
             section: 'Settings',
             items: [
                 routeItem('/workflows/clinic-profile', 'Clinic Profile'),
-            ],
-        },
-    ],
-
-    // ── Branch Manager ─────────────────────────────────────────────────────────
-    branch_manager: [
-        {
-            section: 'Overview',
-            items: [
-                routeItem('/dashboard', 'Overview'),
-            ],
-        },
-        {
-            section: 'Operations',
-            items: [
-                routeItem('/workflows/appointments', 'Appointments'),
-                moduleItem('patients'),
-            ],
-        },
-        {
-            section: 'Branch',
-            items: [
-                moduleItem('doctors'),
-                moduleItem('services'),
-                moduleItem('users', { label: 'Staff Users' }),
-            ],
-        },
-        {
-            section: 'Communication',
-            items: [
-                moduleItem('whatsappConversations', { label: 'WhatsApp' }),
-                moduleItem('reminders'),
-            ],
-        },
-        {
-            section: 'Settings',
-            items: [
-                routeItem('/workflows/branch-profile', 'Branch Profile'),
             ],
         },
     ],

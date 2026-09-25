@@ -7,7 +7,6 @@ import LoginPage from './pages/LoginPage';
 import ModuleFormPage from './pages/ModuleFormPage';
 import ModuleListPage from './pages/ModuleListPage';
 import ModuleViewPage from './pages/ModuleViewPage';
-import CreateBranchWizardPage from './pages/workflows/CreateBranchWizardPage';
 import CreateStaffWizardPage from './pages/workflows/CreateStaffWizardPage';
 import OnboardClinicWizardPage from './pages/workflows/OnboardClinicWizardPage';
 import SetupDoctorWizardPage from './pages/workflows/SetupDoctorWizardPage';
@@ -20,7 +19,6 @@ import MyDoctorProfilePage from './pages/workflows/MyDoctorProfilePage';
 import DoctorAvailabilityPage from './pages/workflows/DoctorAvailabilityPage';
 import ClinicDetailPage from './pages/workflows/ClinicDetailPage';
 import ClinicProfilePage from './pages/workflows/ClinicProfilePage';
-import BranchProfilePage from './pages/workflows/BranchProfilePage';
 import SystemSettingsPage from './pages/workflows/SystemSettingsPage';
 
 function Protected({ children }) {
@@ -62,14 +60,12 @@ export default function App() {
 
                                 {/* ── Super Admin Workflows ── */}
                                 <Route path="/workflows/onboard-clinic" element={<OnlySuperAdmin><OnboardClinicWizardPage /></OnlySuperAdmin>} />
-                                <Route path="/workflows/create-branch" element={<OnlySuperAdmin><CreateBranchWizardPage /></OnlySuperAdmin>} />
                                 <Route path="/workflows/clinics" element={<OnlySuperAdmin><ModuleListPage forcedModuleKey="clinics" /></OnlySuperAdmin>} />
                                 <Route path="/workflows/clinics/:id" element={<OnlySuperAdmin><ClinicDetailPage /></OnlySuperAdmin>} />
                                 <Route path="/workflows/system-settings" element={<OnlySuperAdmin><SystemSettingsPage /></OnlySuperAdmin>} />
 
                                 {/* ── Clinic Admin Workflows ── */}
                                 <Route path="/workflows/clinic-profile" element={<BlockSuperAdmin><ClinicProfilePage /></BlockSuperAdmin>} />
-                                <Route path="/workflows/branch-profile" element={<BlockSuperAdmin><BranchProfilePage /></BlockSuperAdmin>} />
 
                                 {/* ── Shared Workflows ── */}
                                 <Route path="/workflows/create-staff" element={<CreateStaffWizardPage />} />

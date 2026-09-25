@@ -13,11 +13,6 @@ client.interceptors.request.use((config) => {
         config.headers.Authorization = `Bearer ${token}`;
     }
 
-    const activeBranchId = localStorage.getItem('active_branch_id');
-    if (activeBranchId) {
-        config.headers['X-Branch-Id'] = activeBranchId;
-    }
-
     const activeDoctorId = localStorage.getItem('active_doctor_id');
     if (activeDoctorId) {
         config.headers['X-Doctor-Id'] = activeDoctorId;

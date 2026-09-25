@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AppIcon from './AppIcon';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { isAutoBranchRole, isAutoDocRole } from '../config/access';
+import { isAutoDocRole } from '../config/access';
 
 function inferLabel(item) {
     if (!item || typeof item !== 'object') return '';
@@ -197,8 +197,6 @@ export default function FormRenderer({ title, fields, values, onChange, onSubmit
         return (fields || []).filter((field) => {
             // clinic_id only visible to super_admin
             if (user?.role !== 'super_admin' && field.key === 'clinic_id') return false;
-            // branch_id / branch_ids hidden for roles where branch is auto-resolved server-side
-            if (isAutoBranchRole(user?.role) && (field.key === 'branch_id' || field.key === 'branch_ids')) return false;
             // doctor_id hidden for doctor role (booking is always for themselves)
             if (isAutoDocRole(user?.role) && field.key === 'doctor_id') return false;
             return true;
