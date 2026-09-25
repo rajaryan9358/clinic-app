@@ -5,10 +5,13 @@ namespace Tests\Feature;
 use App\Models\Clinic;
 use App\Models\Doctor;
 use App\Models\DoctorSchedule;
+use App\Models\User;
 use App\Services\AppointmentService;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class DoctorAvailabilityTest extends TestCase
@@ -40,5 +43,36 @@ class DoctorAvailabilityTest extends TestCase
             fn ($s) => substr($s['start_time'], 0, 5),
             $days[0]['slots']
         ));
+    }
+
+    public function test_clinic_admin_can_store_a_doctor_schedule_via_api(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $clinic = Clinic::create(['uuid' => (string) Str::uuid(), 'name' => 'C2', 'slug' => 'c2', 'status' => 'active']);
+        $doctor = Doctor::create(['clinic_id' => $clinic->id, 'full_name' => 'Dr B', 'slot_duration_minutes' => 30]);
+
+        $admin = User::create([
+            'clinic_id' => $clinic->id, 'uuid' => (string) Str::uuid(), 'full_name' => 'Admin',
+            'email' => 'admin'.$clinic->id.'@x.test', 'password' => 'x', 'role' => 'clinic_admin', 'status' => 'active',
+        ]);
+        $admin->assignRole('clinic_admin');
+        Sanctum::actingAs($admin);
+
+        $date = Carbon::now()->addDay();
+
+        $response = $this->postJson("/api/clinic/doctors/{$doctor->id}/schedules", [
+            'day_of_week' => $date->dayOfWeek,
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+            'consultation_mode' => 'in_person',
+        ]);
+
+        $response->assertCreated();
+        $this->assertTrue($response->json('success'));
+        $this->assertDatabaseHas('doctor_schedules', [
+            'clinic_id' => $clinic->id,
+            'doctor_id' => $doctor->id,
+        ]);
     }
 }
