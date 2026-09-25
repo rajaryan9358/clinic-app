@@ -25,19 +25,12 @@ class ClinicSettingController extends BaseCrudController
             return $this->error('clinic_id is required', null, 422);
         }
 
-        $request->validate([
-            'walkin_enabled' => ['sometimes', 'boolean'],
-            'token_system_enabled' => ['sometimes', 'boolean'],
-            'max_advance_booking_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
-            'min_booking_notice_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
-        ]);
-
-        $data = $request->all();
-        $data['clinic_id'] = (int) $clinicId;
+        $validated = $request->validate(ClinicSetting::validationRules());
+        $validated['clinic_id'] = (int) $clinicId;
 
         $model = ClinicSetting::query()->updateOrCreate(
             ['clinic_id' => (int) $clinicId],
-            $data
+            $validated
         );
 
         return $this->success(
@@ -45,6 +38,15 @@ class ClinicSettingController extends BaseCrudController
             $model,
             $model->wasRecentlyCreated ? 201 : 200
         );
+    }
+
+    public function update(Request $request, int $id)
+    {
+        $model = $this->findModel($id);
+        $validated = $request->validate(ClinicSetting::validationRules());
+        $model->update($validated);
+
+        return $this->success('Record updated successfully', $model->refresh());
     }
 
     public function destroy(int $id)

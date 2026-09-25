@@ -8,6 +8,12 @@ export function ScopeProvider({ children }) {
     const [loading, setLoading] = useState(false);
 
     const refresh = async () => {
+        try {
+            localStorage.removeItem('active_branch_id');
+        } catch {
+            // ignore storage access errors (private browsing, blocked storage, etc.)
+        }
+
         setLoading(true);
         try {
             const { data } = await client.get('/clinic/me/context');

@@ -27,22 +27,17 @@ class ClinicSettingController extends BaseClinicCrudController
 
     public function store(Request $request)
     {
+        $this->authorizeWrite($request);
+
         $clinicId = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
         $clinicId = (int) $clinicId;
 
-        $request->validate([
-            'walkin_enabled' => ['sometimes', 'boolean'],
-            'token_system_enabled' => ['sometimes', 'boolean'],
-            'max_advance_booking_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
-            'min_booking_notice_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
-        ]);
-
-        $data = $request->all();
-        $data['clinic_id'] = $clinicId;
+        $validated = $request->validate(ClinicSetting::validationRules());
+        $validated['clinic_id'] = $clinicId;
 
         $model = ClinicSetting::query()->updateOrCreate(
             ['clinic_id' => $clinicId],
-            $data
+            $validated
         );
 
         return $this->success(
@@ -52,8 +47,25 @@ class ClinicSettingController extends BaseClinicCrudController
         );
     }
 
+    public function update(Request $request, int $id)
+    {
+        $this->authorizeWrite($request);
+
+        $model = $this->findModel($id);
+        $validated = $request->validate(ClinicSetting::validationRules());
+        $model->update($validated);
+
+        return $this->success('Record updated successfully', $model->refresh());
+    }
+
     public function destroy(int $id)
     {
         return $this->error('Clinic settings cannot be deleted directly', null, 403);
+    }
+
+    private function authorizeWrite(Request $request): void
+    {
+        $role = (string) ($request->user()?->role ?? '');
+        abort_if($role !== 'clinic_admin', 403, 'Not allowed.');
     }
 }

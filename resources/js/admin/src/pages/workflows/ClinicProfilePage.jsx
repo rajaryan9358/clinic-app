@@ -68,6 +68,20 @@ function ColorField({ label, hint, value, onChange }) {
     );
 }
 
+function TextField({ label, value, onChange, type = 'text' }) {
+    return (
+        <div className="space-y-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+            <input
+                type={type}
+                value={value || ''}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+        </div>
+    );
+}
+
 export default function ClinicProfilePage() {
     const { user } = useAuth();
     const readOnly = user?.role === 'clinic_admin';
@@ -81,6 +95,13 @@ export default function ClinicProfilePage() {
     const [logoPreview, setLogoPreview] = useState('');
     const [primaryColor, setPrimaryColor] = useState('');
     const [secondaryColor, setSecondaryColor] = useState('');
+    const [addressLine1, setAddressLine1] = useState('');
+    const [addressLine2, setAddressLine2] = useState('');
+    const [city, setCity] = useState('');
+    const [state, setState] = useState('');
+    const [pincode, setPincode] = useState('');
+    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
     const logoInputRef = useRef(null);
 
     useEffect(() => {
@@ -91,6 +112,13 @@ export default function ClinicProfilePage() {
                 setLogoPreview(c.logo_url || '');
                 setPrimaryColor(c.primary_color || '');
                 setSecondaryColor(c.secondary_color || '');
+                setAddressLine1(c.address_line_1 || '');
+                setAddressLine2(c.address_line_2 || '');
+                setCity(c.city || '');
+                setState(c.state || '');
+                setPincode(c.pincode || '');
+                setPhone(c.phone || '');
+                setEmail(c.email || '');
             })
             .catch((e) => setError(e?.response?.data?.message || 'Failed to load clinic profile'))
             .finally(() => setLoading(false));
@@ -120,6 +148,13 @@ export default function ClinicProfilePage() {
                 logo_url: logoUrl || null,
                 primary_color: primaryColor || null,
                 secondary_color: secondaryColor || null,
+                address_line_1: addressLine1 || null,
+                address_line_2: addressLine2 || null,
+                city: city || null,
+                state: state || null,
+                pincode: pincode || null,
+                phone: phone || null,
+                email: email || null,
             });
             const updated = res.data?.data || clinic;
             setClinic(updated);
@@ -173,6 +208,32 @@ export default function ClinicProfilePage() {
                     <InfoField label="Owner Email" value={clinic?.owner_email} />
                     <InfoField label="Owner Phone" value={clinic?.owner_phone} />
                 </div>
+            </div>
+
+            {/* Location & Contact */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Location &amp; Contact</p>
+                {readOnly ? (
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <InfoField label="Address Line 1" value={addressLine1} />
+                        <InfoField label="Address Line 2" value={addressLine2} />
+                        <InfoField label="City" value={city} />
+                        <InfoField label="State" value={state} />
+                        <InfoField label="Pincode" value={pincode} />
+                        <InfoField label="Phone" value={phone} />
+                        <InfoField label="Email" value={email} />
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <TextField label="Address Line 1" value={addressLine1} onChange={setAddressLine1} />
+                        <TextField label="Address Line 2" value={addressLine2} onChange={setAddressLine2} />
+                        <TextField label="City" value={city} onChange={setCity} />
+                        <TextField label="State" value={state} onChange={setState} />
+                        <TextField label="Pincode" value={pincode} onChange={setPincode} />
+                        <TextField label="Phone" value={phone} onChange={setPhone} />
+                        <TextField label="Email" value={email} onChange={setEmail} type="email" />
+                    </div>
+                )}
             </div>
 
             {/* Trial */}

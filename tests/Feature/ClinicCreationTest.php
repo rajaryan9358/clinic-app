@@ -54,4 +54,22 @@ class ClinicCreationTest extends TestCase
         $this->assertNull(\App\Enums\UserRole::tryFrom('branch_manager'));
         $this->assertDatabaseMissing('roles', ['name' => 'branch_manager']);
     }
+
+    public function test_super_admin_create_clinic_with_explicit_null_setting_returns_422(): void
+    {
+        $superAdmin = User::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(), 'full_name' => 'Super',
+            'email' => 'super@x.test', 'password' => 'x', 'role' => 'super_admin', 'status' => 'active',
+        ]);
+        $superAdmin->assignRole('super_admin');
+        \Laravel\Sanctum\Sanctum::actingAs($superAdmin);
+
+        $response = $this->postJson('/api/super-admin/clinics', [
+            'name' => 'Null Settings Clinic',
+            'slug' => 'null-settings-clinic',
+            'settings' => ['max_advance_booking_days' => null],
+        ]);
+
+        $response->assertStatus(422);
+    }
 }

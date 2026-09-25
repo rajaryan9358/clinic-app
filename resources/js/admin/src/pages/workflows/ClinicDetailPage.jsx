@@ -1153,7 +1153,7 @@ function SettingsTab({ clinicId }) {
                             { key: 'whatsapp_booking_enabled', label: 'WhatsApp booking enabled' },
                             { key: 'walkin_enabled', label: 'Walk-in appointments' },
                             { key: 'token_system_enabled', label: 'Token system' },
-                            { key: 'auto_confirm', label: 'Auto-confirm appointments' },
+                            { key: 'auto_confirm_appointments', label: 'Auto-confirm appointments' },
                             { key: 'allow_reschedule', label: 'Allow patient rescheduling' },
                             { key: 'allow_cancel', label: 'Allow patient cancellation' },
                         ].map(({ key, label }) => (
@@ -1164,16 +1164,29 @@ function SettingsTab({ clinicId }) {
 
                 <Card className="p-5">
                     <h3 className="mb-4 text-sm font-semibold text-gray-900">Cutoff</h3>
-                    <div>
-                        <label className="mb-1 block text-xs font-semibold text-gray-700">Booking Cutoff (hours before appointment)</label>
-                        <input
-                            type="number"
-                            min={0}
-                            max={168}
-                            value={form.cutoff_hours ?? ''}
-                            onChange={(e) => setForm((p) => ({ ...p, cutoff_hours: e.target.value }))}
-                            className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-700">Reschedule Cutoff (hours before appointment)</label>
+                            <input
+                                type="number"
+                                min={0}
+                                max={8760}
+                                value={form.reschedule_cutoff_hours ?? ''}
+                                onChange={(e) => setForm((p) => ({ ...p, reschedule_cutoff_hours: e.target.value }))}
+                                className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-700">Cancel Cutoff (hours before appointment)</label>
+                            <input
+                                type="number"
+                                min={0}
+                                max={8760}
+                                value={form.cancel_cutoff_hours ?? ''}
+                                onChange={(e) => setForm((p) => ({ ...p, cancel_cutoff_hours: e.target.value }))}
+                                className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </div>
                     </div>
                 </Card>
 

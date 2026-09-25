@@ -37,4 +37,30 @@ class ClinicSetting extends Model
     {
         return $this->belongsTo(Clinic::class);
     }
+
+    /**
+     * Validation rules covering every writable clinic_settings field.
+     * Shared by the clinic-scoped and super-admin settings controllers so
+     * store() and update() apply the same constraints.
+     */
+    public static function validationRules(): array
+    {
+        return [
+            'booking_enabled' => ['sometimes', 'boolean'],
+            'whatsapp_booking_enabled' => ['sometimes', 'boolean'],
+            'auto_confirm_appointments' => ['sometimes', 'boolean'],
+            'allow_reschedule' => ['sometimes', 'boolean'],
+            'allow_cancel' => ['sometimes', 'boolean'],
+            'reschedule_cutoff_hours' => ['sometimes', 'integer', 'min:0', 'max:8760'],
+            'cancel_cutoff_hours' => ['sometimes', 'integer', 'min:0', 'max:8760'],
+            'default_slot_duration_minutes' => ['sometimes', 'integer', 'min:1', 'max:480'],
+            'booking_notice_text' => ['sometimes', 'nullable', 'string'],
+            'terms_text' => ['sometimes', 'nullable', 'string'],
+            'privacy_policy_text' => ['sometimes', 'nullable', 'string'],
+            'walkin_enabled' => ['sometimes', 'boolean'],
+            'token_system_enabled' => ['sometimes', 'boolean'],
+            'max_advance_booking_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
+            'min_booking_notice_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
+        ];
+    }
 }

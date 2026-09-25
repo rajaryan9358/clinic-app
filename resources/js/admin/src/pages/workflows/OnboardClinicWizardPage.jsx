@@ -148,16 +148,18 @@ export default function OnboardClinicWizardPage() {
                 walkin_enabled, token_system_enabled, max_advance_booking_days, min_booking_notice_minutes,
                 ...clinicFields
             } = clinic;
+            const settings = { walkin_enabled, token_system_enabled };
+            if (String(max_advance_booking_days ?? '').trim() !== '') {
+                settings.max_advance_booking_days = Number(max_advance_booking_days);
+            }
+            if (String(min_booking_notice_minutes ?? '').trim() !== '') {
+                settings.min_booking_notice_minutes = Number(min_booking_notice_minutes);
+            }
             const payload = {
                 ...clinicFields,
                 primary_color: clinicFields.primary_color || null,
                 secondary_color: clinicFields.secondary_color || null,
-                settings: {
-                    walkin_enabled,
-                    token_system_enabled,
-                    max_advance_booking_days: Number(max_advance_booking_days) || 30,
-                    min_booking_notice_minutes: Number(min_booking_notice_minutes) || 0,
-                },
+                settings,
                 clinic_admin: {
                     full_name: admin.full_name,
                     email: admin.email || null,
