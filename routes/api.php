@@ -31,6 +31,8 @@ use App\Http\Controllers\Api\Clinic\WhatsappTemplateController as ClinicWhatsapp
 use App\Http\Controllers\Api\SuperAdmin\AppointmentController as SuperAdminAppointmentController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController as SuperAdminAuditLogController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicController as SuperAdminClinicController;
+use App\Http\Controllers\Api\SuperAdmin\ClinicSubscriptionController as SuperAdminClinicSubscriptionController;
+use App\Http\Controllers\Api\SuperAdmin\SubscriptionTransactionController as SuperAdminSubscriptionTransactionController;
 use App\Http\Controllers\Api\SuperAdmin\PlanController as SuperAdminPlanController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicSettingController as SuperAdminClinicSettingController;
 use App\Http\Controllers\Api\SuperAdmin\DashboardController as SuperAdminDashboardController;
@@ -100,6 +102,13 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
 
     registerCrudRoutes('clinics', SuperAdminClinicController::class);
     Route::get('clinics/{id}/overview', [SuperAdminClinicController::class, 'overview']);
+    Route::post('clinics/{id}/subscription', [SuperAdminClinicSubscriptionController::class, 'store']);
+    Route::put('clinics/{id}/subscription', [SuperAdminClinicSubscriptionController::class, 'update']);
+    Route::post('clinics/{id}/subscription/extend-trial', [SuperAdminClinicSubscriptionController::class, 'extendTrial']);
+    Route::post('clinics/{id}/subscription/extend-grace', [SuperAdminClinicSubscriptionController::class, 'extendGrace']);
+    Route::post('clinics/{id}/subscription/offline-payment', [SuperAdminClinicSubscriptionController::class, 'offlinePayment']);
+    Route::post('clinics/{id}/subscription/cancel', [SuperAdminClinicSubscriptionController::class, 'cancel']);
+    Route::get('subscription-transactions', [SuperAdminSubscriptionTransactionController::class, 'index']);
     registerCrudRoutes('domains', SuperAdminDomainController::class);
     registerCrudRoutes('users', SuperAdminUserController::class);
     registerCrudRoutes('doctors', SuperAdminDoctorController::class);

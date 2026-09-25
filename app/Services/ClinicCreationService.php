@@ -8,10 +8,10 @@ use App\Models\Domain;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Billing\SubscriptionService;
+use App\Services\Billing\SubscriptionValidation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class ClinicCreationService
 {
@@ -59,9 +59,7 @@ class ClinicCreationService
             if (! empty($data['subscription'])) {
                 $s = $data['subscription'];
                 $plan = Plan::findOrFail($s['plan_id']);
-                if ($s['billing_cycle'] === 'yearly' && $plan->yearly_price === null) {
-                    throw ValidationException::withMessages(['subscription.billing_cycle' => 'This plan has no yearly price.']);
-                }
+                SubscriptionValidation::assertYearlyPriceAvailable($plan, $s['billing_cycle'], 'subscription.billing_cycle');
                 $this->subscriptions->start($clinic, $plan, $s['billing_cycle'], $s['start_mode'], [
                     'trial_days' => $s['trial_days'] ?? null,
                     'amount' => $s['offline_amount'] ?? null,

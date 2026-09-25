@@ -7,6 +7,7 @@ use App\Http\Requests\StoreClinicRequest;
 use App\Http\Requests\UpdateClinicRequest;
 use App\Models\Clinic;
 use App\Models\ClinicSetting;
+use App\Models\ClinicSubscription;
 use App\Models\Doctor;
 use App\Models\Service;
 use App\Models\User;
@@ -54,6 +55,7 @@ class ClinicController extends BaseCrudController
         return $this->success('Clinic overview fetched', [
             'clinic' => $clinic,
             'settings' => ClinicSetting::query()->where('clinic_id', $clinic->id)->first(),
+            'subscription' => ClinicSubscription::query()->with('plan')->where('clinic_id', $clinic->id)->first(),
             'admins' => $admins,
             'counts' => [
                 'doctors' => Doctor::query()->where('clinic_id', $clinic->id)->count(),
