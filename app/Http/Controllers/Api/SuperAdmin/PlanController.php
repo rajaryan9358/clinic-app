@@ -53,8 +53,11 @@ class PlanController
         if (array_key_exists('monthly_price', $data) && (int) $data['monthly_price'] !== (int) $plan->monthly_price) {
             $data['razorpay_plan_id_monthly'] = null;
         }
-        if (array_key_exists('yearly_price', $data) && $data['yearly_price'] !== $plan->yearly_price) {
-            $data['razorpay_plan_id_yearly'] = null;
+        if (array_key_exists('yearly_price', $data)) {
+            $newYearly = $data['yearly_price'] === null ? null : (int) $data['yearly_price'];
+            if ($newYearly !== $plan->yearly_price) {
+                $data['razorpay_plan_id_yearly'] = null;
+            }
         }
         $plan->update($data);
 

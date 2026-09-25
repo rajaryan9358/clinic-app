@@ -47,6 +47,32 @@ class PlanApiTest extends TestCase
         $this->assertSame('plan_y', $plan->razorpay_plan_id_yearly);
     }
 
+    public function test_string_prices_unchanged_does_not_clear_razorpay_ids(): void
+    {
+        $plan = Plan::create(['name' => 'Pro', 'monthly_price' => 199900, 'yearly_price' => 1999000,
+            'razorpay_plan_id_monthly' => 'plan_m', 'razorpay_plan_id_yearly' => 'plan_y']);
+
+        // PUT with string values (form-style data as would come from HTML forms)
+        $this->putJson("/api/super-admin/plans/{$plan->id}", ['name' => 'Pro', 'monthly_price' => '199900', 'yearly_price' => '1999000'])->assertOk();
+
+        $plan->refresh();
+        $this->assertSame('plan_m', $plan->razorpay_plan_id_monthly, 'monthly ID should not clear when price unchanged (string comparison)');
+        $this->assertSame('plan_y', $plan->razorpay_plan_id_yearly, 'yearly ID should not clear when price unchanged (string comparison)');
+    }
+
+    public function test_null_yearly_price_clears_razorpay_yearly_id(): void
+    {
+        $plan = Plan::create(['name' => 'Pro', 'monthly_price' => 199900, 'yearly_price' => 1999000,
+            'razorpay_plan_id_monthly' => 'plan_m', 'razorpay_plan_id_yearly' => 'plan_y']);
+
+        // PUT with yearly_price => null (removing yearly billing option)
+        $this->putJson("/api/super-admin/plans/{$plan->id}", ['name' => 'Pro', 'yearly_price' => null])->assertOk();
+
+        $plan->refresh();
+        $this->assertSame('plan_m', $plan->razorpay_plan_id_monthly, 'monthly ID should remain unchanged');
+        $this->assertNull($plan->razorpay_plan_id_yearly, 'yearly ID should clear when yearly_price becomes null');
+    }
+
     public function test_validation_and_delete_rules(): void
     {
         $this->postJson('/api/super-admin/plans', ['name' => 'Bad', 'monthly_price' => 0])->assertStatus(422);
