@@ -29,6 +29,7 @@ class StoreDoctorRequest extends FormRequest
             'linked_user.email' => ['nullable', 'email'],
             'linked_user.phone' => ['nullable', 'string', 'max:20'],
             'linked_user.password' => ['required_if:create_linked_user,1', 'required_if:create_linked_user,true', 'string', 'min:6'],
+            'linked_user.role' => ['nullable', 'string', 'exists:roles,name'],
             'consultation_fee' => ['nullable', 'numeric', 'min:0'],
             'followup_fee' => ['nullable', 'numeric', 'min:0'],
             'slot_duration_minutes' => ['nullable', 'integer', 'min:5', 'max:240'],

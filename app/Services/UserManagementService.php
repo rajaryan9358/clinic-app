@@ -9,17 +9,54 @@ use App\Services\Billing\PlanLimits;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class UserManagementService
 {
-    public function create(array $data): User
+    /**
+     * Validate that $actor may assign $roleName to a user in clinic $clinicId (null = clinic-less).
+     * Spec §4: role must exist; doctor-kind roles are rejected on the staff form; clinic_admin-kind
+     * roles may only be assigned by a clinic_admin (or super_admin) actor; super_admin-kind roles may
+     * only be assigned to clinic-less users.
+     *
+     * @throws ValidationException when the role does not exist or is doctor/super_admin-kind in a
+     *                             context that forbids it (422, field `role`).
+     */
+    private function assertAssignable(?User $actor, string $roleName, ?int $clinicId): Role
     {
-        $roleKind = ! empty($data['role']) ? Role::where('name', $data['role'])->value('kind') : null;
-        if (! empty($data['clinic_id']) && $roleKind !== 'doctor') {
+        $role = Role::where('name', $roleName)->where('guard_name', 'web')->first();
+
+        if (! $role) {
+            throw ValidationException::withMessages(['role' => ['The selected role is invalid.']]);
+        }
+
+        if ($role->kind === 'doctor') {
+            throw ValidationException::withMessages(['role' => ["Doctor logins are created from the doctor's profile."]]);
+        }
+
+        if ($role->kind === 'super_admin' && $clinicId !== null) {
+            throw ValidationException::withMessages(['role' => ['The super admin role cannot be assigned to a clinic user.']]);
+        }
+
+        if ($role->kind === 'clinic_admin' && $actor !== null && ! in_array($actor->roleKind(), ['clinic_admin', 'super_admin'], true)) {
+            abort(403, "You can't assign the Clinic Admin role.");
+        }
+
+        return $role;
+    }
+
+    public function create(array $data, ?User $actor = null): User
+    {
+        $role = null;
+        if (! empty($data['role'])) {
+            $role = $this->assertAssignable($actor, $data['role'], $data['clinic_id'] ?? null);
+        }
+
+        if (! empty($data['clinic_id']) && $role && $role->kind !== 'doctor') {
             app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'staff');
         }
 
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $role) {
             $user = User::create([
                 'clinic_id' => $data['clinic_id'] ?? null,
                 'uuid' => (string) Str::uuid(),
@@ -34,7 +71,7 @@ class UserManagementService
 
             $user->syncRoles([$data['role']]);
 
-            $limitsToAssignedDoctors = ! empty($data['role']) && (bool) (Role::findByName($data['role'], 'web')?->limit_to_assigned_doctors);
+            $limitsToAssignedDoctors = (bool) ($role?->limit_to_assigned_doctors);
 
             if ($limitsToAssignedDoctors && array_key_exists('doctor_ids', $data)) {
                 $doctorIds = is_array($data['doctor_ids']) ? array_values($data['doctor_ids']) : [];
@@ -63,9 +100,9 @@ class UserManagementService
         $user->update(['password' => Hash::make($password)]);
     }
 
-    public function update(User $user, array $data): User
+    public function update(User $user, array $data, ?User $actor = null): User
     {
-        return DB::transaction(function () use ($user, $data) {
+        return DB::transaction(function () use ($user, $data, $actor) {
             $updatable = [
                 'full_name',
                 'email',
@@ -74,6 +111,19 @@ class UserManagementService
                 'status',
                 'login_type',
             ];
+
+            $role = null;
+            if (array_key_exists('role', $data)) {
+                if ($data['role'] !== $user->role) {
+                    $role = $this->assertAssignable($actor, $data['role'], $data['clinic_id'] ?? $user->clinic_id);
+                } else {
+                    // Unchanged role (e.g. an existing doctor login edited from the super admin
+                    // staff form) is always kept, even if it wouldn't be freshly assignable here.
+                    $role = Role::where('name', $user->role)->where('guard_name', 'web')->first();
+                }
+            } else {
+                $role = Role::where('name', $user->role)->where('guard_name', 'web')->first();
+            }
 
             $payload = [];
             foreach ($updatable as $key) {
@@ -94,8 +144,7 @@ class UserManagementService
                 $user->syncRoles([$user->role]);
             }
 
-            $role = (string) ($user->role ?? '');
-            $limitsToAssignedDoctors = $role !== '' && (bool) (Role::findByName($role, 'web')?->limit_to_assigned_doctors);
+            $limitsToAssignedDoctors = (bool) ($role?->limit_to_assigned_doctors);
             if ($limitsToAssignedDoctors && array_key_exists('doctor_ids', $data)) {
                 $doctorIds = is_array($data['doctor_ids']) ? array_values($data['doctor_ids']) : [];
                 $doctorIds = array_values(array_unique(array_map('intval', $doctorIds)));

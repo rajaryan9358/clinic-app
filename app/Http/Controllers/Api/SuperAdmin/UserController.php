@@ -22,7 +22,7 @@ class UserController extends BaseCrudController
     public function store(Request $request)
     {
         $data = validator($request->all(), (new StoreUserRequest())->rules())->validate();
-        $user = $this->userManagementService->create($data);
+        $user = $this->userManagementService->create($data, $request->user());
 
         return $this->success('User created successfully', $user, 201);
     }
@@ -52,7 +52,7 @@ class UserController extends BaseCrudController
 
         /** @var \App\Models\User $user */
         $user = $this->findModel($id);
-        $updated = $this->userManagementService->update($user, $data);
+        $updated = $this->userManagementService->update($user, $data, $request->user());
 
         $data = $updated->toArray();
 

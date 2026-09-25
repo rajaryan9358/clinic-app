@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Clinic;
 use App\Http\Controllers\Concerns\ApiResponse;
 use App\Models\Clinic;
 use App\Models\Doctor;
+use App\Support\PermissionCatalogue;
 use Illuminate\Http\Request;
 
 class MeController
@@ -33,6 +34,12 @@ class MeController
 
         return $this->success('Context fetched', [
             'role' => (string) ($user?->role ?? ''),
+            'role_label' => $user?->roleModel()?->label,
+            'role_kind' => $user?->roleKind(),
+            'role_limits_assigned_doctors' => $user?->limitsToAssignedDoctors(),
+            'permissions' => in_array($user?->roleKind(), ['clinic_admin', 'super_admin'], true)
+                ? PermissionCatalogue::all()
+                : $user?->getAllPermissions()->pluck('name')->values()->all() ?? [],
             'active_doctor_id' => $activeDoctorId ? (int) $activeDoctorId : null,
             'allowed_doctors' => $doctors,
             'clinic_id' => $clinicId,

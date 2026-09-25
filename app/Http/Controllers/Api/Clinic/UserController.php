@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Clinic;
 
+use App\Http\Requests\StatusChangeRequest;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\UserManagementService;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,21 +20,38 @@ class UserController extends BaseClinicCrudController
     public function __construct(private readonly UserManagementService $userManagementService) {}
 
     /**
-     * Roles a staff manager may list/create/edit. The route's staff.* permission
-     * decides who may manage staff at all; Task 4 replaces this list with the
-     * clinic's assignable roles.
+     * Role names manageable through this controller: staff and clinic_admin kinds.
+     * Doctor-kind and super_admin-kind users are managed elsewhere (doctor onboarding
+     * / super admin console) and never appear here.
      */
-    private function allowedTargetRoles(): array
+    private function manageableRoleNames(): array
     {
-        return ['receptionist', 'assistant'];
+        return Role::query()
+            ->where('guard_name', 'web')
+            ->whereIn('kind', ['staff', 'clinic_admin'])
+            ->pluck('name')
+            ->all();
+    }
+
+    /**
+     * A non-admin editor (staff kind) may not update/delete/block a clinic_admin-kind
+     * user. clinic_admin and super_admin actors are unrestricted.
+     */
+    private function assertCanMutate(User $actor, User $target): void
+    {
+        if (in_array($actor->roleKind(), ['clinic_admin', 'super_admin'], true)) {
+            return;
+        }
+
+        if ($target->roleKind() === 'clinic_admin') {
+            abort(403, "You can't change a clinic admin.");
+        }
     }
 
     protected function baseQuery(Request $request): Builder
     {
         $query = parent::baseQuery($request);
-
-        $allowedRoles = $this->allowedTargetRoles();
-        $query->whereIn('role', $allowedRoles);
+        $query->whereIn('role', $this->manageableRoleNames());
 
         return $query;
     }
@@ -42,29 +61,26 @@ class UserController extends BaseClinicCrudController
         /** @var \App\Models\User $user */
         $user = parent::findModel($id);
 
-        $allowedManageRoles = $this->allowedTargetRoles();
-        abort_if(! in_array((string) $user->role, $allowedManageRoles, true), 403, 'Not allowed.');
+        abort_if(! in_array((string) $user->role, $this->manageableRoleNames(), true), 404);
 
         return $user;
     }
 
     public function store(Request $request)
     {
-            $allowedRoles = $this->allowedTargetRoles();
-
-            $data = validator($request->all(), [
-                'full_name' => ['required', 'string', 'max:255'],
-                'email' => ['nullable', 'email', 'required_without:phone'],
-                'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
-                'password' => ['required', 'string', 'min:8'],
-                'role' => ['required', Rule::in($allowedRoles)],
-                'status' => ['nullable', Rule::in(['active', 'inactive', 'blocked'])],
-                'doctor_ids' => ['nullable', 'array'],
-                'doctor_ids.*' => ['integer', 'exists:doctors,id'],
-            ])->validate();
+        $data = validator($request->all(), [
+            'full_name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'required_without:phone'],
+            'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
+            'password' => ['required', 'string', 'min:8'],
+            'role' => ['required', 'string', 'exists:roles,name'],
+            'status' => ['nullable', Rule::in(['active', 'inactive', 'blocked'])],
+            'doctor_ids' => ['nullable', 'array'],
+            'doctor_ids.*' => ['integer', 'exists:doctors,id'],
+        ])->validate();
         $data['clinic_id'] = $request->attributes->get('clinic_id');
 
-        $user = $this->userManagementService->create($data);
+        $user = $this->userManagementService->create($data, $request->user());
 
         return $this->success('User created successfully', $user, 201);
     }
@@ -85,23 +101,29 @@ class UserController extends BaseClinicCrudController
     {
         /** @var \App\Models\User $user */
         $user = $this->findModel($id);
+        $actor = $request->user();
 
-            $allowedManageRoles = $this->allowedTargetRoles();
-            abort_if(! in_array((string) $user->role, $allowedManageRoles, true), 403, 'Not allowed.');
+        $this->assertCanMutate($actor, $user);
 
-            $data = validator($request->all(), [
-                'full_name' => ['sometimes', 'string', 'max:255'],
-                'email' => ['sometimes', 'nullable', 'email'],
-                'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
-                'password' => ['sometimes', 'nullable', 'string', 'min:8'],
-                'role' => ['sometimes', Rule::in($allowedManageRoles)],
-                'status' => ['sometimes', 'nullable', Rule::in(['active', 'inactive', 'blocked'])],
-                'login_type' => ['sometimes', 'nullable', Rule::in(['password', 'otp'])],
-                'doctor_ids' => ['sometimes', 'array'],
-                'doctor_ids.*' => ['integer', 'exists:doctors,id'],
-            ])->validate();
+        $data = validator($request->all(), [
+            'full_name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'nullable', 'email'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'password' => ['sometimes', 'nullable', 'string', 'min:8'],
+            'role' => ['sometimes', 'string', 'exists:roles,name'],
+            'status' => ['sometimes', 'nullable', Rule::in(['active', 'inactive', 'blocked'])],
+            'login_type' => ['sometimes', 'nullable', Rule::in(['password', 'otp'])],
+            'doctor_ids' => ['sometimes', 'array'],
+            'doctor_ids.*' => ['integer', 'exists:doctors,id'],
+        ])->validate();
 
-            $updated = $this->userManagementService->update($user, $data);
+        if (array_key_exists('role', $data) && $data['role'] !== $user->role
+            && (int) $actor->id === (int) $user->id
+            && ! in_array($actor->roleKind(), ['clinic_admin', 'super_admin'], true)) {
+            abort(403, "You can't change your own role.");
+        }
+
+        $updated = $this->userManagementService->update($user, $data, $actor);
 
         $updated->loadMissing('assignedDoctors:id');
         $data = $updated->toArray();
@@ -110,4 +132,30 @@ class UserController extends BaseClinicCrudController
         return $this->success('Record updated successfully', $data);
     }
 
+    public function destroy(int $id)
+    {
+        /** @var \App\Models\User $user */
+        $user = $this->findModel($id);
+        $this->assertCanMutate(request()->user(), $user);
+
+        return parent::destroy($id);
+    }
+
+    public function changeStatus(StatusChangeRequest $request, int $id)
+    {
+        /** @var \App\Models\User $user */
+        $user = $this->findModel($id);
+        $this->assertCanMutate($request->user(), $user);
+
+        return parent::changeStatus($request, $id);
+    }
+
+    protected function toggleBlock(int $id, string $status)
+    {
+        /** @var \App\Models\User $user */
+        $user = $this->findModel($id);
+        $this->assertCanMutate(request()->user(), $user);
+
+        return parent::toggleBlock($id, $status);
+    }
 }
