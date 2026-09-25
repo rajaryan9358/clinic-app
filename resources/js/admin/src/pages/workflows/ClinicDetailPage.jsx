@@ -7,7 +7,6 @@ import { formatDate } from '../../utils/dateFormat';
 
 const TABS = [
     { key: 'overview',  label: 'Overview',       icon: 'dashboard' },
-    { key: 'branches',  label: 'Branches',        icon: 'building' },
     { key: 'domains',   label: 'Domains',         icon: 'globe' },
     { key: 'doctors',   label: 'Doctors',         icon: 'stethoscope' },
     { key: 'services',  label: 'Services',        icon: 'clipboard-check' },
@@ -64,13 +63,11 @@ function LoadingState() {
 
 function ServicesTab({ clinicId }) {
     const [services, setServices] = useState([]);
-    const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     const [sheet, setSheet] = useState({ open: false, mode: 'clinic', service: null });
     const [form, setForm] = useState({ name: '', code: '', description: '', duration_minutes: '', fee: '', status: 'active' });
-    const [branchIds, setBranchIds] = useState([]);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
 
@@ -78,12 +75,8 @@ function ServicesTab({ clinicId }) {
         setLoading(true);
         setError('');
         try {
-            const [svcRes, brRes] = await Promise.all([
-                client.get('/super-admin/services', { params: { clinic_id: clinicId, per_page: 200 } }),
-                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 200 } }),
-            ]);
+            const svcRes = await client.get('/super-admin/services', { params: { clinic_id: clinicId, per_page: 200 } });
             setServices(Array.isArray(svcRes.data?.data) ? svcRes.data.data : []);
-            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
         } catch (e) {
             setError(e?.response?.data?.message || 'Failed to load services');
         } finally {
@@ -96,7 +89,6 @@ function ServicesTab({ clinicId }) {
     const openAdd = () => {
         setSaveError('');
         setForm({ name: '', code: '', description: '', duration_minutes: '', fee: '' });
-        setBranchIds([]);
         setSheet({ open: true, mode: 'add', service: null });
     };
 
@@ -110,14 +102,7 @@ function ServicesTab({ clinicId }) {
             fee: service?.fee ?? '',
             status: service?.status || 'active',
         });
-        const ids = Array.isArray(service?.branches) ? service.branches.map((b) => String(b.id)) : [];
-        setBranchIds(ids);
         setSheet({ open: true, mode: 'edit', service });
-    };
-
-    const toggleBranch = (id) => {
-        const sid = String(id);
-        setBranchIds((prev) => prev.includes(sid) ? prev.filter((x) => x !== sid) : [...prev, sid]);
     };
 
     const save = async (e) => {
@@ -141,17 +126,10 @@ function ServicesTab({ clinicId }) {
                 return;
             }
 
-            let serviceId = sheet.service?.id;
-            if (serviceId) {
-                await client.put(`/super-admin/services/${serviceId}`, payload);
+            if (sheet.service?.id) {
+                await client.put(`/super-admin/services/${sheet.service.id}`, payload);
             } else {
-                const res = await client.post('/super-admin/services', payload);
-                serviceId = res.data?.data?.id;
-            }
-
-            if (serviceId) {
-                const ids = (branchIds || []).map((v) => Number(v)).filter((n) => Number.isFinite(n));
-                await client.put(`/super-admin/services/${serviceId}/branches`, { branch_ids: ids });
+                await client.post('/super-admin/services', payload);
             }
 
             await load();
@@ -170,7 +148,7 @@ function ServicesTab({ clinicId }) {
         <>
             <SectionHeader
                 title="Services"
-                subtitle="Create services for this clinic and assign them to branches."
+                subtitle="Create services for this clinic."
                 action={
                     <Btn variant="primary" onClick={openAdd}>
                         <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Service
@@ -183,8 +161,6 @@ function ServicesTab({ clinicId }) {
             ) : (
                 <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                     {services.map((svc) => {
-                        const assigned = Array.isArray(svc?.branches) ? svc.branches : [];
-                        const branchNames = assigned.map((b) => b?.name).filter(Boolean).join(', ');
                         return (
                             <div key={svc.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5">
                                 <div className="min-w-0">
@@ -192,8 +168,7 @@ function ServicesTab({ clinicId }) {
                                     <p className="mt-0.5 text-xs text-gray-500">
                                         {svc.code ? `${svc.code} · ` : ''}
                                         {svc.duration_minutes ? `${svc.duration_minutes} min · ` : ''}
-                                        {svc.fee != null && svc.fee !== '' ? `₹${svc.fee} · ` : ''}
-                                        {branchNames ? `Branches: ${branchNames}` : 'All branches'}
+                                        {svc.fee != null && svc.fee !== '' ? `₹${svc.fee}` : ''}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -209,7 +184,7 @@ function ServicesTab({ clinicId }) {
             <Sheet
                 open={sheet.open}
                 title={sheet.mode === 'edit' ? `Edit Service — ${sheet.service?.name}` : 'Add Service'}
-                subtitle="Configure the service details and select which branches offer it."
+                subtitle="Configure the service details."
                 onClose={() => setSheet({ open: false, mode: 'add', service: null })}
                 footer={
                     <div className="flex items-center justify-between gap-3">
@@ -243,28 +218,6 @@ function ServicesTab({ clinicId }) {
                         <Field label="Fee">
                             <TextInput type="number" value={form.fee} onChange={(v) => setForm((p) => ({ ...p, fee: v }))} placeholder="500" />
                         </Field>
-                    </div>
-
-                    <div>
-                        <label className="mb-1 block text-xs font-semibold text-gray-700">Branch Assignment</label>
-                        {branches.length === 0 ? (
-                            <p className="text-sm text-gray-400">No branches found for this clinic.</p>
-                        ) : (
-                            <div className="space-y-2 rounded-xl border border-gray-200 p-3">
-                                {branches.map((b) => (
-                                    <label key={b.id} className="flex cursor-pointer items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={branchIds.includes(String(b.id))}
-                                            onChange={() => toggleBranch(b.id)}
-                                            className="h-4 w-4 rounded border-gray-300 text-blue-600"
-                                        />
-                                        <span className="text-sm text-gray-700">{b.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        )}
-                        <p className="mt-1 text-xs text-gray-400">Leave all unchecked to make this service available across all branches.</p>
                     </div>
                 </form>
             </Sheet>
@@ -463,252 +416,10 @@ function OverviewTab({ clinic, clinicId, onEditClinic }) {
     );
 }
 
-// ── Branches Tab ──────────────────────────────────────────────────────────────
-
-function BranchesTab({ clinicId }) {
-    const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [settings, setSettings] = useState({});
-
-    // Sheet state
-    const [sheet, setSheet] = useState({ open: false, mode: null, branch: null, branchSetting: null });
-    const [form, setForm] = useState({});
-    const [saving, setSaving] = useState(false);
-    const [saveError, setSaveError] = useState('');
-
-    const load = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const [brRes, setRes] = await Promise.all([
-                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
-                client.get('/super-admin/settings/branch', { params: { clinic_id: clinicId, per_page: 100 } }).catch(() => ({ data: { data: [] } })),
-            ]);
-            setItems(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
-            const settingMap = {};
-            (Array.isArray(setRes.data?.data) ? setRes.data.data : []).forEach((s) => {
-                settingMap[s.branch_id] = s;
-            });
-            setSettings(settingMap);
-        } catch (e) {
-            setError(e?.response?.data?.message || 'Failed to load branches');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { load(); }, [clinicId]);
-
-    const openAddBranch = () => {
-        setForm({ clinic_id: clinicId, name: '', address: '', phone: '', email: '', status: 'active', is_main_branch: false });
-        setSaveError('');
-        setSheet({ open: true, mode: 'add_branch', branch: null, branchSetting: null });
-    };
-
-    const openEditBranch = (branch) => {
-        setForm({ ...branch });
-        setSaveError('');
-        setSheet({ open: true, mode: 'edit_branch', branch, branchSetting: null });
-    };
-
-    const openEditSettings = (branch) => {
-        const s = settings[branch.id] || {};
-        setForm({ branch_id: branch.id, clinic_id: clinicId, booking_enabled: s.booking_enabled ?? true, walkin_enabled: s.walkin_enabled ?? true, token_system_enabled: s.token_system_enabled ?? false, max_advance_days: s.max_advance_days ?? 30, min_notice_minutes: s.min_notice_minutes ?? 60 });
-        setSaveError('');
-        setSheet({ open: true, mode: 'edit_settings', branch, branchSetting: s });
-    };
-
-    const closeSheet = () => setSheet({ open: false, mode: null, branch: null, branchSetting: null });
-
-    const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
-
-    const handleSave = async () => {
-        setSaving(true);
-        setSaveError('');
-        try {
-            if (sheet.mode === 'add_branch') {
-                await client.post('/super-admin/branches', form);
-            } else if (sheet.mode === 'edit_branch') {
-                await client.put(`/super-admin/branches/${sheet.branch.id}`, form);
-            } else if (sheet.mode === 'edit_settings') {
-                const s = sheet.branchSetting;
-                if (s?.id) {
-                    await client.put(`/super-admin/settings/branch/${s.id}`, form);
-                } else {
-                    await client.post('/super-admin/settings/branch', form);
-                }
-            }
-            closeSheet();
-            load();
-        } catch (e) {
-            setSaveError(e?.response?.data?.message || 'Failed to save');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <LoadingState />;
-    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
-
-    return (
-        <>
-            <SectionHeader
-                title="Branches"
-                subtitle="Locations under this clinic."
-                action={
-                    <Btn variant="primary" onClick={openAddBranch}>
-                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Branch
-                    </Btn>
-                }
-            />
-
-            {!items.length ? <EmptyState icon="building" text="No branches yet. Add your first branch." /> : (
-                <div className="space-y-4">
-                    {items.map((branch) => {
-                        const s = settings[branch.id] || {};
-                        return (
-                            <Card key={branch.id} className="p-5">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <h4 className="text-sm font-semibold text-gray-900">{branch.name}</h4>
-                                            <StatusBadge status={branch.status} />
-                                            {branch.code && <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{branch.code}</span>}
-                                            {branch.is_main_branch && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Main</span>}
-                                        </div>
-                                        {(branch.city || branch.state) && (
-                                            <p className="mt-0.5 text-xs text-gray-500">{[branch.city, branch.state].filter(Boolean).join(', ')}</p>
-                                        )}
-                                        {branch.phone && <p className="mt-0.5 text-xs text-gray-400">{branch.phone}</p>}
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                        <Btn onClick={() => openEditBranch(branch)}>
-                                            <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
-                                        </Btn>
-                                        <DeleteBtn endpoint={`/super-admin/branches/${branch.id}`} onDeleted={load} label="branch" />
-                                    </div>
-                                </div>
-
-                                {/* Branch settings pills */}
-                                <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-                                    {[
-                                        { label: 'Booking', value: s.booking_enabled },
-                                        { label: 'Walk-in', value: s.walkin_enabled },
-                                        { label: 'Token System', value: s.token_system_enabled },
-                                    ].map(({ label, value }) => (
-                                        <span
-                                            key={label}
-                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                                value ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
-                                            }`}
-                                        >
-                                            <AppIcon name={value ? 'check' : 'close'} className="h-3 w-3" />
-                                            {label}
-                                        </span>
-                                    ))}
-                                    {s.max_advance_days != null && (
-                                        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                                            {s.max_advance_days}d advance
-                                        </span>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => openEditSettings(branch)}
-                                        className="ml-1 text-xs font-medium text-blue-600 hover:underline"
-                                    >
-                                        Edit settings →
-                                    </button>
-                                </div>
-                            </Card>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Branch Sheet */}
-            <Sheet
-                open={sheet.open}
-                title={
-                    sheet.mode === 'add_branch' ? 'Add Branch'
-                    : sheet.mode === 'edit_branch' ? `Edit Branch — ${sheet.branch?.name}`
-                    : `Branch Settings — ${sheet.branch?.name}`
-                }
-                subtitle={
-                    sheet.mode === 'edit_settings'
-                        ? 'Control booking behavior for this branch.'
-                        : 'Fill in the branch details below.'
-                }
-                onClose={closeSheet}
-                footer={
-                    <div className="flex items-center justify-between gap-3">
-                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
-                        <div className="ml-auto flex gap-2">
-                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
-                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
-                                {saving ? 'Saving…' : 'Save'}
-                            </Btn>
-                        </div>
-                    </div>
-                }
-            >
-                {sheet.mode === 'edit_settings' ? (
-                    <div className="space-y-4">
-                        <Toggle checked={form.booking_enabled} onChange={(v) => setForm((p) => ({ ...p, booking_enabled: v }))} label="Online booking enabled" />
-                        <Toggle checked={form.walkin_enabled} onChange={(v) => setForm((p) => ({ ...p, walkin_enabled: v }))} label="Walk-in enabled" />
-                        <Toggle checked={form.token_system_enabled} onChange={(v) => setForm((p) => ({ ...p, token_system_enabled: v }))} label="Token system enabled" />
-                        <Field label="Max advance booking days">
-                            <TextInput type="number" {...f('max_advance_days')} />
-                        </Field>
-                        <Field label="Min booking notice (minutes)">
-                            <TextInput type="number" {...f('min_notice_minutes')} />
-                        </Field>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        <Field label="Branch Name" required>
-                            <TextInput {...f('name')} placeholder="e.g. Koramangala Branch" />
-                        </Field>
-                        <Field label="Address">
-                            <textarea
-                                value={form.address ?? ''}
-                                onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-                                placeholder="Full branch address"
-                                rows={2}
-                                className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
-                            />
-                        </Field>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Field label="Phone">
-                                <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
-                            </Field>
-                            <Field label="Email">
-                                <TextInput type="email" {...f('email')} placeholder="branch@clinic.com" />
-                            </Field>
-                        </div>
-                        <Field label="Status">
-                            <SelectInput {...f('status')} options={[
-                                { value: 'active', label: 'Active' },
-                                { value: 'inactive', label: 'Inactive' },
-                            ]} />
-                        </Field>
-                        <Toggle
-                            checked={form.is_main_branch}
-                            onChange={(v) => setForm((p) => ({ ...p, is_main_branch: v }))}
-                            label="Main branch"
-                        />
-                    </div>
-                )}
-            </Sheet>
-        </>
-    );
-}
-
 // ── Domains Tab ───────────────────────────────────────────────────────────────
 
 function DomainsTab({ clinicId }) {
     const [items, setItems] = useState([]);
-    const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [sheet, setSheet] = useState({ open: false, domain: null });
@@ -720,12 +431,8 @@ function DomainsTab({ clinicId }) {
         setLoading(true);
         setError('');
         try {
-            const [domRes, brRes] = await Promise.all([
-                client.get('/super-admin/domains', { params: { clinic_id: clinicId, per_page: 100 } }),
-                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
-            ]);
+            const domRes = await client.get('/super-admin/domains', { params: { clinic_id: clinicId, per_page: 100 } });
             setItems(Array.isArray(domRes.data?.data) ? domRes.data.data : []);
-            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
         } catch (e) {
             setError(e?.response?.data?.message || 'Failed to load');
         } finally {
@@ -736,13 +443,13 @@ function DomainsTab({ clinicId }) {
     useEffect(() => { load(); }, [clinicId]);
 
     const openAdd = () => {
-        setForm({ clinic_id: clinicId, branch_id: '', host: '', type: 'booking', is_primary: false, status: 'active' });
+        setForm({ clinic_id: clinicId, host: '', type: 'booking', is_primary: false, status: 'active' });
         setSaveError('');
         setSheet({ open: true, domain: null });
     };
 
     const openEdit = (domain) => {
-        setForm({ ...domain, branch_id: domain.branch_id || '' });
+        setForm({ ...domain });
         setSaveError('');
         setSheet({ open: true, domain });
     };
@@ -775,7 +482,7 @@ function DomainsTab({ clinicId }) {
         <>
             <SectionHeader
                 title="Domains & Links"
-                subtitle="Booking portals linked to this clinic's branches."
+                subtitle="Booking portals linked to this clinic."
                 action={
                     <Btn variant="primary" onClick={openAdd}>
                         <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Domain
@@ -808,7 +515,6 @@ function DomainsTab({ clinicId }) {
                                             <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Primary</span>
                                         )}
                                     </div>
-                                    {domain.branch?.name && <p className="mt-0.5 text-xs text-gray-500">Branch: {domain.branch.name}</p>}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Btn onClick={() => openEdit(domain)}>
@@ -825,7 +531,7 @@ function DomainsTab({ clinicId }) {
             <Sheet
                 open={sheet.open}
                 title={sheet.domain ? `Edit Domain — ${sheet.domain.host}` : 'Add Domain'}
-                subtitle="Link a custom domain to a branch booking portal."
+                subtitle="Link a custom domain to this clinic's booking portal."
                 onClose={closeSheet}
                 footer={
                     <div className="flex items-center justify-between gap-3">
@@ -842,13 +548,6 @@ function DomainsTab({ clinicId }) {
                 <div className="space-y-4">
                     <Field label="Host / Domain" required>
                         <TextInput {...f('host')} placeholder="book.yourclinic.com" />
-                    </Field>
-                    <Field label="Branch">
-                        <SelectInput
-                            value={form.branch_id || ''}
-                            onChange={(v) => setForm((p) => ({ ...p, branch_id: v }))}
-                            options={[{ value: '', label: 'Select branch…' }, ...branches.map((b) => ({ value: String(b.id), label: b.name }))]}
-                        />
                     </Field>
                     <Field label="Type">
                         <SelectInput {...f('type')} options={[
@@ -877,7 +576,6 @@ function DomainsTab({ clinicId }) {
 
 function DoctorsTab({ clinicId }) {
     const [items, setItems] = useState([]);
-    const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [sheet, setSheet] = useState({ open: false, doctor: null });
@@ -892,12 +590,8 @@ function DoctorsTab({ clinicId }) {
         setLoading(true);
         setError('');
         try {
-            const [docRes, brRes] = await Promise.all([
-                client.get('/super-admin/doctors', { params: { clinic_id: clinicId, per_page: 100 } }),
-                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
-            ]);
+            const docRes = await client.get('/super-admin/doctors', { params: { clinic_id: clinicId, per_page: 100 } });
             setItems(Array.isArray(docRes.data?.data) ? docRes.data.data : []);
-            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
         } catch (e) {
             setError(e?.response?.data?.message || 'Failed to load');
         } finally {
@@ -924,7 +618,6 @@ function DoctorsTab({ clinicId }) {
             followup_fee: '',
             slot_duration_minutes: '15',
             buffer_time_minutes: '5',
-            branch_ids: [],
         });
         setPhotoFile(null);
         setPhotoPreview('');
@@ -933,7 +626,7 @@ function DoctorsTab({ clinicId }) {
     };
 
     const openEdit = (doctor) => {
-        setForm({ ...doctor, password: '', branch_ids: doctor.branch_ids || [] });
+        setForm({ ...doctor, password: '' });
         setPhotoFile(null);
         setPhotoPreview(doctor.photo_url || '');
         setSaveError('');
@@ -953,14 +646,6 @@ function DoctorsTab({ clinicId }) {
         setPhotoPreview(URL.createObjectURL(file));
     };
     const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
-
-    const toggleBranch = (branchId) => {
-        setForm((p) => {
-            const ids = Array.isArray(p.branch_ids) ? p.branch_ids : [];
-            const sid = String(branchId);
-            return { ...p, branch_ids: ids.map(String).includes(sid) ? ids.filter((x) => String(x) !== sid) : [...ids, branchId] };
-        });
-    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -984,9 +669,6 @@ function DoctorsTab({ clinicId }) {
                 followup_fee: form.followup_fee === '' ? null : Number(form.followup_fee),
                 slot_duration_minutes: form.slot_duration_minutes === '' ? null : Number(form.slot_duration_minutes),
                 buffer_time_minutes: form.buffer_time_minutes === '' ? null : Number(form.buffer_time_minutes),
-                branch_ids: Array.isArray(form.branch_ids)
-                    ? form.branch_ids.map((v) => Number(v)).filter((n) => Number.isFinite(n))
-                    : [],
             };
             // Only send password if the user explicitly entered one (blank = keep existing)
             if (!payload.password) delete payload.password;
@@ -1167,34 +849,6 @@ function DoctorsTab({ clinicId }) {
                     >
                         <TextInput type="password" {...f('password')} placeholder="••••••••" />
                     </Field>
-                    {branches.length > 0 && (
-                        <Field label="Branches" hint={(form.branch_ids || []).length ? `${(form.branch_ids || []).length} selected` : undefined}>
-                            <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
-                                {branches.map((b) => {
-                                    const selected = (form.branch_ids || []).map(String).includes(String(b.id));
-                                    return (
-                                        <label key={b.id} className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors ${selected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selected}
-                                                onChange={() => toggleBranch(b.id)}
-                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium text-gray-800">{b.name}</span>
-                                                    {b.is_main_branch && (
-                                                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Main</span>
-                                                    )}
-                                                </div>
-                                                {b.address && <p className="mt-0.5 truncate text-xs text-gray-500">{b.address}</p>}
-                                            </div>
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                        </Field>
-                    )}
                 </div>
             </Sheet>
         </>
@@ -1205,7 +859,6 @@ function DoctorsTab({ clinicId }) {
 
 function StaffTab({ clinicId }) {
     const [items, setItems] = useState([]);
-    const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [sheet, setSheet] = useState({ open: false, user: null });
@@ -1217,12 +870,8 @@ function StaffTab({ clinicId }) {
         setLoading(true);
         setError('');
         try {
-            const [usrRes, brRes] = await Promise.all([
-                client.get('/super-admin/users', { params: { clinic_id: clinicId, per_page: 100 } }),
-                client.get('/super-admin/branches', { params: { clinic_id: clinicId, per_page: 100 } }),
-            ]);
+            const usrRes = await client.get('/super-admin/users', { params: { clinic_id: clinicId, per_page: 100 } });
             setItems(Array.isArray(usrRes.data?.data) ? usrRes.data.data : []);
-            setBranches(Array.isArray(brRes.data?.data) ? brRes.data.data : []);
         } catch (e) {
             setError(e?.response?.data?.message || 'Failed to load');
         } finally {
@@ -1233,27 +882,19 @@ function StaffTab({ clinicId }) {
     useEffect(() => { load(); }, [clinicId]);
 
     const openAdd = () => {
-        setForm({ clinic_id: clinicId, full_name: '', email: '', phone: '', password: '', role: 'receptionist', branch_ids: [] });
+        setForm({ clinic_id: clinicId, full_name: '', email: '', phone: '', password: '', role: 'receptionist' });
         setSaveError('');
         setSheet({ open: true, user: null });
     };
 
     const openEdit = (user) => {
-        setForm({ ...user, password: '', branch_ids: user.branch_ids || [] });
+        setForm({ ...user, password: '' });
         setSaveError('');
         setSheet({ open: true, user });
     };
 
     const closeSheet = () => setSheet({ open: false, user: null });
     const f = (key) => ({ value: form[key], onChange: (v) => setForm((p) => ({ ...p, [key]: v })) });
-
-    const toggleBranch = (branchId) => {
-        setForm((p) => {
-            const ids = Array.isArray(p.branch_ids) ? p.branch_ids : [];
-            const sid = String(branchId);
-            return { ...p, branch_ids: ids.map(String).includes(sid) ? ids.filter((x) => String(x) !== sid) : [...ids, branchId] };
-        });
-    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -1320,7 +961,7 @@ function StaffTab({ clinicId }) {
             <Sheet
                 open={sheet.open}
                 title={sheet.user ? `Edit Staff — ${sheet.user.full_name}` : 'Add Staff User'}
-                subtitle="Create login credentials and assign role + branches."
+                subtitle="Create login credentials and assign a role."
                 onClose={closeSheet}
                 footer={
                     <div className="flex items-center justify-between gap-3">
@@ -1350,28 +991,10 @@ function StaffTab({ clinicId }) {
                     <Field label="Role" required>
                         <SelectInput {...f('role')} options={[
                             { value: 'clinic_admin', label: 'Clinic Admin' },
-                            { value: 'branch_manager', label: 'Branch Manager' },
                             { value: 'receptionist', label: 'Receptionist' },
                             { value: 'assistant', label: 'Assistant' },
                         ]} />
                     </Field>
-                    {branches.length > 0 && (
-                        <Field label="Branch Access">
-                            <div className="space-y-2 rounded-xl border border-gray-200 p-3">
-                                {branches.map((b) => (
-                                    <label key={b.id} className="flex cursor-pointer items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={(form.branch_ids || []).map(String).includes(String(b.id))}
-                                            onChange={() => toggleBranch(b.id)}
-                                            className="h-4 w-4 rounded border-gray-300 text-blue-600"
-                                        />
-                                        <span className="text-sm text-gray-700">{b.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </Field>
-                    )}
                 </div>
             </Sheet>
         </>
@@ -1397,7 +1020,6 @@ function SettingsTab({ clinicId }) {
         webhook_verify_token: '',
         access_token: '',
         status: 'pending',
-        branch_id: '',
     });
     const [waLoading, setWaLoading] = useState(true);
     const [waSaving, setWaSaving] = useState(false);
@@ -1434,7 +1056,6 @@ function SettingsTab({ clinicId }) {
                     webhook_verify_token: preferred?.webhook_verify_token || '',
                     access_token: '',
                     status: preferred?.status || 'pending',
-                    branch_id: preferred?.branch_id ? String(preferred.branch_id) : '',
                 });
             })
             .catch((e) => {
@@ -1484,7 +1105,6 @@ function SettingsTab({ clinicId }) {
                 phone_number_id: waForm.phone_number_id || null,
                 waba_id: waForm.waba_id || null,
                 status: waForm.status || 'pending',
-                branch_id: waForm.branch_id ? Number(waForm.branch_id) : null,
             };
 
             if (String(waForm.access_token || '').trim()) {
@@ -1531,6 +1151,8 @@ function SettingsTab({ clinicId }) {
                         {[
                             { key: 'booking_enabled', label: 'Online booking enabled' },
                             { key: 'whatsapp_booking_enabled', label: 'WhatsApp booking enabled' },
+                            { key: 'walkin_enabled', label: 'Walk-in appointments' },
+                            { key: 'token_system_enabled', label: 'Token system' },
                             { key: 'auto_confirm', label: 'Auto-confirm appointments' },
                             { key: 'allow_reschedule', label: 'Allow patient rescheduling' },
                             { key: 'allow_cancel', label: 'Allow patient cancellation' },
@@ -1552,6 +1174,28 @@ function SettingsTab({ clinicId }) {
                             onChange={(e) => setForm((p) => ({ ...p, cutoff_hours: e.target.value }))}
                             className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                         />
+                    </div>
+                </Card>
+
+                <Card className="p-5">
+                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Booking Window</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Field label="Max advance booking (days)">
+                            <TextInput
+                                type="number"
+                                value={form.max_advance_booking_days ?? ''}
+                                onChange={(v) => setForm((p) => ({ ...p, max_advance_booking_days: v }))}
+                                placeholder="30"
+                            />
+                        </Field>
+                        <Field label="Min booking notice (minutes)">
+                            <TextInput
+                                type="number"
+                                value={form.min_booking_notice_minutes ?? ''}
+                                onChange={(v) => setForm((p) => ({ ...p, min_booking_notice_minutes: v }))}
+                                placeholder="30"
+                            />
+                        </Field>
                     </div>
                 </Card>
 
@@ -1714,6 +1358,31 @@ function EditClinicSheet({ open, clinic, onClose, onSaved }) {
                 <Field label="Owner Email">
                     <TextInput type="email" {...f('owner_email')} placeholder="owner@clinic.com" />
                 </Field>
+                <Field label="Address Line 1">
+                    <TextInput {...f('address_line_1')} placeholder="Street address" />
+                </Field>
+                <Field label="Address Line 2">
+                    <TextInput {...f('address_line_2')} placeholder="Area, landmark (optional)" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label="City">
+                        <TextInput {...f('city')} placeholder="City" />
+                    </Field>
+                    <Field label="State">
+                        <TextInput {...f('state')} placeholder="State" />
+                    </Field>
+                </div>
+                <Field label="Pincode">
+                    <TextInput {...f('pincode')} placeholder="560001" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label="Phone">
+                        <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
+                    </Field>
+                    <Field label="Email">
+                        <TextInput type="email" {...f('email')} placeholder="clinic@clinic.com" />
+                    </Field>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="Status">
                         <SelectInput {...f('status')} options={[
@@ -1852,7 +1521,6 @@ export default function ClinicDetailPage() {
                 {activeTab === 'overview' && (
                     <OverviewTab clinic={clinic} clinicId={id} onEditClinic={() => setEditSheet(true)} />
                 )}
-                {activeTab === 'branches'  && <BranchesTab clinicId={id} />}
                 {activeTab === 'domains'   && <DomainsTab clinicId={id} />}
                 {activeTab === 'doctors'   && <DoctorsTab clinicId={id} />}
                 {activeTab === 'services'  && <ServicesTab clinicId={id} />}

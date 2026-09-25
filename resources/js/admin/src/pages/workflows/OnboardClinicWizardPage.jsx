@@ -58,8 +58,7 @@ function SectionCard({ title, subtitle, children }) {
 
 const STEPS = [
     { num: 1, label: 'Clinic' },
-    { num: 2, label: 'Branch' },
-    { num: 3, label: 'Admin' },
+    { num: 2, label: 'Admin' },
 ];
 
 export default function OnboardClinicWizardPage() {
@@ -73,13 +72,9 @@ export default function OnboardClinicWizardPage() {
     const [clinic, setClinic] = useState({
         name: '', slug: '', legal_name: '', owner_name: '', owner_email: '', owner_phone: '',
         status: 'trial', primary_color: '', secondary_color: '',
-    });
-
-    const [branch, setBranch] = useState({
-        name: '', address: '', phone: '', email: '', is_main_branch: true, status: 'active',
-        booking_enabled: true, walkin_enabled: true, token_system_enabled: false,
-        max_advance_days: 30, min_notice_minutes: 60,
-        booking_domain_host: '', patient_domain_host: '',
+        address_line_1: '', address_line_2: '', city: '', state: '', pincode: '', phone: '', email: '',
+        walkin_enabled: true, token_system_enabled: false,
+        max_advance_booking_days: 30, min_booking_notice_minutes: 30,
     });
 
     const [admin, setAdmin] = useState({
@@ -87,7 +82,6 @@ export default function OnboardClinicWizardPage() {
     });
 
     const [createdClinicId, setCreatedClinicId] = useState(null);
-    const [createdBranchId, setCreatedBranchId] = useState(null);
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
     const [logoFile, setLogoFile] = useState(null);
@@ -124,107 +118,22 @@ export default function OnboardClinicWizardPage() {
         setLogoPreview(URL.createObjectURL(file));
     };
 
-    const createClinic = async () => {
+    const continueToAdmin = async () => {
         if (!clinic.name) { setError('Clinic name is required.'); return; }
         setSaving(true);
         setError('');
         try {
-            let logoUrl = '';
-            if (logoFile) {
+            if (logoFile && !clinic.logo_url) {
                 const fd = new FormData();
                 fd.append('file', logoFile);
                 fd.append('module', 'clinics');
                 const upRes = await client.post(`${base}/uploads/image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                logoUrl = upRes.data?.data?.url || '';
+                const logoUrl = upRes.data?.data?.url || '';
+                if (logoUrl) setClinic((p) => ({ ...p, logo_url: logoUrl }));
             }
-            const payload = {
-                ...clinic,
-                ...(logoUrl ? { logo_url: logoUrl } : {}),
-                primary_color: clinic.primary_color || null,
-                secondary_color: clinic.secondary_color || null,
-            };
-            const { data } = await client.post(`${base}/clinics`, payload);
-            const id = data?.data?.id;
-            if (!id) throw new Error('Clinic created but no id returned');
-            setCreatedClinicId(id);
             setStep(2);
         } catch (e) {
-            setError(e?.response?.data?.message || e?.message || 'Failed to create clinic');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const createBranch = async () => {
-        if (!branch.name) { setError('Branch name is required.'); return; }
-        setSaving(true);
-        setError('');
-        try {
-            // Create branch
-            const branchPayload = {
-                clinic_id: createdClinicId,
-                name: branch.name,
-                address: branch.address,
-                phone: branch.phone,
-                email: branch.email,
-                is_main_branch: true,
-                status: branch.status,
-            };
-            const { data } = await client.post(`${base}/branches`, branchPayload);
-            const branchId = data?.data?.id;
-            if (!branchId) throw new Error('Branch created but no id returned');
-            setCreatedBranchId(branchId);
-
-            // Create branch settings
-            try {
-                await client.post(`${base}/settings/branch`, {
-                    clinic_id: createdClinicId,
-                    branch_id: branchId,
-                    booking_enabled: branch.booking_enabled,
-                    walkin_enabled: branch.walkin_enabled,
-                    token_system_enabled: branch.token_system_enabled,
-                    max_advance_days: Number(branch.max_advance_days) || 30,
-                    min_notice_minutes: Number(branch.min_notice_minutes) || 60,
-                });
-            } catch {
-                // settings endpoint may not exist yet — continue
-            }
-
-            // Create booking domain if host provided
-            if (branch.booking_domain_host) {
-                try {
-                    await client.post(`${base}/domains`, {
-                        clinic_id: createdClinicId,
-                        branch_id: branchId,
-                        host: branch.booking_domain_host,
-                        type: 'booking',
-                        is_primary: true,
-                        status: 'active',
-                    });
-                } catch {
-                    // non-blocking
-                }
-            }
-
-            // Create patient portal domain if host provided
-            if (branch.patient_domain_host) {
-                try {
-                    await client.post(`${base}/domains`, {
-                        clinic_id: createdClinicId,
-                        branch_id: branchId,
-                        host: branch.patient_domain_host,
-                        type: 'portal',
-                        is_primary: false,
-                        status: 'active',
-                    });
-                } catch {
-                    // non-blocking
-                }
-            }
-
-            setStep(3);
-        } catch (e) {
-            setError(e?.response?.data?.message || e?.message || 'Failed to create branch');
+            setError(e?.response?.data?.message || e?.message || 'Failed to upload logo');
         } finally {
             setSaving(false);
         }
@@ -235,26 +144,40 @@ export default function OnboardClinicWizardPage() {
         setSaving(true);
         setError('');
         try {
-            await client.post(`${base}/users`, {
-                clinic_id: createdClinicId,
-                full_name: admin.full_name,
-                email: admin.email || null,
-                phone: admin.phone || null,
-                password: admin.password,
-                role: 'clinic_admin',
-                status: 'active',
-                branch_ids: createdBranchId ? [createdBranchId] : [],
-            });
-            navigate(`/workflows/clinics/${createdClinicId}`);
+            const {
+                walkin_enabled, token_system_enabled, max_advance_booking_days, min_booking_notice_minutes,
+                ...clinicFields
+            } = clinic;
+            const payload = {
+                ...clinicFields,
+                primary_color: clinicFields.primary_color || null,
+                secondary_color: clinicFields.secondary_color || null,
+                settings: {
+                    walkin_enabled,
+                    token_system_enabled,
+                    max_advance_booking_days: Number(max_advance_booking_days) || 30,
+                    min_booking_notice_minutes: Number(min_booking_notice_minutes) || 0,
+                },
+                clinic_admin: {
+                    full_name: admin.full_name,
+                    email: admin.email || null,
+                    phone: admin.phone || null,
+                    password: admin.password,
+                },
+            };
+            const { data } = await client.post(`${base}/clinics`, payload);
+            const id = data?.data?.id;
+            if (!id) throw new Error('Clinic created but no id returned');
+            setCreatedClinicId(id);
+            navigate(`/workflows/clinics/${id}`);
         } catch (e) {
-            setError(e?.response?.data?.message || e?.message || 'Failed to create clinic admin');
+            setError(e?.response?.data?.message || e?.message || 'Failed to create clinic');
         } finally {
             setSaving(false);
         }
     };
 
     const c = (key) => ({ value: clinic[key], onChange: (v) => setClinic((p) => ({ ...p, [key]: v })) });
-    const b = (key) => ({ value: branch[key], onChange: (v) => setBranch((p) => ({ ...p, [key]: v })) });
     const a = (key) => ({ value: admin[key], onChange: (v) => setAdmin((p) => ({ ...p, [key]: v })) });
 
     return (
@@ -263,7 +186,7 @@ export default function OnboardClinicWizardPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
                 <div>
                     <h2 className="text-xl font-bold text-gray-900">Onboard New Clinic</h2>
-                    <p className="mt-0.5 text-sm text-gray-500">Create a clinic, its first branch, and the admin account.</p>
+                    <p className="mt-0.5 text-sm text-gray-500">Create a clinic and its admin account.</p>
                 </div>
                 <Link to="/workflows/clinics" className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
                     ← Back to Clinics
@@ -374,86 +297,68 @@ export default function OnboardClinicWizardPage() {
                         </Field>
                     </div>
 
+                    <div className="border-t border-gray-100 pt-4">
+                        <h4 className="mb-3 text-sm font-semibold text-gray-900">Address and contact</h4>
+                        <div className="space-y-4">
+                            <Field label="Address Line 1">
+                                <TextInput {...c('address_line_1')} placeholder="Street address" />
+                            </Field>
+                            <Field label="Address Line 2">
+                                <TextInput {...c('address_line_2')} placeholder="Area, landmark (optional)" />
+                            </Field>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                <Field label="City">
+                                    <TextInput {...c('city')} placeholder="City" />
+                                </Field>
+                                <Field label="State">
+                                    <TextInput {...c('state')} placeholder="State" />
+                                </Field>
+                                <Field label="Pincode">
+                                    <TextInput {...c('pincode')} placeholder="560001" />
+                                </Field>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Field label="Phone">
+                                    <TextInput {...c('phone')} placeholder="+91 XXXXXXXXXX" />
+                                </Field>
+                                <Field label="Email">
+                                    <TextInput type="email" {...c('email')} placeholder="clinic@clinic.com" />
+                                </Field>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-4">
+                        <h4 className="mb-3 text-sm font-semibold text-gray-900">Booking</h4>
+                        <div className="space-y-4">
+                            <Toggle checked={clinic.walkin_enabled} onChange={(v) => setClinic((p) => ({ ...p, walkin_enabled: v }))} label="Walk-in enabled" />
+                            <Toggle checked={clinic.token_system_enabled} onChange={(v) => setClinic((p) => ({ ...p, token_system_enabled: v }))} label="Token system enabled" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <Field label="Max advance booking days">
+                                    <TextInput type="number" {...c('max_advance_booking_days')} placeholder="30" />
+                                </Field>
+                                <Field label="Min booking notice (minutes)">
+                                    <TextInput type="number" {...c('min_booking_notice_minutes')} placeholder="30" />
+                                </Field>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="flex justify-end pt-2">
                         <button
                             type="button"
-                            onClick={createClinic}
+                            onClick={continueToAdmin}
                             disabled={saving}
                             className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                         >
-                            {saving ? 'Creating…' : 'Create Clinic →'}
+                            {saving ? 'Continuing…' : 'Continue →'}
                         </button>
                     </div>
                 </SectionCard>
             )}
 
-            {/* Step 2 — Branch */}
+            {/* Step 2 — Clinic Admin */}
             {step === 2 && (
-                <div className="space-y-4">
-                    <SectionCard title="Main Branch Details" subtitle="The primary location for this clinic.">
-                        <Field label="Branch Name" required>
-                            <TextInput {...b('name')} placeholder="e.g. Main Branch / Koramangala" />
-                        </Field>
-                        <Field label="Address">
-                            <textarea
-                                value={branch.address ?? ''}
-                                onChange={(e) => setBranch((p) => ({ ...p, address: e.target.value }))}
-                                placeholder="Full branch address"
-                                rows={2}
-                                className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
-                            />
-                        </Field>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Field label="Phone">
-                                <TextInput {...b('phone')} placeholder="+91 XXXXXXXXXX" />
-                            </Field>
-                            <Field label="Email">
-                                <TextInput type="email" {...b('email')} placeholder="branch@clinic.com" />
-                            </Field>
-                        </div>
-                    </SectionCard>
-
-                    <SectionCard title="Branch Settings" subtitle="Control booking behavior for this branch.">
-                        <Toggle checked={branch.booking_enabled} onChange={(v) => setBranch((p) => ({ ...p, booking_enabled: v }))} label="Online booking enabled" />
-                        <Toggle checked={branch.walkin_enabled} onChange={(v) => setBranch((p) => ({ ...p, walkin_enabled: v }))} label="Walk-in enabled" />
-                        <Toggle checked={branch.token_system_enabled} onChange={(v) => setBranch((p) => ({ ...p, token_system_enabled: v }))} label="Token system enabled" />
-                        <div className="grid grid-cols-2 gap-4">
-                            <Field label="Max advance booking days">
-                                <TextInput type="number" {...b('max_advance_days')} placeholder="30" />
-                            </Field>
-                            <Field label="Min booking notice (minutes)">
-                                <TextInput type="number" {...b('min_notice_minutes')} placeholder="60" />
-                            </Field>
-                        </div>
-                    </SectionCard>
-
-                    <SectionCard title="Domains" subtitle="Optional — link custom domains to this branch. You can add more later.">
-                        <Field label="Booking Portal Domain" hint="e.g. book.yourclinic.com — leave blank to skip">
-                            <TextInput {...b('booking_domain_host')} placeholder="book.yourclinic.com" />
-                        </Field>
-                        <Field label="Patient Portal Domain" hint="e.g. portal.yourclinic.com — leave blank to skip">
-                            <TextInput {...b('patient_domain_host')} placeholder="portal.yourclinic.com" />
-                        </Field>
-                    </SectionCard>
-
-                    <div className="flex justify-between pt-1">
-                        <button type="button" onClick={() => { setError(''); setStep(1); }} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                            ← Back
-                        </button>
-                        <button
-                            type="button"
-                            onClick={createBranch}
-                            disabled={saving}
-                            className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                        >
-                            {saving ? 'Creating…' : 'Create Branch →'}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Step 3 — Clinic Admin */}
-            {step === 3 && (
                 <SectionCard title="Clinic Admin Account" subtitle="This person will manage the clinic and have full access.">
                     <Field label="Full Name" required>
                         <TextInput {...a('full_name')} placeholder="Clinic Admin Name" />
@@ -471,7 +376,7 @@ export default function OnboardClinicWizardPage() {
                     </Field>
 
                     <div className="flex justify-between pt-2">
-                        <button type="button" onClick={() => { setError(''); setStep(2); }} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                        <button type="button" onClick={() => { setError(''); setStep(1); }} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
                             ← Back
                         </button>
                         <button
