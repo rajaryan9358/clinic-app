@@ -210,8 +210,11 @@ function PaymentsTab() {
             const payload = {
                 razorpay_key_id: form.razorpay_key_id,
                 razorpay_mode: form.razorpay_mode,
-                subscription_grace_days: Number(form.subscription_grace_days),
             };
+            // Blank grace days → leave the stored value alone (never send 0 for blank).
+            if (String(form.subscription_grace_days ?? '').trim() !== '') {
+                payload.subscription_grace_days = Number(form.subscription_grace_days);
+            }
             if (String(form.razorpay_key_secret || '').trim()) {
                 payload.razorpay_key_secret = form.razorpay_key_secret.trim();
             }

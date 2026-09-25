@@ -13,7 +13,9 @@ export default function SubscriptionLockScreen({ message, clinicName }) {
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{clinicName || 'Clinic'}</p>
                 <h1 className="mt-1 text-lg font-bold text-gray-900">Subscription inactive</h1>
                 <p className="mt-2 text-sm text-gray-600">
-                    {message || "Your clinic's subscription is inactive. Contact your clinic admin to renew."}
+                    {message && /suspend/i.test(message)
+                        ? message
+                        : "Your clinic's subscription is inactive. Contact your clinic admin to renew."}
                 </p>
                 <button
                     type="button"

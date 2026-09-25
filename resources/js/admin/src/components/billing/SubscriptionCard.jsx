@@ -12,7 +12,7 @@ function limitLabel(value) {
 }
 
 // ── Plan picker used by both "Assign plan" (no subscription yet) and
-// "Change plan" (existing subscription, no Razorpay link). ──────────────────
+// "Change plan" (existing subscription, no live Razorpay link). ──────────────────
 function PlanPicker({ plans, planId, billingCycle, onSelectPlan, onSelectCycle }) {
     const selected = plans.find((p) => p.id === planId) || null;
     return (
@@ -222,7 +222,7 @@ function AssignPlanPanel({ clinicId, plans, onDone }) {
     );
 }
 
-// ── Change plan (existing subscription, no Razorpay link) ───────────────────
+// ── Change plan (no Razorpay link, or a cancelled/expired one) ───────────────────
 function ChangePlanPanel({ clinicId, plans, subscription, onDone, onCancel }) {
     const [planId, setPlanId] = useState(subscription.plan_id);
     const [cycle, setCycle] = useState(subscription.billing_cycle || 'monthly');
@@ -394,6 +394,9 @@ export default function SubscriptionCard({ clinicId, subscription, onChanged }) 
     const done = () => { setAction(null); onChanged?.(); };
 
     const linkedToRazorpay = Boolean(subscription?.razorpay_subscription_id);
+    const terminated = ['cancelled', 'expired'].includes(subscription?.status);
+    const liveStatus = ['active', 'past_due', 'trialing', 'pending_payment'].includes(subscription?.status);
+    const canChangePlan = !linkedToRazorpay || terminated;
 
     return (
         <Card className="p-5">
@@ -456,13 +459,13 @@ export default function SubscriptionCard({ clinicId, subscription, onChanged }) 
 
                     {!action && (
                         <div className="flex flex-wrap gap-2 pt-1">
-                            <span title={linkedToRazorpay ? 'This clinic pays through Razorpay. Cancel the subscription before changing plan.' : undefined}>
-                                <Btn onClick={() => setAction('change')} disabled={linkedToRazorpay}>Change plan</Btn>
+                            <span title={!canChangePlan ? 'This clinic pays through Razorpay. Cancel the subscription before changing plan.' : undefined}>
+                                <Btn onClick={() => setAction('change')} disabled={!canChangePlan}>Change plan</Btn>
                             </span>
-                            <Btn onClick={() => setAction('extend-trial')}>Extend trial</Btn>
+                            {!linkedToRazorpay && <Btn onClick={() => setAction('extend-trial')}>Extend trial</Btn>}
                             <Btn onClick={() => setAction('extend-grace')}>Extend grace</Btn>
-                            <Btn onClick={() => setAction('offline')}>Record offline payment</Btn>
-                            <Btn variant="danger" onClick={() => setAction('cancel')}>Cancel subscription</Btn>
+                            {!(linkedToRazorpay && liveStatus) && <Btn onClick={() => setAction('offline')}>Record offline payment</Btn>}
+                            {!terminated && <Btn variant="danger" onClick={() => setAction('cancel')}>Cancel subscription</Btn>}
                         </div>
                     )}
 

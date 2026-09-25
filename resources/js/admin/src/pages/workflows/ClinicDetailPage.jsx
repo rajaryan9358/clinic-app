@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
+import ClinicStatusBadge from '../../components/billing/ClinicStatusBadge.jsx';
 import SubscriptionCard from '../../components/billing/SubscriptionCard.jsx';
 import { formatDate } from '../../utils/dateFormat';
 
@@ -406,14 +407,18 @@ function ColorValue({ color }) {
     );
 }
 
-function OverviewTab({ clinic, clinicId, onEditClinic }) {
+function OverviewTab({ clinic, clinicId, onEditClinic, onSubscriptionLoaded }) {
     const [overview, setOverview] = useState(null);
     const [error, setError] = useState('');
 
     const loadOverview = () => {
         setError('');
         return client.get(`/super-admin/clinics/${clinicId}/overview`)
-            .then((res) => setOverview(res.data?.data || null))
+            .then((res) => {
+                const data = res.data?.data || null;
+                setOverview(data);
+                onSubscriptionLoaded?.(data?.subscription || null);
+            })
             .catch((e) => setError(e?.response?.data?.message || 'Could not load clinic overview.'));
     };
 
@@ -1349,9 +1354,7 @@ function EditClinicSheet({ open, clinic, onClose, onSaved }) {
                     <Field label="Status">
                         <SelectInput {...f('status')} options={[
                             { value: 'active', label: 'Active' },
-                            { value: 'trial', label: 'Trial' },
                             { value: 'suspended', label: 'Suspended' },
-                            { value: 'inactive', label: 'Inactive' },
                         ]} />
                     </Field>
                 </div>
@@ -1394,6 +1397,8 @@ export default function ClinicDetailPage() {
     const [error, setError] = useState('');
     const [activeTab, setActiveTab] = useState('overview');
     const [editSheet, setEditSheet] = useState(false);
+    // Subscription from the overview endpoint, for the header status badge.
+    const [subscription, setSubscription] = useState(undefined);
 
     const loadClinic = () => {
         client.get(`/super-admin/clinics/${id}`)
@@ -1436,7 +1441,9 @@ export default function ClinicDetailPage() {
                 </button>
                 <AppIcon name="chevron-right" className="h-3.5 w-3.5 text-gray-300" />
                 <h1 className="text-xl font-bold text-gray-900">{clinic?.name || `Clinic #${id}`}</h1>
-                {clinic?.status && <StatusBadge status={clinic.status} />}
+                {clinic && subscription !== undefined && (
+                    <ClinicStatusBadge clinicStatus={clinic.status} subscriptionStatus={subscription?.status} />
+                )}
             </div>
 
             {/* Tab bar */}
@@ -1460,7 +1467,7 @@ export default function ClinicDetailPage() {
             {/* Tab content */}
             <div>
                 {activeTab === 'overview' && (
-                    <OverviewTab clinic={clinic} clinicId={id} onEditClinic={() => setEditSheet(true)} />
+                    <OverviewTab clinic={clinic} clinicId={id} onEditClinic={() => setEditSheet(true)} onSubscriptionLoaded={setSubscription} />
                 )}
                 {activeTab === 'doctors'   && <DoctorsTab clinicId={id} />}
                 {activeTab === 'services'  && <ServicesTab clinicId={id} />}

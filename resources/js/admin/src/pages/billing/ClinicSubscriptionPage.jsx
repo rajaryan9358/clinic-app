@@ -14,11 +14,13 @@ function limitLabel(value) {
 
 function statusDateLine(subscription) {
     if (!subscription) return null;
-    const { status, trial_ends_at, current_period_end, grace_ends_at } = subscription;
+    const { status, trial_ends_at, current_period_end, grace_ends_at, razorpay_subscription_id } = subscription;
     switch (status) {
         case 'trialing':
+            if (razorpay_subscription_id) return `Autopay set up — first charge on ${trial_ends_at ? formatDate(trial_ends_at) : 'trial end'}`;
             return trial_ends_at ? `Trial ends ${formatDate(trial_ends_at)}` : 'Trial active';
         case 'active':
+            if (razorpay_subscription_id) return current_period_end ? `Autopay active — renews ${formatDate(current_period_end)}` : 'Autopay active';
             return current_period_end ? `Renews ${formatDate(current_period_end)}` : null;
         case 'pending_payment':
         case 'past_due':
@@ -98,6 +100,9 @@ export default function ClinicSubscriptionPage() {
     const plans = Array.isArray(data?.plans) ? data.plans : [];
     const transactions = Array.isArray(data?.transactions) ? data.transactions : [];
     const selectedPlan = plans.find((p) => p.id === selectedPlanId) || null;
+    // Autopay already set up through Razorpay: no second checkout.
+    const autopayLinked = Boolean(subscription?.razorpay_subscription_id)
+        && ['trialing', 'active'].includes(subscription?.status);
 
     const selectPlan = (p) => {
         setSelectedPlanId(p.id);
@@ -127,9 +132,12 @@ export default function ClinicSubscriptionPage() {
                 prefill: { email: c.email || '', contact: c.phone || '' },
                 handler: async (resp) => {
                     try {
-                        await client.post('/clinic/subscription/verify', resp);
+                        const { data: verifyRes } = await client.post('/clinic/subscription/verify', resp);
+                        const verified = verifyRes?.data || null;
                         await Promise.all([load(), scope?.refresh?.()]);
-                        setNotice('Payment received. Your subscription is active.');
+                        setNotice(verified?.status === 'trialing'
+                            ? `Autopay set up. First charge on ${formatDate(verified.trial_ends_at)}.`
+                            : 'Payment received. Your subscription is active.');
                     } catch (e) {
                         // Payment may still have been captured even though verification
                         // failed (422 or a network blip) — reload the subscription data
@@ -254,7 +262,10 @@ export default function ClinicSubscriptionPage() {
                                 </button>
                             </div>
 
-                            {isAdmin && (
+                            {isAdmin && autopayLinked && (
+                                <span className="text-xs text-gray-500">{statusDateLine(subscription)}</span>
+                            )}
+                            {isAdmin && !autopayLinked && (
                                 <div className="flex flex-col items-end gap-1">
                                     <Btn variant="primary" onClick={pay} disabled={paying || !data?.payments_configured || !selectedPlanId}>
                                         <AppIcon name="credit-card" className="h-3.5 w-3.5" />

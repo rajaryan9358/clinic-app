@@ -6,6 +6,7 @@ import RecordDialog from '../components/RecordDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AppIcon from '../components/AppIcon';
 import StatusBadge from '../components/StatusBadge';
+import ClinicStatusBadge from '../components/billing/ClinicStatusBadge.jsx';
 import { modules } from '../config/modules';
 import { canAccessModule, canCreateModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
@@ -785,7 +786,7 @@ Write an appropriate reply.`;
                     hiddenColumns={moduleKey === 'patients'
                         ? ['uuid']
                         : moduleKey === 'clinics'
-                            ? ['uuid', 'legal_name']
+                            ? ['uuid', 'legal_name', 'subscription']
                         : moduleKey === 'doctors'
                             ? ['user_id', 'registration_number']
                             : moduleKey === 'users'
@@ -810,6 +811,9 @@ Write an appropriate reply.`;
                         }
                         : moduleKey === 'clinics'
                             ? {
+                                status: (value, row) => (
+                                    <ClinicStatusBadge clinicStatus={value} subscriptionStatus={row?.subscription?.status} />
+                                ),
                                 logo_url: (value) => {
                                     if (!value) return <span className="text-gray-300">—</span>;
                                     return <img src={value} alt="Logo" className="h-8 w-8 rounded-lg object-contain border border-gray-200 bg-gray-50" />;
