@@ -40,7 +40,7 @@ class DemoClinicSeeder extends Seeder
         $service->create([
             'name' => 'Demo Clinic',
             'slug' => 'demo-clinic',
-            'status' => 'trial',
+            'status' => 'active',
             'owner_name' => 'Demo Owner',
             'owner_email' => 'owner@demo-clinic.test',
             'city' => 'Bengaluru',

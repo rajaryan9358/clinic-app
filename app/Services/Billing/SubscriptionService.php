@@ -48,7 +48,15 @@ class SubscriptionService
 
     public function recordOfflinePayment(ClinicSubscription $sub, int $amount, int $periodMonths, ?string $notes, ?int $actorId): SubscriptionTransaction
     {
-        return DB::transaction(function () use ($sub, $amount, $periodMonths, $notes, $actorId) {
+        if ($sub->razorpay_subscription_id && in_array($sub->status, ['active', 'past_due', 'trialing', 'pending_payment'], true)) {
+            throw ValidationException::withMessages(['subscription' => 'This clinic pays through Razorpay. Cancel it before recording an offline payment.']);
+        }
+
+        $pendingId = $sub->pending_razorpay_subscription_id;
+        $tx = DB::transaction(function () use ($sub, $amount, $periodMonths, $notes, $actorId) {
+            if ($sub->razorpay_subscription_id || $sub->pending_razorpay_subscription_id) {
+                $sub->update(['razorpay_subscription_id' => null, 'pending_razorpay_subscription_id' => null]);
+            }
             $start = $sub->current_period_end && $sub->current_period_end->isFuture() ? $sub->current_period_end->copy() : now();
             $end = $start->copy()->addMonths($periodMonths);
 
@@ -61,6 +69,21 @@ class SubscriptionService
 
             return $tx;
         });
+
+        if ($pendingId) {
+            $this->cancelQuietly($pendingId);
+        }
+
+        return $tx;
+    }
+
+    private function cancelQuietly(string $subscriptionId): void
+    {
+        try {
+            $this->gateway->cancelSubscription($subscriptionId, false);
+        } catch (\Throwable $e) {
+            Log::warning('Could not cancel Razorpay subscription', ['subscription_id' => $subscriptionId, 'error' => $e->getMessage()]);
+        }
     }
 
     public function activate(ClinicSubscription $sub, ?\DateTimeInterface $periodStart = null, ?\DateTimeInterface $periodEnd = null): ClinicSubscription
@@ -87,6 +110,9 @@ class SubscriptionService
 
     public function extendTrial(ClinicSubscription $sub, int $days): ClinicSubscription
     {
+        if ($sub->razorpay_subscription_id) {
+            throw ValidationException::withMessages(['subscription' => "This clinic pays through Razorpay; its trial can't be extended."]);
+        }
         $base = $sub->trial_ends_at && $sub->trial_ends_at->isFuture() ? $sub->trial_ends_at->copy() : now();
         $sub->update(['status' => 'trialing', 'trial_ends_at' => $base->addDays($days), 'grace_ends_at' => null]);
 
@@ -96,18 +122,27 @@ class SubscriptionService
     public function extendGrace(ClinicSubscription $sub, int $days): ClinicSubscription
     {
         $base = $sub->grace_ends_at && $sub->grace_ends_at->isFuture() ? $sub->grace_ends_at->copy() : now();
-        $status = in_array($sub->status, ['expired', 'trialing'], true) ? 'past_due' : $sub->status;
-        $sub->update(['status' => $status, 'grace_ends_at' => $base->addDays($days)]);
+        $status = in_array($sub->status, ['expired', 'trialing', 'cancelled'], true) ? 'past_due' : $sub->status;
+        $attrs = ['status' => $status, 'grace_ends_at' => $base->addDays($days)];
+        if (in_array($sub->status, ['expired', 'cancelled'], true)) {
+            $attrs['cancelled_at'] = null;
+        }
+        $sub->update($attrs);
 
         return $sub->refresh();
     }
 
     public function changePlan(ClinicSubscription $sub, Plan $plan, string $cycle): ClinicSubscription
     {
-        if ($sub->razorpay_subscription_id) {
+        $terminated = in_array($sub->status, ['cancelled', 'expired'], true);
+        if ($sub->razorpay_subscription_id && ! $terminated) {
             throw ValidationException::withMessages(['plan' => 'This clinic pays through Razorpay. Cancel the subscription before changing plan.']);
         }
-        $sub->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle]);
+        $attrs = ['plan_id' => $plan->id, 'billing_cycle' => $cycle];
+        if ($terminated) {
+            $attrs += ['razorpay_subscription_id' => null, 'pending_razorpay_subscription_id' => null];
+        }
+        $sub->update($attrs);
 
         return $sub->refresh();
     }
@@ -129,38 +164,70 @@ class SubscriptionService
             throw ValidationException::withMessages(['subscription' => 'Your clinic already has an active subscription.']);
         }
 
-        if ($sub->razorpay_subscription_id) {
-            $oldId = $sub->razorpay_subscription_id;
-            try {
-                $this->gateway->cancelSubscription($oldId, false);
-            } catch (\Throwable $e) {
-                Log::warning('Could not cancel previous Razorpay subscription', ['subscription_id' => $oldId, 'error' => $e->getMessage()]);
-            }
-        }
-
         $column = $cycle === 'yearly' ? 'razorpay_plan_id_yearly' : 'razorpay_plan_id_monthly';
         if (! $plan->{$column}) {
             $plan->update([$column => $this->gateway->createPlan($cycle, $amount, "{$plan->name} ({$cycle})")]);
         }
 
-        $startAt = $sub->status === 'trialing' && $sub->trial_ends_at && $sub->trial_ends_at->isFuture()
-            ? $sub->trial_ends_at->timestamp : null;
+        $later = collect([$sub->trial_ends_at, $sub->current_period_end])->filter()->max();
+        $startAt = $later && $later->isFuture() ? $later->timestamp : null;
 
         $created = $this->gateway->createSubscription($plan->{$column}, $cycle === 'yearly' ? 10 : 120, $startAt, [
             'clinic_id' => (string) $sub->clinic_id, 'plan_id' => (string) $plan->id, 'billing_cycle' => $cycle,
         ]);
 
-        $sub->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle, 'razorpay_subscription_id' => $created['id']]);
+        $previousPending = $sub->pending_razorpay_subscription_id;
+        $sub->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle, 'pending_razorpay_subscription_id' => $created['id']]);
+        if ($previousPending && $previousPending !== $created['id']) {
+            $this->cancelQuietly($previousPending);
+        }
 
         return ['subscription_id' => $created['id'], 'key_id' => (string) $this->gateway->keyId(), 'amount' => $amount];
     }
 
     public function confirmCheckout(ClinicSubscription $sub, string $paymentId, string $subscriptionId, string $signature): ClinicSubscription
     {
-        if ($sub->razorpay_subscription_id !== $subscriptionId || ! $this->gateway->verifyPaymentSignature($paymentId, $subscriptionId, $signature)) {
+        $known = in_array($subscriptionId, array_filter([$sub->pending_razorpay_subscription_id, $sub->razorpay_subscription_id]), true);
+        if (! $known || ! $this->gateway->verifyPaymentSignature($paymentId, $subscriptionId, $signature)) {
             throw ValidationException::withMessages(['razorpay_signature' => 'Payment could not be verified.']);
         }
 
-        return $sub->status === 'trialing' ? $sub->refresh() : $this->activate($sub);
+        $this->promotePending($sub, $subscriptionId);
+
+        if ($sub->status === 'trialing' && $sub->trial_ends_at && $sub->trial_ends_at->isFuture()) {
+            return $sub->refresh();
+        }
+
+        if ($sub->current_period_end && $sub->current_period_end->isFuture()) {
+            return $this->activate($sub); // never shorten a longer (e.g. offline) period
+        }
+
+        $now = now();
+
+        return $this->activate($sub, $now, $sub->billing_cycle === 'yearly' ? $now->copy()->addYear() : $now->copy()->addMonth());
+    }
+
+    /**
+     * Promote $subscriptionId from pending to linked when it is this clinic's pending Razorpay subscription.
+     * Returns true when a promotion happened.
+     */
+    public function promotePending(ClinicSubscription $sub, string $subscriptionId): bool
+    {
+        if ($sub->pending_razorpay_subscription_id !== $subscriptionId) {
+            return false;
+        }
+        $this->promote($sub, $subscriptionId);
+
+        return true;
+    }
+
+    private function promote(ClinicSubscription $sub, string $newId): void
+    {
+        $old = $sub->razorpay_subscription_id;
+        $sub->update(['razorpay_subscription_id' => $newId, 'pending_razorpay_subscription_id' => null, 'cancelled_at' => null]);
+
+        if ($old && $old !== $newId) {
+            $this->cancelQuietly($old);
+        }
     }
 }

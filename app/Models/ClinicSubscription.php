@@ -12,7 +12,8 @@ class ClinicSubscription extends Model
 
     protected $fillable = [
         'clinic_id', 'plan_id', 'billing_cycle', 'status', 'trial_ends_at', 'current_period_start',
-        'current_period_end', 'grace_ends_at', 'razorpay_subscription_id', 'cancelled_at',
+        'current_period_end', 'grace_ends_at', 'razorpay_subscription_id',
+        'pending_razorpay_subscription_id', 'cancelled_at',
     ];
 
     protected $casts = [

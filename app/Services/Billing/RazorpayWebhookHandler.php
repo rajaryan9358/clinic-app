@@ -18,6 +18,18 @@ class RazorpayWebhookHandler
         $subscriptionId = $subEntity['id'] ?? ($payment['subscription_id'] ?? ($payment['notes']['subscription_id'] ?? null));
 
         $sub = $subscriptionId ? ClinicSubscription::query()->where('razorpay_subscription_id', $subscriptionId)->first() : null;
+        if (! $sub && $subscriptionId) {
+            $sub = ClinicSubscription::query()->where('pending_razorpay_subscription_id', $subscriptionId)->first();
+            if ($sub) {
+                if (! in_array($event, ['subscription.authenticated', 'subscription.activated', 'subscription.charged'], true)) {
+                    Log::info('Ignoring Razorpay event for a not-yet-confirmed subscription', ['event' => $event, 'subscription_id' => $subscriptionId]);
+
+                    return;
+                }
+                $this->service->promotePending($sub, $subscriptionId);
+                $sub->refresh();
+            }
+        }
         if (! $sub) {
             Log::info('Razorpay webhook for unknown subscription', ['event' => $event, 'subscription_id' => $subscriptionId]);
 
@@ -28,8 +40,9 @@ class RazorpayWebhookHandler
         $end = isset($subEntity['current_end']) ? Carbon::createFromTimestamp($subEntity['current_end']) : null;
 
         match ($event) {
+            'subscription.authenticated' => null, // promotion only; charged/activated set the status
             'subscription.activated', 'subscription.pending', 'subscription.halted' => $this->lifecycle($event, $sub, $start, $end),
-            'subscription.charged' => $this->charged($sub, $payment ?? [], $payload['invoice']['entity'] ?? null, $start, $end),
+            'subscription.charged' => $this->charged($sub, $subscriptionId, $payment ?? [], $payload['invoice']['entity'] ?? null, $start, $end),
             'subscription.cancelled' => $sub->update(['status' => 'cancelled', 'cancelled_at' => now()]),
             'subscription.completed' => $sub->update(['status' => 'expired']),
             'payment.failed' => $this->failed($sub, $payment ?? []),
@@ -39,7 +52,9 @@ class RazorpayWebhookHandler
 
     private function lifecycle(string $event, ClinicSubscription $sub, ?Carbon $start, ?Carbon $end): void
     {
-        if (in_array($sub->status, ['cancelled', 'expired'], true)) {
+        $cancelled = $sub->status === 'cancelled' && $sub->cancelled_at !== null;
+        $ignore = $event === 'subscription.activated' ? $cancelled : ($cancelled || $sub->status === 'expired');
+        if ($ignore) {
             Log::info('Ignoring Razorpay event for terminated subscription', ['event' => $event, 'subscription_id' => $sub->razorpay_subscription_id]);
 
             return;
@@ -51,7 +66,7 @@ class RazorpayWebhookHandler
         };
     }
 
-    private function charged(ClinicSubscription $sub, array $payment, ?array $invoice, ?Carbon $start, ?Carbon $end): void
+    private function charged(ClinicSubscription $sub, string $subscriptionId, array $payment, ?array $invoice, ?Carbon $start, ?Carbon $end): void
     {
         if (! empty($payment['id'])) {
             SubscriptionTransaction::query()->updateOrCreate(
@@ -66,19 +81,10 @@ class RazorpayWebhookHandler
             );
         }
 
-        if ($sub->status === 'cancelled') {
+        if ($sub->status === 'cancelled' && $sub->cancelled_at !== null && $subscriptionId === $sub->razorpay_subscription_id) {
             if ($end) {
-                $sub->update(['current_period_end' => $end]);
+                $sub->update(['current_period_end' => $end]); // paid access is honoured, cancellation stands
             }
-
-            return;
-        }
-
-        if ($sub->status === 'expired') {
-            $sub->update(array_filter([
-                'status' => 'cancelled',
-                'current_period_end' => $end,
-            ], fn ($v) => $v !== null));
 
             return;
         }

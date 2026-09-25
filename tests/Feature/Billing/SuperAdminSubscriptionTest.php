@@ -121,4 +121,63 @@ class SuperAdminSubscriptionTest extends TestCase
         $this->postJson($this->base().'/offline-payment', ['amount' => 1000, 'period_months' => 1])->assertStatus(404);
         $this->postJson($this->base().'/cancel')->assertStatus(404);
     }
+
+    private function linked(array $attrs): ClinicSubscription
+    {
+        return ClinicSubscription::create(array_merge(['clinic_id' => $this->clinic->id, 'plan_id' => $this->starter->id, 'billing_cycle' => 'monthly',
+            'razorpay_subscription_id' => 'sub_link'], $attrs));
+    }
+
+    public function test_extend_trial_refused_for_linked_clinic(): void
+    {
+        $this->linked(['status' => 'trialing', 'trial_ends_at' => now()->addDays(3)]);
+        $this->postJson($this->base().'/extend-trial', ['days' => 5])->assertStatus(422)
+            ->assertJsonFragment(['message' => "This clinic pays through Razorpay; its trial can't be extended."]);
+    }
+
+    public function test_extend_grace_on_cancelled_moves_to_past_due(): void
+    {
+        $this->linked(['status' => 'cancelled', 'cancelled_at' => now()]);
+        $this->postJson($this->base().'/extend-grace', ['days' => 2])->assertOk();
+        $sub = ClinicSubscription::first();
+        $this->assertSame('past_due', $sub->status);
+        $this->assertNull($sub->cancelled_at);
+        $this->assertTrue($sub->grace_ends_at->isFuture());
+    }
+
+    public function test_change_plan_on_cancelled_linked_clears_link(): void
+    {
+        $this->linked(['status' => 'cancelled', 'cancelled_at' => now(), 'pending_razorpay_subscription_id' => 'sub_pend']);
+        $this->putJson($this->base(), ['plan_id' => $this->pro->id, 'billing_cycle' => 'monthly'])->assertOk();
+        $sub = ClinicSubscription::first();
+        $this->assertSame($this->pro->id, $sub->plan_id);
+        $this->assertNull($sub->razorpay_subscription_id);
+        $this->assertNull($sub->pending_razorpay_subscription_id);
+    }
+
+    public function test_offline_payment_refused_while_linked_and_live(): void
+    {
+        $this->linked(['status' => 'active']);
+        $this->postJson($this->base().'/offline-payment', ['amount' => 1000, 'period_months' => 1])->assertStatus(422)
+            ->assertJsonFragment(['message' => 'This clinic pays through Razorpay. Cancel it before recording an offline payment.']);
+        $this->assertSame(0, SubscriptionTransaction::count());
+    }
+
+    public function test_offline_payment_on_expired_linked_clears_link_and_pending(): void
+    {
+        $this->linked(['status' => 'expired', 'pending_razorpay_subscription_id' => 'sub_pend']);
+        $this->postJson($this->base().'/offline-payment', ['amount' => 1000, 'period_months' => 1])->assertOk();
+        $sub = ClinicSubscription::first();
+        $this->assertSame('active', $sub->status);
+        $this->assertNull($sub->razorpay_subscription_id);
+        $this->assertNull($sub->pending_razorpay_subscription_id);
+        $this->assertSame([['subscriptionId' => 'sub_pend', 'atCycleEnd' => false]], $this->gw->cancelled);
+    }
+
+    public function test_clinics_list_includes_subscription_status(): void
+    {
+        ClinicSubscription::create(['clinic_id' => $this->clinic->id, 'plan_id' => $this->starter->id, 'billing_cycle' => 'monthly', 'status' => 'past_due', 'grace_ends_at' => now()->addDay()]);
+        $row = collect($this->getJson('/api/super-admin/clinics')->assertOk()->json('data'))->firstWhere('id', $this->clinic->id);
+        $this->assertSame('past_due', $row['subscription']['status']);
+    }
 }

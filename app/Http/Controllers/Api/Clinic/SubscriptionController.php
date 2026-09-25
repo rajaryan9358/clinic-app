@@ -52,7 +52,7 @@ class SubscriptionController
             'plans' => Plan::query()->where('is_active', true)->orderBy('sort_order')->orderBy('id')
                 ->get(['id', 'name', 'description', 'monthly_price', 'yearly_price', 'max_doctors', 'max_staff', 'max_appointments_per_month']),
             'transactions' => SubscriptionTransaction::query()->where('clinic_id', $clinic->id)->with('plan:id,name')
-                ->latest()->limit(50)->get(),
+                ->latest()->limit(50)->get()->makeHidden(['notes', 'recorded_by']),
             'razorpay_key_id' => $this->gateway->keyId(),
             'payments_configured' => $this->gateway->isConfigured(),
         ]);

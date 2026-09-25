@@ -12,6 +12,7 @@ use App\Models\Doctor;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\ClinicCreationService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class ClinicController extends BaseCrudController
@@ -21,6 +22,11 @@ class ClinicController extends BaseCrudController
     protected array $searchable = ['name', 'slug', 'owner_name', 'owner_email'];
 
     protected array $filterable = ['status'];
+
+    protected function baseQuery(Request $request): Builder
+    {
+        return parent::baseQuery($request)->with(['subscription:id,clinic_id,status,trial_ends_at,grace_ends_at']);
+    }
 
     public function block(int $id)
     {

@@ -36,6 +36,7 @@ return new class extends Migration
             $table->timestamp('current_period_end')->nullable();
             $table->timestamp('grace_ends_at')->nullable();
             $table->string('razorpay_subscription_id')->nullable()->unique();
+            $table->string('pending_razorpay_subscription_id')->nullable()->unique();
             $table->timestamp('cancelled_at')->nullable();
             $table->timestamps();
             $table->index('status');

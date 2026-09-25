@@ -123,14 +123,15 @@ class RazorpayWebhookTest extends TestCase
         $this->assertEqualsWithDelta(now()->addMonth()->timestamp, $this->sub->current_period_end->timestamp, 5);
     }
 
-    public function test_charged_on_expired_subscription_sets_cancelled_with_charged_period_end(): void
+    public function test_charged_on_expired_subscription_reactivates_with_charged_period_end(): void
     {
         $this->sub->update(['status' => 'expired', 'current_period_end' => now()->subDay()]);
         $payload = $this->subEntity() + ['payment' => ['entity' => ['id' => 'pay_e1', 'amount' => 99900, 'method' => 'upi', 'invoice_id' => 'inv_e1']]];
         $this->send('subscription.charged', $payload)->assertOk();
 
         $this->sub->refresh();
-        $this->assertSame('cancelled', $this->sub->status);
+        $this->assertSame('active', $this->sub->status);
+        $this->assertNull($this->sub->grace_ends_at);
         $this->assertNotNull(SubscriptionTransaction::where('razorpay_payment_id', 'pay_e1')->first());
         $this->assertEqualsWithDelta(now()->addMonth()->timestamp, $this->sub->current_period_end->timestamp, 5);
     }
@@ -158,5 +159,27 @@ class RazorpayWebhookTest extends TestCase
 
         $tx = SubscriptionTransaction::where('razorpay_payment_id', 'pay_inv')->firstOrFail();
         $this->assertSame('https://rzp.io/i/abc', $tx->invoice_url);
+    }
+
+    public function test_charged_on_past_due_and_trialing_activates(): void
+    {
+        foreach (['past_due', 'trialing'] as $i => $status) {
+            $this->sub->update(['status' => $status, 'grace_ends_at' => now()->addDay(), 'trial_ends_at' => now()->subDay()]);
+            $this->send('subscription.charged', $this->subEntity() + ['payment' => ['entity' => ['id' => 'pay_s'.$i, 'amount' => 99900]]])->assertOk();
+            $this->assertSame('active', $this->sub->refresh()->status, $status);
+        }
+    }
+
+    public function test_activated_on_expired_activates_but_pending_and_halted_are_ignored(): void
+    {
+        $this->sub->update(['status' => 'expired', 'grace_ends_at' => null]);
+        $this->send('subscription.pending', $this->subEntity(['status' => 'pending']))->assertOk();
+        $this->send('subscription.halted', $this->subEntity(['status' => 'halted']))->assertOk();
+        $this->sub->refresh();
+        $this->assertSame('expired', $this->sub->status);
+        $this->assertNull($this->sub->grace_ends_at);
+
+        $this->send('subscription.activated', $this->subEntity())->assertOk();
+        $this->assertSame('active', $this->sub->refresh()->status);
     }
 }

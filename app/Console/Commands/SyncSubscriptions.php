@@ -17,11 +17,11 @@ class SyncSubscriptions extends Command
         $now = now();
         $count = 0;
 
-        ClinicSubscription::query()->where('status', 'trialing')->whereNull('razorpay_subscription_id')
+        ClinicSubscription::query()->where('status', 'trialing')
             ->whereNotNull('trial_ends_at')->where('trial_ends_at', '<=', $now)
             ->each(function (ClinicSubscription $s) use ($service, &$count) { $service->markPastDue($s, 'pending_payment'); $count++; });
 
-        ClinicSubscription::query()->where('status', 'active')->whereNull('razorpay_subscription_id')
+        ClinicSubscription::query()->where('status', 'active')
             ->whereNotNull('current_period_end')->where('current_period_end', '<=', $now)
             ->each(function (ClinicSubscription $s) use ($service, &$count) { $s->update(['grace_ends_at' => null]); $service->markPastDue($s, 'past_due'); $count++; });
 
