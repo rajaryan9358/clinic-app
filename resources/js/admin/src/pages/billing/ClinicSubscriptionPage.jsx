@@ -131,7 +131,13 @@ export default function ClinicSubscriptionPage() {
                         await Promise.all([load(), scope?.refresh?.()]);
                         setNotice('Payment received. Your subscription is active.');
                     } catch (e) {
-                        setError(e?.response?.data?.message || 'Payment could not be verified. If money was deducted, it will be confirmed shortly.');
+                        // Payment may still have been captured even though verification
+                        // failed (422 or a network blip) — reload the subscription data
+                        // and scope context so the admin doesn't act on stale state, then
+                        // surface the error last since load() clears it on entry.
+                        const message = e?.response?.data?.message || 'Payment could not be verified. If money was deducted, it will be confirmed shortly.';
+                        await Promise.all([load(), scope?.refresh?.()]);
+                        setError(message);
                     }
                 },
                 modal: { ondismiss: () => setPaying(false) },
