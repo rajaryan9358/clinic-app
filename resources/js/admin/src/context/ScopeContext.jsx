@@ -3,9 +3,12 @@ import client from '../api/client';
 
 const ScopeContext = createContext(null);
 
+const DEFAULT_LOCK_MESSAGE = "Your clinic's subscription is inactive. Contact your clinic admin to renew.";
+
 export function ScopeProvider({ children }) {
     const [context, setContext] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [subscriptionLocked, setSubscriptionLocked] = useState(null); // null | { message }
 
     const refresh = async () => {
         try {
@@ -22,6 +25,12 @@ export function ScopeProvider({ children }) {
             if (data?.data?.active_doctor_id) {
                 localStorage.setItem('active_doctor_id', String(data.data.active_doctor_id));
             }
+
+            if (data?.data?.subscription?.allows_access === false) {
+                setSubscriptionLocked({ message: DEFAULT_LOCK_MESSAGE });
+            } else {
+                setSubscriptionLocked(null);
+            }
         } catch {
             setContext(null);
         } finally {
@@ -36,13 +45,22 @@ export function ScopeProvider({ children }) {
                 refresh();
             } else {
                 setContext(null);
+                setSubscriptionLocked(null);
                 localStorage.removeItem('active_doctor_id');
             }
         };
 
+        const onSubscriptionRequired = (event) => {
+            setSubscriptionLocked({ message: event?.detail?.message || DEFAULT_LOCK_MESSAGE });
+        };
+
         onAuthChanged();
         window.addEventListener('auth:changed', onAuthChanged);
-        return () => window.removeEventListener('auth:changed', onAuthChanged);
+        window.addEventListener('subscription-required', onSubscriptionRequired);
+        return () => {
+            window.removeEventListener('auth:changed', onAuthChanged);
+            window.removeEventListener('subscription-required', onSubscriptionRequired);
+        };
     }, []);
 
     const setActiveDoctorId = (doctorId) => {
@@ -52,8 +70,8 @@ export function ScopeProvider({ children }) {
     };
 
     const value = useMemo(
-        () => ({ context, loading, refresh, setActiveDoctorId }),
-        [context, loading]
+        () => ({ context, loading, refresh, setActiveDoctorId, subscriptionLocked }),
+        [context, loading, subscriptionLocked]
     );
 
     return <ScopeContext.Provider value={value}>{children}</ScopeContext.Provider>;

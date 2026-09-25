@@ -85,6 +85,7 @@ export const navigationByRole = {
             section: 'Settings',
             items: [
                 routeItem('/workflows/clinic-profile', 'Clinic Profile'),
+                routeItem('/workflows/subscription', 'Subscription'),
             ],
         },
     ],

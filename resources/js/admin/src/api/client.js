@@ -20,4 +20,14 @@ client.interceptors.request.use((config) => {
     return config;
 });
 
+client.interceptors.response.use(
+    (res) => res,
+    (error) => {
+        if (error?.response?.status === 402 && error.response.data?.code === 'SUBSCRIPTION_REQUIRED') {
+            window.dispatchEvent(new CustomEvent('subscription-required', { detail: error.response.data }));
+        }
+        return Promise.reject(error);
+    },
+);
+
 export default client;

@@ -51,6 +51,12 @@ const STATUS_CONFIG = {
     error:           { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
     yes:             { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
     no:              { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
+
+    // ── Subscription ──────────────────────────────────────────────────────────
+    trialing:        { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
+    pending_payment: { dot: 'bg-amber-500',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
+    past_due:        { dot: 'bg-amber-500',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
+    expired:         { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
 };
 
 const FALLBACK = { dot: 'bg-gray-400', text: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' };

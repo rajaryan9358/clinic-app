@@ -15,6 +15,7 @@ const ROUTE_ICONS = {
     '/workflows/setup-doctor': 'user-check',
     '/workflows/my-profile': 'user-circle',
     '/workflows/communication/delivery-issues': 'alert-triangle',
+    '/workflows/subscription': 'credit-card',
 };
 
 // Map module keys → icon names
@@ -106,42 +107,60 @@ export default function Layout({ children }) {
     const clinicName = context?.clinic_name || 'Clinic SaaS';
     const clinicLogoUrl = context?.clinic_logo_url;
 
-    const trialBanner = (() => {
-        const status = context?.clinic_status;
-        if (status !== 'trial' && status !== 'inactive') return null;
-        const trialEndsAt = context?.clinic_trial_ends_at;
-        if (!trialEndsAt) {
-            // Status is trial but no expiry date set — show generic trial notice
-            if (status === 'trial') return { expired: false, daysLeft: null, noDate: true };
-            return null;
-        }
-        const endsAt = new Date(trialEndsAt);
+    const subscriptionBanner = (() => {
+        const sub = context?.subscription;
+        if (!sub) return null;
         const now = new Date();
-        const daysLeft = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
-        if (endsAt <= now) return { expired: true, daysLeft: 0 };
-        return { expired: false, daysLeft, noDate: false };
+        const daysLeft = (dateStr) => {
+            if (!dateStr) return null;
+            return Math.max(0, Math.ceil((new Date(dateStr) - now) / (1000 * 60 * 60 * 24)));
+        };
+
+        if (sub.status === 'trialing') {
+            const days = daysLeft(sub.trial_ends_at);
+            return {
+                tone: 'amber',
+                text: days == null ? 'Your account is on a trial period' : `Trial: ${days} day${days === 1 ? '' : 's'} left`,
+                payNow: false,
+            };
+        }
+
+        if (sub.status === 'pending_payment' || sub.status === 'past_due') {
+            const days = daysLeft(sub.grace_ends_at);
+            return {
+                tone: 'amber',
+                text: days == null ? 'Payment due' : `Payment due — ${days} day${days === 1 ? '' : 's'} left`,
+                payNow: true,
+            };
+        }
+
+        if (sub.status === 'cancelled') {
+            const endsAt = sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : null;
+            return {
+                tone: 'red',
+                text: endsAt ? `Subscription cancelled — access until ${endsAt}` : 'Subscription cancelled',
+                payNow: false,
+            };
+        }
+
+        return null;
     })();
 
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* ── Trial Banner ── */}
-            {trialBanner && (
-                <div className={`fixed inset-x-0 top-0 z-40 flex items-center justify-center gap-3 px-4 py-1.5 text-xs font-semibold ${trialBanner.expired ? 'bg-red-600 text-white' : 'bg-amber-400 text-amber-900'}`}>
-                    {trialBanner.expired
-                        ? 'Trial period has expired — account suspended'
-                        : trialBanner.noDate
-                            ? 'Your account is on a trial period'
-                            : `Trial: ${trialBanner.daysLeft} day${trialBanner.daysLeft === 1 ? '' : 's'} remaining · expires ${new Date(context.clinic_trial_ends_at).toLocaleDateString()}`
-                    }
-                    {role === 'clinic_admin' && (
-                        <a href="mailto:support@clinicsaas.com" className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${trialBanner.expired ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-amber-900/20 text-amber-900 hover:bg-amber-900/30'}`}>
-                            Contact to extend →
-                        </a>
+            {/* ── Subscription Banner ── */}
+            {subscriptionBanner && (
+                <div className={`fixed inset-x-0 top-0 z-40 flex items-center justify-center gap-3 px-4 py-1.5 text-xs font-semibold ${subscriptionBanner.tone === 'red' ? 'bg-red-600 text-white' : 'bg-amber-400 text-amber-900'}`}>
+                    {subscriptionBanner.text}
+                    {subscriptionBanner.payNow && role === 'clinic_admin' && (
+                        <Link to="/workflows/subscription" className="rounded-full bg-amber-900/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-900/30">
+                            Pay now →
+                        </Link>
                     )}
                 </div>
             )}
             {/* ── Top Header ── */}
-            <header className={`fixed inset-x-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm ${trialBanner ? 'top-7' : 'top-0'}`}>
+            <header className={`fixed inset-x-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm ${subscriptionBanner ? 'top-7' : 'top-0'}`}>
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                     {clinicLogoUrl ? (
@@ -205,7 +224,7 @@ export default function Layout({ children }) {
             </header>
 
             {/* ── Sidebar ── */}
-            <aside className={`fixed inset-y-0 left-0 z-20 flex w-64 flex-col border-r border-gray-200 bg-white ${trialBanner ? 'pt-[84px]' : 'pt-14'}`}>
+            <aside className={`fixed inset-y-0 left-0 z-20 flex w-64 flex-col border-r border-gray-200 bg-white ${subscriptionBanner ? 'pt-[84px]' : 'pt-14'}`}>
                 <div className="flex-1 overflow-y-auto px-3 py-4">
                     <nav className="space-y-0.5">
                         {navSections.map((section) => (
@@ -236,7 +255,7 @@ export default function Layout({ children }) {
             </aside>
 
             {/* ── Main content ── */}
-            <main className={`pl-64 ${trialBanner ? 'pt-[84px]' : 'pt-14'}`}>
+            <main className={`pl-64 ${subscriptionBanner ? 'pt-[84px]' : 'pt-14'}`}>
                 <div className="min-h-[calc(100vh-3.5rem)] p-6">
                     {children}
                 </div>
