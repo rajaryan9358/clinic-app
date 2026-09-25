@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'clinic.scope' => \App\Http\Middleware\EnsureClinicScope::class,
             'clinic.context' => \App\Http\Middleware\ResolveClinicContext::class,
+            'clinic.subscription' => \App\Http\Middleware\EnsureClinicSubscription::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
         ]);

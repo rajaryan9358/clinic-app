@@ -155,7 +155,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::post('uploads/image', [UploadController::class, 'storeImage']);
 });
 
-Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context'])->prefix('clinic')->group(function () {
+Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.subscription'])->prefix('clinic')->group(function () {
     Route::get('me/context', [ClinicMeController::class, 'context']);
 
     Route::get('dashboard/summary', [ClinicDashboardController::class, 'summary']);
