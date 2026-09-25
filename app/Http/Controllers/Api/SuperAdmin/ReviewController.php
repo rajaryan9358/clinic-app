@@ -89,7 +89,7 @@ class ReviewController extends BaseCrudController
     {
         /** @var Review $review */
         $review = $this->findModel($id);
-        $review->loadMissing('clinic:id,name');
+        $review->load('clinic:id,name,city,state');
 
         $opts = $request->validate([
             'reply_type' => ['required', 'in:short,medium,detailed'],

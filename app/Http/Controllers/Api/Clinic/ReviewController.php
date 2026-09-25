@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\Clinic;
 use App\Models\Clinic;
 use App\Models\Review;
 use App\Services\ReviewAiService;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class ReviewController extends BaseClinicCrudController
