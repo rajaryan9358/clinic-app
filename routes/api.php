@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\Clinic\WhatsappTemplateController as ClinicWhatsapp
 use App\Http\Controllers\Api\SuperAdmin\AppointmentController as SuperAdminAppointmentController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController as SuperAdminAuditLogController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicController as SuperAdminClinicController;
+use App\Http\Controllers\Api\SuperAdmin\PlanController as SuperAdminPlanController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicSettingController as SuperAdminClinicSettingController;
 use App\Http\Controllers\Api\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\Api\SuperAdmin\DoctorController as SuperAdminDoctorController;
@@ -83,6 +84,11 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
 
     Route::get('settings/system', [SuperAdminSystemSettingController::class, 'show']);
     Route::post('settings/system', [SuperAdminSystemSettingController::class, 'store']);
+
+    Route::get('plans', [SuperAdminPlanController::class, 'index']);
+    Route::post('plans', [SuperAdminPlanController::class, 'store']);
+    Route::put('plans/{id}', [SuperAdminPlanController::class, 'update']);
+    Route::delete('plans/{id}', [SuperAdminPlanController::class, 'destroy']);
 
     Route::get('reports/appointments.pdf', [SuperAdminReportController::class, 'appointmentsPdf']);
     Route::get('reports/patients.pdf', [SuperAdminReportController::class, 'patientsPdf']);
