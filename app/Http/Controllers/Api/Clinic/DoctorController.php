@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Clinic;
 
+use App\Http\Requests\StatusChangeRequest;
 use App\Http\Requests\StoreDoctorRequest;
 use App\Models\Doctor;
 use App\Services\DoctorManagementService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class DoctorController extends BaseClinicCrudController
@@ -27,5 +29,49 @@ class DoctorController extends BaseClinicCrudController
         $doctor = $this->doctorManagementService->create($data);
 
         return $this->success('Doctor created successfully', $doctor, 201);
+    }
+
+    /*
+     * Doctor-kind users hold doctors.edit so they can edit their own profile via
+     * DoctorProfileController (own record, limited fields). The generic write
+     * routes below bypass those rules, so doctors are refused here.
+     */
+    private function refuseDoctorKind(): ?JsonResponse
+    {
+        if (request()->user()?->roleKind() === 'doctor') {
+            return response()->json(['success' => false, 'message' => 'Doctors edit their details from their profile.'], 403);
+        }
+
+        return null;
+    }
+
+    public function update(Request $request, int $id)
+    {
+        return $this->refuseDoctorKind() ?? parent::update($request, $id);
+    }
+
+    public function destroy(int $id)
+    {
+        return $this->refuseDoctorKind() ?? parent::destroy($id);
+    }
+
+    public function restore(int $id)
+    {
+        return $this->refuseDoctorKind() ?? parent::restore($id);
+    }
+
+    public function changeStatus(StatusChangeRequest $request, int $id)
+    {
+        return $this->refuseDoctorKind() ?? parent::changeStatus($request, $id);
+    }
+
+    public function block(int $id)
+    {
+        return $this->refuseDoctorKind() ?? parent::block($id);
+    }
+
+    public function unblock(int $id)
+    {
+        return $this->refuseDoctorKind() ?? parent::unblock($id);
     }
 }
