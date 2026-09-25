@@ -20,10 +20,8 @@ class UpdateUserRequest extends FormRequest
             'email' => ['sometimes', 'nullable', 'email'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
-            'role' => ['sometimes', Rule::in(['super_admin', 'clinic_admin', 'branch_manager', 'doctor', 'receptionist', 'assistant'])],
+            'role' => ['sometimes', Rule::in(['super_admin', 'clinic_admin', 'receptionist', 'assistant'])],
             'status' => ['sometimes', 'nullable', Rule::in(['active', 'inactive', 'blocked'])],
-            'branch_ids' => ['sometimes', 'array'],
-            'branch_ids.*' => ['integer', 'exists:branches,id'],
             'doctor_ids' => ['sometimes', 'array'],
             'doctor_ids.*' => ['integer', 'exists:doctors,id'],
         ];

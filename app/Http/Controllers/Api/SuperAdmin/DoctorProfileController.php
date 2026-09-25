@@ -19,7 +19,6 @@ class DoctorProfileController extends Controller
         return Doctor::query()
             ->withTrashed()
             ->with([
-                'branches:id,name',
                 'services:id,name',
                 'schedules',
                 'exceptions',
@@ -31,16 +30,10 @@ class DoctorProfileController extends Controller
     {
         $doctor = $this->findDoctor($id);
 
-        $branchIds = $doctor->branches->pluck('id')->values();
-        $primaryBranchId = optional($doctor->branches->firstWhere('pivot.is_primary', true))->id;
-
         return $this->success('Doctor profile fetched', [
             'doctor' => $doctor,
-            'branch_ids' => $branchIds,
-            'primary_branch_id' => $primaryBranchId,
             'service_ids' => $doctor->services->pluck('id')->values(),
             'setup' => [
-                'has_branches' => $branchIds->count() > 0,
                 'has_services' => $doctor->services->count() > 0,
                 'has_schedules' => $doctor->schedules->count() > 0,
             ],
@@ -70,33 +63,12 @@ class DoctorProfileController extends Controller
             'photo_url' => ['nullable', 'string', 'max:2048'],
             'status' => ['nullable', 'in:active,inactive'],
 
-            'branch_ids' => ['nullable', 'array'],
-            'branch_ids.*' => ['integer', Rule::exists('branches', 'id')->where('clinic_id', $clinicId)],
-            'primary_branch_id' => ['nullable', 'integer'],
-
             'service_ids' => ['nullable', 'array'],
             'service_ids.*' => ['integer', Rule::exists('services', 'id')->where('clinic_id', $clinicId)],
         ])->validate();
 
-        $doctor->fill(collect($data)->except(['branch_ids', 'primary_branch_id', 'service_ids'])->all());
+        $doctor->fill(collect($data)->except(['service_ids'])->all());
         $doctor->save();
-
-        if (array_key_exists('branch_ids', $data)) {
-            $branchIds = array_values(array_unique(array_map('intval', $data['branch_ids'] ?? [])));
-            $primary = isset($data['primary_branch_id']) ? (int) $data['primary_branch_id'] : null;
-            if ($primary && ! in_array($primary, $branchIds, true)) {
-                $primary = null;
-            }
-
-            $payload = [];
-            foreach ($branchIds as $index => $branchId) {
-                $payload[$branchId] = [
-                    'clinic_id' => $clinicId,
-                    'is_primary' => $primary ? $branchId === $primary : $index === 0,
-                ];
-            }
-            $doctor->branches()->sync($payload);
-        }
 
         if (array_key_exists('service_ids', $data)) {
             $serviceIds = array_values(array_unique(array_map('intval', $data['service_ids'] ?? [])));
@@ -107,14 +79,10 @@ class DoctorProfileController extends Controller
             $doctor->services()->sync($payload);
         }
 
-        $doctor->refresh()->load(['branches:id,name', 'services:id,name', 'schedules', 'exceptions']);
-        $branchIds = $doctor->branches->pluck('id')->values();
-        $primaryBranchId = optional($doctor->branches->firstWhere('pivot.is_primary', true))->id;
+        $doctor->refresh()->load(['services:id,name', 'schedules', 'exceptions']);
 
         return $this->success('Doctor profile updated', [
             'doctor' => $doctor,
-            'branch_ids' => $branchIds,
-            'primary_branch_id' => $primaryBranchId,
             'service_ids' => $doctor->services->pluck('id')->values(),
         ]);
     }
@@ -125,7 +93,6 @@ class DoctorProfileController extends Controller
         $clinicId = (int) $doctor->clinic_id;
 
         $data = validator($request->all(), [
-            'branch_id' => ['required', 'integer', Rule::exists('branches', 'id')->where('clinic_id', $clinicId)],
             'day_of_week' => ['required', 'integer', 'min:0', 'max:6'],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i'],
@@ -139,7 +106,6 @@ class DoctorProfileController extends Controller
         $schedule = DoctorSchedule::create([
             'clinic_id' => $clinicId,
             'doctor_id' => $doctor->id,
-            'branch_id' => $data['branch_id'],
             'day_of_week' => $data['day_of_week'],
             'start_time' => $data['start_time'],
             'end_time' => $data['end_time'],
@@ -164,7 +130,6 @@ class DoctorProfileController extends Controller
             ->findOrFail($scheduleId);
 
         $data = validator($request->all(), [
-            'branch_id' => ['sometimes', 'integer', Rule::exists('branches', 'id')->where('clinic_id', $clinicId)],
             'day_of_week' => ['sometimes', 'integer', 'min:0', 'max:6'],
             'start_time' => ['sometimes', 'date_format:H:i'],
             'end_time' => ['sometimes', 'date_format:H:i'],
@@ -203,7 +168,6 @@ class DoctorProfileController extends Controller
         $data = validator($request->all(), [
             'exception_date' => ['required', 'date'],
             'type' => ['required', 'in:leave,blocked,special_hours'],
-            'branch_id' => ['nullable', 'integer', Rule::exists('branches', 'id')->where('clinic_id', $clinicId)],
             'start_time' => ['nullable', 'date_format:H:i'],
             'end_time' => ['nullable', 'date_format:H:i'],
             'reason' => ['nullable', 'string', 'max:1000'],
@@ -212,7 +176,6 @@ class DoctorProfileController extends Controller
         $exception = DoctorScheduleException::create([
             'clinic_id' => $clinicId,
             'doctor_id' => $doctor->id,
-            'branch_id' => $data['branch_id'] ?? null,
             'exception_date' => $data['exception_date'],
             'type' => $data['type'],
             'start_time' => $data['start_time'] ?? null,

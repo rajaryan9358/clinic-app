@@ -8,5 +8,5 @@ class WhatsappTemplateController extends BaseClinicCrudController
 {
     protected string $modelClass = WhatsappTemplate::class;
     protected array $searchable = ['name', 'template_key', 'status'];
-    protected array $filterable = ['branch_id', 'status', 'category'];
+    protected array $filterable = ['status', 'category'];
 }

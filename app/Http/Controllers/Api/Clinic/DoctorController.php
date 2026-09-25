@@ -18,7 +18,7 @@ class DoctorController extends BaseClinicCrudController
     public function store(Request $request)
     {
         $role = (string) ($request->user()?->role ?? '');
-        abort_if(! in_array($role, ['clinic_admin', 'branch_manager'], true), 403, 'Not allowed.');
+        abort_if($role !== 'clinic_admin', 403, 'Not allowed.');
 
         $request->merge([
             'clinic_id' => $request->attributes->get('clinic_id'),
@@ -26,11 +26,6 @@ class DoctorController extends BaseClinicCrudController
 
         $data = validator($request->all(), (new StoreDoctorRequest())->rules())->validate();
         $data['clinic_id'] = $request->attributes->get('clinic_id');
-
-        $activeBranchId = $request->attributes->get('active_branch_id');
-        if ($activeBranchId && empty($data['branch_ids'])) {
-            $data['branch_ids'] = [(int) $activeBranchId];
-        }
 
         $doctor = $this->doctorManagementService->create($data);
 

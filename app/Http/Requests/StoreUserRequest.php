@@ -20,10 +20,8 @@ class StoreUserRequest extends FormRequest
             'email' => ['nullable', 'email', 'required_without:phone'],
             'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
             'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', Rule::in(['super_admin', 'clinic_admin', 'branch_manager', 'doctor', 'receptionist', 'assistant'])],
+            'role' => ['required', Rule::in(['super_admin', 'clinic_admin', 'receptionist', 'assistant'])],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'blocked'])],
-            'branch_ids' => ['nullable', 'array'],
-            'branch_ids.*' => ['integer', 'exists:branches,id'],
             'doctor_ids' => ['nullable', 'array'],
             'doctor_ids.*' => ['integer', 'exists:doctors,id'],
         ];

@@ -38,13 +38,6 @@ class DoctorController extends BaseCrudController
             }
         }
 
-        if ($request->filled('branch_id')) {
-            $branchId = (int) $request->input('branch_id');
-            $query->whereHas('branches', function (Builder $q) use ($branchId) {
-                $q->where('branches.id', $branchId);
-            });
-        }
-
         $sortBy = $request->input('sort_by', $this->defaultSort);
         $sortDir = $request->input('sort_dir', 'desc');
         $query->orderBy($sortBy, $sortDir);

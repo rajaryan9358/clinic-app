@@ -29,7 +29,6 @@
             <tr>
                 <th style="width: 26%">Patient</th>
                 <th style="width: 14%">Phone</th>
-                <th style="width: 16%">Branch</th>
                 <th style="width: 10%">Status</th>
                 <th style="width: 10%">Total Appts</th>
                 <th style="width: 10%">Completed</th>
@@ -41,7 +40,6 @@
                 <tr>
                     <td>{{ $p->full_name ?? ('Patient #'.$p->id) }}</td>
                     <td>{{ $p->phone ?? '-' }}</td>
-                    <td>{{ $p->branch->name ?? ($p->branch_id ? ('Branch #'.$p->branch_id) : '-') }}</td>
                     <td>{{ $p->status_tag ?? '-' }}</td>
                     <td>{{ (int)($stats[$p->id]['total'] ?? 0) }}</td>
                     <td>{{ (int)($stats[$p->id]['completed'] ?? 0) }}</td>
@@ -49,7 +47,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="muted">No patients found.</td>
+                    <td colspan="6" class="muted">No patients found.</td>
                 </tr>
             @endforelse
         </tbody>

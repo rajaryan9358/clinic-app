@@ -36,14 +36,6 @@ class DoctorManagementService
                 'user_id' => $doctorUserId,
             ]);
 
-            if (! empty($data['branch_ids'])) {
-                $payload = [];
-                foreach ($data['branch_ids'] as $index => $branchId) {
-                    $payload[$branchId] = ['clinic_id' => $data['clinic_id'], 'is_primary' => $index === 0];
-                }
-                $doctor->branches()->sync($payload);
-            }
-
             if (! empty($data['schedules'])) {
                 $doctor->schedules()->createMany(array_map(function ($schedule) use ($data) {
                     return [

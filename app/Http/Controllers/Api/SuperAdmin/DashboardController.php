@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\SuperAdmin;
 use App\Enums\UserRole;
 use App\Http\Controllers\Api\BaseCrudController;
 use App\Models\Appointment;
-use App\Models\Branch;
 use App\Models\Clinic;
 use App\Models\Doctor;
 use App\Models\FollowupTask;
@@ -24,7 +23,6 @@ class DashboardController extends BaseCrudController
         return $this->success('Dashboard summary fetched successfully', [
             'total_clinics' => Clinic::count(),
             'today_clinic_onboarding' => Clinic::whereDate('created_at', $today)->count(),
-            'total_branches' => Branch::count(),
             'total_staff' => User::query()
                 ->where('role', '!=', UserRole::SUPER_ADMIN->value)
                 ->where('role', '!=', UserRole::DOCTOR->value)

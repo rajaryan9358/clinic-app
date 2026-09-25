@@ -40,10 +40,8 @@ class UserController extends BaseCrudController
     {
         /** @var \App\Models\User $user */
         $user = $this->findModel($id);
-        $user->loadMissing('branches:id');
 
         $data = $user->toArray();
-        $data['branch_ids'] = $user->branches->pluck('id')->values()->all();
 
         return $this->success('Record fetched successfully', $data);
     }
@@ -56,9 +54,7 @@ class UserController extends BaseCrudController
         $user = $this->findModel($id);
         $updated = $this->userManagementService->update($user, $data);
 
-        $updated->loadMissing('branches:id');
         $data = $updated->toArray();
-        $data['branch_ids'] = $updated->branches->pluck('id')->values()->all();
 
         return $this->success('Record updated successfully', $data);
     }

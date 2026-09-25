@@ -11,7 +11,7 @@ class UpdateClinicUserRequest extends FormRequest
     public function authorize(): bool
     {
         $actorRole = (string) ($this->user()?->role ?? '');
-        if (! in_array($actorRole, ['clinic_admin', 'branch_manager'], true)) {
+        if ($actorRole !== 'clinic_admin') {
             return false;
         }
 
@@ -31,8 +31,7 @@ class UpdateClinicUserRequest extends FormRequest
         }
 
         $allowedManageRoles = match ($actorRole) {
-            'clinic_admin' => ['branch_manager', 'receptionist', 'assistant', 'doctor'],
-            'branch_manager' => ['receptionist', 'assistant', 'doctor'],
+            'clinic_admin' => ['receptionist', 'assistant'],
             default => [],
         };
 
@@ -57,11 +56,9 @@ class UpdateClinicUserRequest extends FormRequest
             'email' => ['sometimes', 'nullable', 'email'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
-            'role' => ['sometimes', Rule::in(['branch_manager', 'receptionist', 'assistant', 'doctor'])],
+            'role' => ['sometimes', Rule::in(['receptionist', 'assistant'])],
             'status' => ['sometimes', 'nullable', Rule::in(['active', 'inactive', 'blocked'])],
             'login_type' => ['sometimes', 'nullable', Rule::in(['password', 'otp'])],
-            'branch_ids' => ['sometimes', 'array'],
-            'branch_ids.*' => ['integer', 'exists:branches,id'],
             'doctor_ids' => ['sometimes', 'array'],
             'doctor_ids.*' => ['integer', 'exists:doctors,id'],
         ];

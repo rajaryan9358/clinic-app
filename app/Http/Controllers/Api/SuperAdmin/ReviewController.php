@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\SuperAdmin;
 
 use App\Http\Controllers\Api\BaseCrudController;
-use App\Models\Branch;
 use App\Models\Clinic;
 use App\Models\Review;
 use App\Services\ReviewAiService;
@@ -16,7 +15,7 @@ class ReviewController extends BaseCrudController
 
     protected array $searchable = ['reviewer_name', 'message'];
 
-    protected array $filterable = ['clinic_id', 'branch_id', 'rating', 'sentiment'];
+    protected array $filterable = ['clinic_id', 'rating', 'sentiment'];
 
     public function __construct(private readonly ReviewAiService $ai) {}
 
@@ -24,7 +23,6 @@ class ReviewController extends BaseCrudController
     {
         return parent::baseQuery($request)->with([
             'clinic:id,name',
-            'branch:id,name,city,state',
         ]);
     }
 
@@ -32,17 +30,11 @@ class ReviewController extends BaseCrudController
     {
         $data = $request->validate([
             'clinic_id' => ['required', 'integer'],
-            'branch_id' => ['required', 'integer'],
             'reviewer_name' => ['nullable', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:10000'],
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'review_date' => ['nullable', 'date'],
         ]);
-
-        $branchOk = Branch::query()->where('id', $data['branch_id'])->where('clinic_id', $data['clinic_id'])->exists();
-        if (! $branchOk) {
-            return $this->error('Invalid branch for this clinic', null, 422);
-        }
 
         if (empty($data['review_date'])) {
             unset($data['review_date']);
@@ -50,7 +42,7 @@ class ReviewController extends BaseCrudController
 
         /** @var Review $review */
         $review = Review::create($data);
-        $review->loadMissing('clinic:id,name', 'branch:id,name,city,state');
+        $review->loadMissing('clinic:id,name');
 
         $this->ai->analyzeAndPersistSentiment($review);
 
@@ -74,7 +66,7 @@ class ReviewController extends BaseCrudController
             $this->ai->analyzeAndPersistSentiment($review->refresh());
         }
 
-        $review->loadMissing('clinic:id,name', 'branch:id,name,city,state');
+        $review->loadMissing('clinic:id,name');
         return $this->success('Review updated successfully', $review->refresh());
     }
 
@@ -82,7 +74,7 @@ class ReviewController extends BaseCrudController
     {
         /** @var Review $review */
         $review = $this->findModel($id);
-        $review->loadMissing('clinic:id,name', 'branch:id,name,city,state');
+        $review->loadMissing('clinic:id,name');
 
         $data = $review->toArray();
         $meta = is_array($review->reply_meta) ? $review->reply_meta : [];
@@ -97,7 +89,7 @@ class ReviewController extends BaseCrudController
     {
         /** @var Review $review */
         $review = $this->findModel($id);
-        $review->loadMissing('branch:id,name,city,state', 'clinic:id,name');
+        $review->loadMissing('clinic:id,name');
 
         $opts = $request->validate([
             'reply_type' => ['required', 'in:short,medium,detailed'],
@@ -110,8 +102,8 @@ class ReviewController extends BaseCrudController
         $clinic = $review->clinic;
 
         $location = '';
-        if ($review->branch) {
-            $parts = array_filter([$review->branch->name, $review->branch->city, $review->branch->state]);
+        if ($clinic) {
+            $parts = array_filter([$clinic->city, $clinic->state]);
             $location = implode(', ', $parts);
         }
 
@@ -148,7 +140,7 @@ class ReviewController extends BaseCrudController
             'replied_at' => now(),
         ]);
 
-        $review->loadMissing('clinic:id,name', 'branch:id,name,city,state');
+        $review->loadMissing('clinic:id,name');
         return $this->success('Reply saved successfully', $review->refresh());
     }
 }

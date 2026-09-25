@@ -3,8 +3,6 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Clinic\AppointmentController as ClinicAppointmentController;
 use App\Http\Controllers\Api\Clinic\AuditLogController as ClinicAuditLogController;
-use App\Http\Controllers\Api\Clinic\BranchController as ClinicBranchController;
-use App\Http\Controllers\Api\Clinic\BranchSettingController as ClinicBranchSettingController;
 use App\Http\Controllers\Api\Clinic\ClinicSettingController as ClinicClinicSettingController;
 use App\Http\Controllers\Api\Clinic\DashboardController as ClinicDashboardController;
 use App\Http\Controllers\Api\Clinic\DoctorController as ClinicDoctorController;
@@ -30,8 +28,6 @@ use App\Http\Controllers\Api\Clinic\ClinicProfileController as ClinicClinicProfi
 use App\Http\Controllers\Api\Clinic\WhatsappTemplateController as ClinicWhatsappTemplateController;
 use App\Http\Controllers\Api\SuperAdmin\AppointmentController as SuperAdminAppointmentController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController as SuperAdminAuditLogController;
-use App\Http\Controllers\Api\SuperAdmin\BranchController as SuperAdminBranchController;
-use App\Http\Controllers\Api\SuperAdmin\BranchSettingController as SuperAdminBranchSettingController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicController as SuperAdminClinicController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicSettingController as SuperAdminClinicSettingController;
 use App\Http\Controllers\Api\SuperAdmin\DashboardController as SuperAdminDashboardController;
@@ -93,12 +89,10 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::get('reports/doctors.pdf', [SuperAdminReportController::class, 'doctorsPdf']);
 
     registerCrudRoutes('clinics', SuperAdminClinicController::class);
-    registerCrudRoutes('branches', SuperAdminBranchController::class);
     registerCrudRoutes('domains', SuperAdminDomainController::class);
     registerCrudRoutes('users', SuperAdminUserController::class);
     registerCrudRoutes('doctors', SuperAdminDoctorController::class);
     registerCrudRoutes('services', SuperAdminServiceController::class);
-    Route::put('services/{id}/branches', [SuperAdminServiceController::class, 'syncBranches']);
     registerCrudRoutes('patients', SuperAdminPatientController::class);
     Route::get('appointments/availability', [SuperAdminAppointmentController::class, 'availability']);
     Route::post('appointments/generate-tokens', [SuperAdminAppointmentController::class, 'generateTokens']);
@@ -113,7 +107,6 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     registerCrudRoutes('invoices', SuperAdminInvoiceController::class);
     registerCrudRoutes('payments', SuperAdminPaymentController::class);
     registerCrudRoutes('settings/clinic', SuperAdminClinicSettingController::class);
-    registerCrudRoutes('settings/branch', SuperAdminBranchSettingController::class);
     registerCrudRoutes('audit-logs', SuperAdminAuditLogController::class);
     registerCrudRoutes('reviews', SuperAdminReviewController::class);
 
@@ -167,7 +160,6 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context'])->prefix('c
     Route::get('reports/patients.pdf', [ClinicReportController::class, 'patientsPdf']);
     Route::get('reports/doctors.pdf', [ClinicReportController::class, 'doctorsPdf']);
 
-    registerCrudRoutes('branches', ClinicBranchController::class);
     registerCrudRoutes('domains', ClinicDomainController::class);
     registerCrudRoutes('users', ClinicUserController::class);
     registerCrudRoutes('doctors', ClinicDoctorController::class);
@@ -186,7 +178,6 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context'])->prefix('c
     registerCrudRoutes('invoices', ClinicInvoiceController::class);
     registerCrudRoutes('payments', ClinicPaymentController::class);
     registerCrudRoutes('settings/clinic', ClinicClinicSettingController::class);
-    registerCrudRoutes('settings/branch', ClinicBranchSettingController::class);
     registerCrudRoutes('audit-logs', ClinicAuditLogController::class);
     registerCrudRoutes('reviews', ClinicReviewController::class);
 

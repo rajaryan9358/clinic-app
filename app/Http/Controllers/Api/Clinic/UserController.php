@@ -26,8 +26,7 @@ class UserController extends BaseClinicCrudController
     private function allowedTargetRoles(string $actorRole): array
     {
         return match ($actorRole) {
-            'clinic_admin' => ['branch_manager', 'receptionist', 'assistant'],
-            'branch_manager' => ['receptionist', 'assistant'],
+            'clinic_admin' => ['receptionist', 'assistant'],
             default => [],
         };
     }
@@ -84,17 +83,10 @@ class UserController extends BaseClinicCrudController
                 'password' => ['required', 'string', 'min:8'],
                 'role' => ['required', Rule::in($allowedRoles)],
                 'status' => ['nullable', Rule::in(['active', 'inactive', 'blocked'])],
-                'branch_ids' => ['nullable', 'array'],
-                'branch_ids.*' => ['integer', 'exists:branches,id'],
                 'doctor_ids' => ['nullable', 'array'],
                 'doctor_ids.*' => ['integer', 'exists:doctors,id'],
             ])->validate();
         $data['clinic_id'] = $request->attributes->get('clinic_id');
-
-        $activeBranchId = $request->attributes->get('active_branch_id');
-        if ($activeBranchId && empty($data['branch_ids'])) {
-            $data['branch_ids'] = [(int) $activeBranchId];
-        }
 
         $user = $this->userManagementService->create($data);
 
@@ -107,10 +99,9 @@ class UserController extends BaseClinicCrudController
 
         /** @var \App\Models\User $user */
         $user = $this->findModel($id);
-        $user->loadMissing('branches:id', 'assignedDoctors:id');
+        $user->loadMissing('assignedDoctors:id');
 
         $data = $user->toArray();
-        $data['branch_ids'] = $user->branches->pluck('id')->values()->all();
         $data['doctor_ids'] = $user->assignedDoctors->pluck('id')->values()->all();
 
         return $this->success('Record fetched successfully', $data);
@@ -135,17 +126,14 @@ class UserController extends BaseClinicCrudController
                 'role' => ['sometimes', Rule::in($allowedManageRoles)],
                 'status' => ['sometimes', 'nullable', Rule::in(['active', 'inactive', 'blocked'])],
                 'login_type' => ['sometimes', 'nullable', Rule::in(['password', 'otp'])],
-                'branch_ids' => ['sometimes', 'array'],
-                'branch_ids.*' => ['integer', 'exists:branches,id'],
                 'doctor_ids' => ['sometimes', 'array'],
                 'doctor_ids.*' => ['integer', 'exists:doctors,id'],
             ])->validate();
 
             $updated = $this->userManagementService->update($user, $data);
 
-        $updated->loadMissing('branches:id', 'assignedDoctors:id');
+        $updated->loadMissing('assignedDoctors:id');
         $data = $updated->toArray();
-        $data['branch_ids'] = $updated->branches->pluck('id')->values()->all();
         $data['doctor_ids'] = $updated->assignedDoctors->pluck('id')->values()->all();
 
         return $this->success('Record updated successfully', $data);

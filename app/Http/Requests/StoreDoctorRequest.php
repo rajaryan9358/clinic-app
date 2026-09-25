@@ -35,8 +35,6 @@ class StoreDoctorRequest extends FormRequest
             'buffer_time_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],
             'photo_url' => ['nullable', 'string', 'max:2048'],
             'status' => ['nullable', 'in:active,inactive'],
-            'branch_ids' => ['nullable', 'array'],
-            'branch_ids.*' => ['integer', 'exists:branches,id'],
             'schedules' => ['nullable', 'array'],
         ];
     }

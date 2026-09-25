@@ -30,6 +30,13 @@ class ClinicSettingController extends BaseClinicCrudController
         $clinicId = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
         $clinicId = (int) $clinicId;
 
+        $request->validate([
+            'walkin_enabled' => ['sometimes', 'boolean'],
+            'token_system_enabled' => ['sometimes', 'boolean'],
+            'max_advance_booking_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
+            'min_booking_notice_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
+        ]);
+
         $data = $request->all();
         $data['clinic_id'] = $clinicId;
 

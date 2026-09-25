@@ -31,7 +31,6 @@
         </div>
         <div><strong>Status:</strong> {{ $appointment->status ?? '-' }}</div>
         <div><strong>Visit Type:</strong> {{ $appointment->visit_type ? str_replace('_',' ', (string)$appointment->visit_type) : '-' }}</div>
-        <div><strong>Branch:</strong> {{ $appointment->branch->name ?? ($appointment->branch_id ? ('Branch #'.$appointment->branch_id) : '-') }}</div>
         <div><strong>Doctor:</strong> {{ $appointment->doctor->full_name ?? ($appointment->doctor_id ? ('Doctor #'.$appointment->doctor_id) : '-') }}</div>
         <div><strong>Patient:</strong> {{ $appointment->patient->full_name ?? ($appointment->patient_id ? ('Patient #'.$appointment->patient_id) : '-') }}</div>
         @if(!empty($appointment->patient?->phone))

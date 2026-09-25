@@ -37,7 +37,7 @@ class PatientProfileController extends Controller
     {
         return Patient::query()
             ->withTrashed()
-            ->with(['branch:id,name', 'medicalProfile'])
+            ->with(['medicalProfile'])
             ->findOrFail($id);
     }
 
@@ -70,7 +70,6 @@ class PatientProfileController extends Controller
             ->where('patient_id', $patient->id)
             ->with([
                 'doctor:id,full_name',
-                'branch:id,name',
                 'createdByUser:id,full_name,role',
             ])
             ->orderByDesc('id');
@@ -89,11 +88,6 @@ class PatientProfileController extends Controller
             'note_type' => ['required', 'in:general,doctor_note,reception_note,followup_note'],
             'note' => ['required', 'string'],
             'is_private' => ['nullable', 'boolean'],
-            'branch_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('branches', 'id')->where('clinic_id', $clinicId),
-            ],
             'doctor_id' => [
                 'nullable',
                 'integer',
@@ -104,7 +98,6 @@ class PatientProfileController extends Controller
         $note = PatientNote::create([
             'clinic_id' => $clinicId,
             'patient_id' => $patient->id,
-            'branch_id' => $data['branch_id'] ?? null,
             'doctor_id' => $data['doctor_id'] ?? null,
             'created_by_user_id' => $request->user()->id,
             'note_type' => $data['note_type'],
@@ -112,7 +105,7 @@ class PatientProfileController extends Controller
             'is_private' => (bool) ($data['is_private'] ?? false),
         ]);
 
-        return $this->success('Note added', $note->load(['doctor:id,full_name', 'branch:id,name', 'createdByUser:id,full_name,role']), 201);
+        return $this->success('Note added', $note->load(['doctor:id,full_name', 'createdByUser:id,full_name,role']), 201);
     }
 
     public function updateMedicalProfile(Request $request, string $id)
@@ -269,7 +262,7 @@ class PatientProfileController extends Controller
         $appointments = Appointment::query()
             ->where('clinic_id', $clinicId)
             ->where('patient_id', $patient->id)
-            ->with(['doctor:id,full_name', 'branch:id,name'])
+            ->with(['doctor:id,full_name'])
             ->orderByDesc('appointment_date')
             ->orderByDesc('start_time')
             ->get();

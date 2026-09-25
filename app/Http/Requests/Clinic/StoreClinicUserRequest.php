@@ -10,15 +10,14 @@ class StoreClinicUserRequest extends FormRequest
     public function authorize(): bool
     {
         $role = (string) ($this->user()?->role ?? '');
-        if (! in_array($role, ['clinic_admin', 'branch_manager'], true)) {
+        if ($role !== 'clinic_admin') {
             return false;
         }
 
         $targetRole = (string) ($this->input('role') ?? '');
 
         $allowed = match ($role) {
-            'clinic_admin' => ['branch_manager', 'receptionist', 'assistant', 'doctor'],
-            'branch_manager' => ['receptionist', 'assistant', 'doctor'],
+            'clinic_admin' => ['receptionist', 'assistant'],
             default => [],
         };
 
@@ -32,10 +31,8 @@ class StoreClinicUserRequest extends FormRequest
             'email' => ['nullable', 'email', 'required_without:phone'],
             'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
             'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', Rule::in(['branch_manager', 'receptionist', 'assistant', 'doctor'])],
+            'role' => ['required', Rule::in(['receptionist', 'assistant'])],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'blocked'])],
-            'branch_ids' => ['nullable', 'array'],
-            'branch_ids.*' => ['integer', 'exists:branches,id'],
             'doctor_ids' => ['nullable', 'array'],
             'doctor_ids.*' => ['integer', 'exists:doctors,id'],
         ];

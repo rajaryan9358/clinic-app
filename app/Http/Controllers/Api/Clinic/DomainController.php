@@ -8,5 +8,5 @@ class DomainController extends BaseClinicCrudController
 {
     protected string $modelClass = Domain::class;
     protected array $searchable = ['host', 'type'];
-    protected array $filterable = ['branch_id', 'status', 'type'];
+    protected array $filterable = ['status', 'type'];
 }

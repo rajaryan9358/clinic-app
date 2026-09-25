@@ -37,7 +37,6 @@ class UploadController
         if ($clinicId) {
             FileUpload::create([
                 'clinic_id' => $clinicId,
-                'branch_id' => null,
                 'patient_id' => null,
                 'appointment_id' => null,
                 'uploaded_by_user_id' => $request->user()?->id,

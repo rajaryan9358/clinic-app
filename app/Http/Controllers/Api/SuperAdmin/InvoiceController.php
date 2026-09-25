@@ -9,5 +9,5 @@ class InvoiceController extends BaseCrudController
 {
     protected string $modelClass = Invoice::class;
     protected array $searchable = ['invoice_number', 'status'];
-    protected array $filterable = ['clinic_id', 'branch_id', 'patient_id', 'status', 'invoice_date'];
+    protected array $filterable = ['clinic_id', 'patient_id', 'status', 'invoice_date'];
 }

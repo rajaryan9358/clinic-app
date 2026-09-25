@@ -27,17 +27,6 @@ class UserManagementService
 
             $user->syncRoles([$data['role']]);
 
-            if (! empty($data['branch_ids'])) {
-                $payload = [];
-                foreach ($data['branch_ids'] as $index => $branchId) {
-                    $payload[$branchId] = [
-                        'clinic_id' => $user->clinic_id,
-                        'is_default' => $index === 0,
-                    ];
-                }
-                $user->branches()->sync($payload);
-            }
-
             if (($data['role'] ?? null) === 'assistant' && array_key_exists('doctor_ids', $data)) {
                 $doctorIds = is_array($data['doctor_ids']) ? array_values($data['doctor_ids']) : [];
                 $doctorIds = array_values(array_unique(array_map('intval', $doctorIds)));
@@ -94,18 +83,6 @@ class UserManagementService
 
             if (array_key_exists('role', $payload)) {
                 $user->syncRoles([$user->role]);
-            }
-
-            if (array_key_exists('branch_ids', $data)) {
-                $branchIds = is_array($data['branch_ids']) ? $data['branch_ids'] : [];
-                $payload = [];
-                foreach (array_values($branchIds) as $index => $branchId) {
-                    $payload[$branchId] = [
-                        'clinic_id' => $user->clinic_id,
-                        'is_default' => $index === 0,
-                    ];
-                }
-                $user->branches()->sync($payload);
             }
 
             $role = (string) ($user->role ?? '');

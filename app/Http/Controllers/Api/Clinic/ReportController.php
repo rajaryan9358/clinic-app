@@ -29,7 +29,6 @@ class ReportController extends Controller
             ->with([
                 'patient:id,full_name',
                 'doctor:id,full_name',
-                'branch:id,name',
             ]);
 
         if ($request->filled('appointment_date')) {
@@ -44,7 +43,7 @@ class ReportController extends Controller
             $query->whereDate('appointment_date', '<=', $request->input('appointment_date_to'));
         }
 
-        foreach (['branch_id', 'doctor_id', 'patient_id', 'status'] as $filter) {
+        foreach (['doctor_id', 'patient_id', 'status'] as $filter) {
             if ($request->filled($filter)) {
                 $query->where($filter, $request->input($filter));
             }
@@ -103,8 +102,7 @@ class ReportController extends Controller
         $clinicId = $this->clinicId($request);
 
         $query = Patient::query()
-            ->where('clinic_id', $clinicId)
-            ->with(['branch:id,name']);
+            ->where('clinic_id', $clinicId);
 
         $search = trim($request->string('search')->toString());
         if ($search !== '') {
@@ -117,7 +115,7 @@ class ReportController extends Controller
             });
         }
 
-        foreach (['branch_id', 'status_tag', 'preferred_doctor_id'] as $filter) {
+        foreach (['status_tag', 'preferred_doctor_id'] as $filter) {
             if ($request->filled($filter)) {
                 $query->where($filter, $request->input($filter));
             }

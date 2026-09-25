@@ -10,7 +10,7 @@ class FollowupTaskController extends BaseClinicCrudController
 {
     protected string $modelClass = FollowupTask::class;
     protected array $searchable = ['task_type', 'status', 'priority'];
-    protected array $filterable = ['branch_id', 'doctor_id', 'assigned_to_user_id', 'patient_id', 'status'];
+    protected array $filterable = ['doctor_id', 'assigned_to_user_id', 'patient_id', 'status'];
 
     protected function baseQuery(Request $request): Builder
     {

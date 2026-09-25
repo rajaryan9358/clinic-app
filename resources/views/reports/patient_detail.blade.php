@@ -24,7 +24,6 @@
         <div><strong>Name:</strong> {{ $patient->full_name ?? ('Patient #'.$patient->id) }}</div>
         <div><strong>Phone:</strong> {{ $patient->phone ?? '-' }}</div>
         <div><strong>Email:</strong> {{ $patient->email ?? '-' }}</div>
-        <div><strong>Branch:</strong> {{ $patient->branch->name ?? ($patient->branch_id ? ('Branch #'.$patient->branch_id) : '-') }}</div>
         <div><strong>Status:</strong> {{ $patient->status_tag ?? '-' }}</div>
     </div>
 
@@ -69,7 +68,6 @@
                 <th style="width: 16%">Date</th>
                 <th style="width: 10%">Time</th>
                 <th style="width: 24%">Doctor</th>
-                <th style="width: 18%">Branch</th>
                 <th style="width: 16%">Status</th>
                 <th style="width: 16%">Type</th>
             </tr>
@@ -80,12 +78,11 @@
                     <td>{{ optional($a->appointment_date)->format('Y-m-d') ?? '-' }}</td>
                     <td>{{ $a->start_time ? substr((string)$a->start_time,0,5) : '-' }}</td>
                     <td>{{ $a->doctor->full_name ?? ($a->doctor_id ? ('Doctor #'.$a->doctor_id) : '-') }}</td>
-                    <td>{{ $a->branch->name ?? ($a->branch_id ? ('Branch #'.$a->branch_id) : '-') }}</td>
                     <td>{{ $a->status ?? '-' }}</td>
                     <td>{{ $a->visit_type ? str_replace('_',' ', (string)$a->visit_type) : '-' }}</td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="muted">No appointments found.</td></tr>
+                <tr><td colspan="5" class="muted">No appointments found.</td></tr>
             @endforelse
         </tbody>
     </table>

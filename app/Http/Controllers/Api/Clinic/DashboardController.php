@@ -6,7 +6,6 @@ use App\Http\Controllers\Concerns\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\AuditLog;
-use App\Models\Branch;
 use App\Models\Doctor;
 use App\Models\FollowupTask;
 use App\Models\Patient;
@@ -24,7 +23,6 @@ class DashboardController extends Controller
         $clinicId = $request->attributes->get('clinic_id');
 
         return $this->success('Dashboard summary fetched successfully', [
-            'total_branches' => Branch::where('clinic_id', $clinicId)->count(),
             'total_staff' => User::where('clinic_id', $clinicId)->count(),
             'total_doctors' => Doctor::where('clinic_id', $clinicId)->count(),
             'total_patients' => Patient::where('clinic_id', $clinicId)->count(),
@@ -117,28 +115,6 @@ class DashboardController extends Controller
                 'completed' => (int) $row->completed,
                 'cancelled' => (int) $row->cancelled,
                 'no_show' => (int) $row->no_show,
-            ])
-            ->values();
-
-        $branchPerf30 = Appointment::query()
-            ->where('appointments.clinic_id', $clinicId)
-            ->whereBetween('appointments.appointment_date', [$from30, $to])
-            ->leftJoin('branches', function ($join) {
-                $join->on('appointments.branch_id', '=', 'branches.id');
-            })
-            ->select(
-                'appointments.branch_id',
-                DB::raw('coalesce(branches.name, "Unassigned") as branch_name'),
-                DB::raw('count(*) as total')
-            )
-            ->groupBy('appointments.branch_id', 'branches.name')
-            ->orderByDesc('total')
-            ->limit(10)
-            ->get()
-            ->map(fn ($row) => [
-                'branch_id' => $row->branch_id,
-                'branch_name' => $row->branch_name,
-                'total' => (int) $row->total,
             ])
             ->values();
 
@@ -238,7 +214,6 @@ class DashboardController extends Controller
                 ],
                 'booking_sources_30d' => $bookingChannels30,
                 'doctor_performance_30d' => $doctorPerf30,
-                'branch_performance_30d' => $branchPerf30,
                 'followup_insights' => [
                     'overdue' => (int) $followupsOverdue,
                     'due_today' => (int) $followupsDueToday,
@@ -252,17 +227,12 @@ class DashboardController extends Controller
     public function receptionist(Request $request)
     {
         $clinicId  = (int) $request->attributes->get('clinic_id');
-        $branchId  = $request->attributes->get('active_branch_id');
         $today     = Carbon::now()->toDateString();
         $nowTime   = Carbon::now()->format('H:i:s');
 
         $base = Appointment::query()
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', $today);
-
-        if ($branchId) {
-            $base->where('branch_id', (int) $branchId);
-        }
 
         // KPI counts
         $totalToday       = (clone $base)->count();
@@ -275,7 +245,6 @@ class DashboardController extends Controller
 
         $newPatientsToday = Patient::query()
             ->where('clinic_id', $clinicId)
-            ->when($branchId, fn ($q) => $q->where('branch_id', (int) $branchId))
             ->whereDate('created_at', $today)
             ->count();
 
@@ -334,7 +303,6 @@ class DashboardController extends Controller
     public function assistant(Request $request)
     {
         $clinicId  = (int) $request->attributes->get('clinic_id');
-        $branchId  = $request->attributes->get('active_branch_id');
         $today     = Carbon::now()->toDateString();
         $nowTime   = Carbon::now()->format('H:i:s');
 
@@ -348,9 +316,6 @@ class DashboardController extends Controller
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', $today);
 
-        if ($branchId) {
-            $base->where('branch_id', (int) $branchId);
-        }
         if (count($assignedDoctorIds) > 0) {
             $base->whereIn('doctor_id', $assignedDoctorIds);
         }
@@ -365,7 +330,6 @@ class DashboardController extends Controller
 
         $newPatientsToday = Patient::query()
             ->where('clinic_id', $clinicId)
-            ->when($branchId, fn ($q) => $q->where('branch_id', (int) $branchId))
             ->whereDate('created_at', $today)
             ->count();
 

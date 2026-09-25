@@ -40,7 +40,6 @@
                 <th style="width: 10%">Time</th>
                 <th style="width: 20%">Patient</th>
                 <th style="width: 20%">Doctor</th>
-                <th style="width: 14%">Branch</th>
                 <th style="width: 10%">Type</th>
                 <th style="width: 10%">Status</th>
             </tr>
@@ -52,13 +51,12 @@
                     <td>{{ $a->start_time ? substr((string)$a->start_time, 0, 5) : '-' }}</td>
                     <td>{{ $a->patient->full_name ?? ($a->patient_id ? ('Patient #'.$a->patient_id) : '-') }}</td>
                     <td>{{ $a->doctor->full_name ?? ($a->doctor_id ? ('Doctor #'.$a->doctor_id) : '-') }}</td>
-                    <td>{{ $a->branch->name ?? ($a->branch_id ? ('Branch #'.$a->branch_id) : '-') }}</td>
                     <td>{{ $a->visit_type ? str_replace('_',' ', (string)$a->visit_type) : '-' }}</td>
                     <td>{{ $a->status ?? '-' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="muted">No appointments found.</td>
+                    <td colspan="6" class="muted">No appointments found.</td>
                 </tr>
             @endforelse
         </tbody>

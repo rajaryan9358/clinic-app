@@ -11,7 +11,7 @@ class WhatsappAccountController extends BaseClinicCrudController
 {
     protected string $modelClass = WhatsappAccount::class;
     protected array $searchable = ['business_name', 'phone_number', 'provider'];
-    protected array $filterable = ['branch_id', 'status', 'provider'];
+    protected array $filterable = ['status', 'provider'];
 
     public function store(Request $request)
     {
@@ -20,13 +20,7 @@ class WhatsappAccountController extends BaseClinicCrudController
         $providerValues = ['meta', 'twilio', 'gupshup', 'interakt', 'other'];
         $statusValues = ['active', 'inactive', 'pending'];
 
-        $branchExistsRule = Rule::exists('branches', 'id');
-        if ($clinicId) {
-            $branchExistsRule = $branchExistsRule->where(fn ($q) => $q->where('clinic_id', $clinicId));
-        }
-
         $data = $request->validate([
-            'branch_id' => ['nullable', 'integer', $branchExistsRule],
             'business_name' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['required', 'string', 'max:20'],
             'provider' => ['required', Rule::in($providerValues)],
@@ -53,18 +47,11 @@ class WhatsappAccountController extends BaseClinicCrudController
     public function update(Request $request, int $id)
     {
         $model = $this->findModel($id);
-        $clinicId = (int) ($model->clinic_id ?? 0);
 
         $providerValues = ['meta', 'twilio', 'gupshup', 'interakt', 'other'];
         $statusValues = ['active', 'inactive', 'pending'];
 
-        $branchExistsRule = Rule::exists('branches', 'id');
-        if ($clinicId) {
-            $branchExistsRule = $branchExistsRule->where(fn ($q) => $q->where('clinic_id', $clinicId));
-        }
-
         $data = $request->validate([
-            'branch_id' => ['nullable', 'integer', $branchExistsRule],
             'business_name' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['sometimes', 'required', 'string', 'max:20'],
             'provider' => ['sometimes', 'required', Rule::in($providerValues)],

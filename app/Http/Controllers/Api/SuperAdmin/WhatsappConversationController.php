@@ -9,5 +9,5 @@ class WhatsappConversationController extends BaseCrudController
 {
     protected string $modelClass = WhatsappConversation::class;
     protected array $searchable = ['customer_phone', 'conversation_status'];
-    protected array $filterable = ['clinic_id', 'branch_id', 'conversation_status', 'current_owner_type'];
+    protected array $filterable = ['clinic_id', 'conversation_status', 'current_owner_type'];
 }

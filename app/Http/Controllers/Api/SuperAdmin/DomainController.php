@@ -9,5 +9,5 @@ class DomainController extends BaseCrudController
 {
     protected string $modelClass = Domain::class;
     protected array $searchable = ['host', 'type'];
-    protected array $filterable = ['clinic_id', 'branch_id', 'status', 'type'];
+    protected array $filterable = ['clinic_id', 'status', 'type'];
 }
