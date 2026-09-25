@@ -134,9 +134,13 @@ export default function ClinicSubscriptionPage() {
                         // Payment may still have been captured even though verification
                         // failed (422 or a network blip) — reload the subscription data
                         // and scope context so the admin doesn't act on stale state, then
-                        // surface the error last since load() clears it on entry.
+                        // surface the error last since load() clears it on entry. Use
+                        // allSettled (not all) so a reload failure can never swallow the
+                        // verify error — setError(message) below always runs regardless
+                        // of whether load()/refresh() themselves succeed or reject, and it
+                        // runs after load()'s own error handling so this message wins.
                         const message = e?.response?.data?.message || 'Payment could not be verified. If money was deducted, it will be confirmed shortly.';
-                        await Promise.all([load(), scope?.refresh?.()]);
+                        await Promise.allSettled([load(), scope?.refresh?.()]);
                         setError(message);
                     }
                 },
