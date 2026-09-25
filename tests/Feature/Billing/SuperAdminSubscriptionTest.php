@@ -88,5 +88,37 @@ class SuperAdminSubscriptionTest extends TestCase
         $this->assertCount(1, $one->json('data.data'));
         $this->assertSame(1000, $one->json('meta.total_captured'));
         $one->assertJsonPath('data.data.0.clinic.name', 'C');
+
+        $failed = $this->getJson('/api/super-admin/subscription-transactions?clinic_id='.$this->clinic->id.'&status=failed')->assertOk();
+        $this->assertCount(1, $failed->json('data.data'));
+        $this->assertSame(1000, $failed->json('meta.total_captured'));
+    }
+
+    public function test_cancel_gateway_failure_returns_422_without_changing_status(): void
+    {
+        $this->postJson($this->base(), ['plan_id' => $this->starter->id, 'billing_cycle' => 'monthly', 'start_mode' => 'trial'])->assertCreated();
+        ClinicSubscription::first()->update(['razorpay_subscription_id' => 'sub_1']);
+
+        $failing = new class extends FakeRazorpayGateway
+        {
+            public function cancelSubscription(string $subscriptionId, bool $atCycleEnd): void
+            {
+                throw new \RuntimeException('boom');
+            }
+        };
+        $this->app->instance(RazorpayGateway::class, $failing);
+
+        $response = $this->postJson($this->base().'/cancel')->assertStatus(422);
+        $this->assertStringContainsString('Nothing was changed.', $response->json('message'));
+        $this->assertNotSame('cancelled', ClinicSubscription::first()->status);
+    }
+
+    public function test_actions_404_when_no_subscription(): void
+    {
+        $this->putJson($this->base(), ['plan_id' => $this->starter->id, 'billing_cycle' => 'monthly'])->assertStatus(404);
+        $this->postJson($this->base().'/extend-trial', ['days' => 3])->assertStatus(404);
+        $this->postJson($this->base().'/extend-grace', ['days' => 3])->assertStatus(404);
+        $this->postJson($this->base().'/offline-payment', ['amount' => 1000, 'period_months' => 1])->assertStatus(404);
+        $this->postJson($this->base().'/cancel')->assertStatus(404);
     }
 }

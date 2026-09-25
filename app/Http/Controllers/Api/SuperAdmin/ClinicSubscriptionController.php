@@ -10,6 +10,7 @@ use App\Services\Billing\RazorpayGateway;
 use App\Services\Billing\SubscriptionService;
 use App\Services\Billing\SubscriptionValidation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class ClinicSubscriptionController
@@ -101,7 +102,16 @@ class ClinicSubscriptionController
         $sub = $this->subscriptionOrFail($id);
 
         if ($sub->razorpay_subscription_id) {
-            $this->gateway->cancelSubscription($sub->razorpay_subscription_id, true);
+            try {
+                $this->gateway->cancelSubscription($sub->razorpay_subscription_id, true);
+            } catch (\Throwable $e) {
+                Log::warning('Could not cancel Razorpay subscription', [
+                    'subscription_id' => $sub->razorpay_subscription_id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return $this->error('Could not cancel the Razorpay subscription: '.$e->getMessage().'. Nothing was changed.', null, 422);
+            }
         }
 
         $sub->update(['status' => 'cancelled', 'cancelled_at' => now()]);
