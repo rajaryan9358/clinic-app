@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useScope } from '../../context/ScopeContext';
 
 const DEFAULT_PRIMARY   = '#2563EB';
 const DEFAULT_SECONDARY = '#64748B';
@@ -85,6 +86,8 @@ function TextField({ label, value, onChange, type = 'text' }) {
 export default function ClinicProfilePage() {
     const { user } = useAuth();
     const readOnly = user?.role === 'clinic_admin';
+    const { context } = useScope() || {};
+    const trialEndsAt = context?.subscription?.trial_ends_at;
 
     const [clinic, setClinic] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -237,10 +240,10 @@ export default function ClinicProfilePage() {
             </div>
 
             {/* Trial */}
-            {clinic?.trial_ends_at && (
+            {trialEndsAt && (
                 <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-2">
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Trial Period</p>
-                    <TrialBadge trialEndsAt={clinic.trial_ends_at} />
+                    <TrialBadge trialEndsAt={trialEndsAt} />
                 </div>
             )}
 

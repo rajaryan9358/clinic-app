@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
+import SubscriptionCard from '../../components/billing/SubscriptionCard.jsx';
 import { formatDate } from '../../utils/dateFormat';
 
 const TABS = [
@@ -409,13 +410,15 @@ function OverviewTab({ clinic, clinicId, onEditClinic }) {
     const [overview, setOverview] = useState(null);
     const [error, setError] = useState('');
 
-    // Refetch whenever the clinic record changes (e.g. after the Edit sheet saves).
-    useEffect(() => {
+    const loadOverview = () => {
         setError('');
-        client.get(`/super-admin/clinics/${clinicId}/overview`)
+        return client.get(`/super-admin/clinics/${clinicId}/overview`)
             .then((res) => setOverview(res.data?.data || null))
             .catch((e) => setError(e?.response?.data?.message || 'Could not load clinic overview.'));
-    }, [clinicId, clinic?.updated_at]);
+    };
+
+    // Refetch whenever the clinic record changes (e.g. after the Edit sheet saves).
+    useEffect(() => { loadOverview(); }, [clinicId, clinic?.updated_at]);
 
     if (error) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>;
     if (!overview) return <LoadingState />;
@@ -428,6 +431,8 @@ function OverviewTab({ clinic, clinicId, onEditClinic }) {
 
     return (
         <div className="space-y-5">
+            <SubscriptionCard clinicId={clinicId} subscription={overview.subscription} onChanged={loadOverview} />
+
             <div className="grid gap-3 sm:grid-cols-3">
                 {[['Doctors', counts.doctors], ['Staff users', counts.staff], ['Services', counts.services]].map(([label, value]) => (
                     <Card key={label} className="px-5 py-4">
@@ -452,7 +457,6 @@ function OverviewTab({ clinic, clinicId, onEditClinic }) {
                     <InfoRow label="Legal name" value={c.legal_name} />
                     <InfoRow label="Slug" value={c.slug} />
                     <InfoRow label="Status" value={c.status && <StatusBadge status={c.status} />} />
-                    <InfoRow label="Trial ends" value={c.trial_ends_at && formatDate(c.trial_ends_at)} />
                     <InfoRow label="Primary colour" value={c.primary_color && <ColorValue color={c.primary_color} />} />
                     <InfoRow label="Secondary colour" value={c.secondary_color && <ColorValue color={c.secondary_color} />} />
                     <InfoRow label="Created" value={formatDate(c.created_at)} />
@@ -1350,9 +1354,6 @@ function EditClinicSheet({ open, clinic, onClose, onSaved }) {
                             { value: 'inactive', label: 'Inactive' },
                         ]} />
                     </Field>
-                    <Field label="Trial Ends At">
-                        <TextInput type="date" {...f('trial_ends_at')} />
-                    </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="Primary Color" hint="Default: #2563EB">
@@ -1437,24 +1438,6 @@ export default function ClinicDetailPage() {
                 <h1 className="text-xl font-bold text-gray-900">{clinic?.name || `Clinic #${id}`}</h1>
                 {clinic?.status && <StatusBadge status={clinic.status} />}
             </div>
-
-            {/* Trial period banner */}
-            {clinic?.trial_ends_at && (() => {
-                const endsAt = new Date(clinic.trial_ends_at);
-                const daysLeft = Math.ceil((endsAt - new Date()) / (1000 * 60 * 60 * 24));
-                const expired = endsAt <= new Date();
-                const bg = expired ? 'bg-red-50 border-red-200' : daysLeft <= 3 ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100';
-                const text = expired ? 'text-red-700' : daysLeft <= 3 ? 'text-amber-700' : 'text-blue-700';
-                const label = expired
-                    ? 'Trial has expired.'
-                    : `Trial period · ${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining — ends ${formatDate(clinic.trial_ends_at)}`;
-                return (
-                    <div className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium ${bg} ${text}`}>
-                        <AppIcon name={expired || daysLeft <= 3 ? 'alert-triangle' : 'info'} className="h-4 w-4 flex-shrink-0" />
-                        {label}
-                    </div>
-                );
-            })()}
 
             {/* Tab bar */}
             <div className="flex overflow-x-auto rounded-xl border border-gray-200 bg-gray-100 p-1 gap-1">

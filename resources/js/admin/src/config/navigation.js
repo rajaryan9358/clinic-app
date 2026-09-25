@@ -31,6 +31,13 @@ export const navigationByRole = {
             ],
         },
         {
+            section: 'Billing',
+            items: [
+                routeItem('/billing/plans', 'Plans'),
+                routeItem('/billing/subscription-transactions', 'Subscription Transactions'),
+            ],
+        },
+        {
             section: 'Admin',
             items: [
                 moduleItem('auditLogs', { label: 'Audit Logs' }),

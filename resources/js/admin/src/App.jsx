@@ -20,6 +20,8 @@ import DoctorAvailabilityPage from './pages/workflows/DoctorAvailabilityPage';
 import ClinicDetailPage from './pages/workflows/ClinicDetailPage';
 import ClinicProfilePage from './pages/workflows/ClinicProfilePage';
 import SystemSettingsPage from './pages/workflows/SystemSettingsPage';
+import PlansPage from './pages/billing/PlansPage';
+import SubscriptionTransactionsPage from './pages/billing/SubscriptionTransactionsPage';
 
 function Protected({ children }) {
     const { user } = useAuth();
@@ -63,6 +65,8 @@ export default function App() {
                                 <Route path="/workflows/clinics" element={<OnlySuperAdmin><ModuleListPage forcedModuleKey="clinics" /></OnlySuperAdmin>} />
                                 <Route path="/workflows/clinics/:id" element={<OnlySuperAdmin><ClinicDetailPage /></OnlySuperAdmin>} />
                                 <Route path="/workflows/system-settings" element={<OnlySuperAdmin><SystemSettingsPage /></OnlySuperAdmin>} />
+                                <Route path="/billing/plans" element={<OnlySuperAdmin><PlansPage /></OnlySuperAdmin>} />
+                                <Route path="/billing/subscription-transactions" element={<OnlySuperAdmin><SubscriptionTransactionsPage /></OnlySuperAdmin>} />
 
                                 {/* ── Clinic Admin Workflows ── */}
                                 <Route path="/workflows/clinic-profile" element={<BlockSuperAdmin><ClinicProfilePage /></BlockSuperAdmin>} />

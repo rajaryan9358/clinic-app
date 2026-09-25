@@ -785,7 +785,7 @@ Write an appropriate reply.`;
                     hiddenColumns={moduleKey === 'patients'
                         ? ['uuid']
                         : moduleKey === 'clinics'
-                            ? ['uuid', 'legal_name', 'trial_ends_at']
+                            ? ['uuid', 'legal_name']
                         : moduleKey === 'doctors'
                             ? ['user_id', 'registration_number']
                             : moduleKey === 'users'
@@ -813,26 +813,6 @@ Write an appropriate reply.`;
                                 logo_url: (value) => {
                                     if (!value) return <span className="text-gray-300">—</span>;
                                     return <img src={value} alt="Logo" className="h-8 w-8 rounded-lg object-contain border border-gray-200 bg-gray-50" />;
-                                },
-                                status: (value, row) => {
-                                    const badge = <StatusBadge status={value} />;
-                                    if (String(value) !== 'trial' || !row?.trial_ends_at) return badge;
-                                    const d = new Date(String(row.trial_ends_at));
-                                    if (Number.isNaN(d.getTime())) return badge;
-                                    const now = new Date();
-                                    const expired = d <= now;
-                                    const daysLeft = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
-                                    const trialLabel = expired
-                                        ? 'Trial expired'
-                                        : `Trial · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`;
-                                    return (
-                                        <span className="inline-flex flex-col gap-0.5">
-                                            {badge}
-                                            <span className={expired ? 'text-xs font-semibold text-red-600' : daysLeft <= 3 ? 'text-xs font-semibold text-amber-600' : 'text-xs text-gray-400'}>
-                                                {trialLabel}
-                                            </span>
-                                        </span>
-                                    );
                                 },
                             }
                         : moduleKey === 'users'
