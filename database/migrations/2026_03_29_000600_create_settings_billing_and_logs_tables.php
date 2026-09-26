@@ -23,6 +23,7 @@ return new class extends Migration
             $table->boolean('token_system_enabled')->default(false);
             $table->unsignedInteger('max_advance_booking_days')->default(30);
             $table->unsignedInteger('min_booking_notice_minutes')->default(30);
+            $table->unsignedInteger('reminder_hours_before')->default(24);
             $table->text('booking_notice_text')->nullable();
             $table->text('terms_text')->nullable();
             $table->text('privacy_policy_text')->nullable();

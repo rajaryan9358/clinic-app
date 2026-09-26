@@ -12,7 +12,7 @@ class WhatsappMessage extends Model
 
     protected $fillable = [
         'clinic_id', 'conversation_id', 'patient_id', 'appointment_id', 'direction', 'message_type',
-        'template_id', 'provider_message_id', 'from_phone', 'to_phone', 'content_text', 'payload_json',
+        'template_name', 'notification_type', 'provider_message_id', 'from_phone', 'to_phone', 'content_text', 'payload_json',
         'delivery_status', 'error_message', 'sent_by_user_id',
     ];
 

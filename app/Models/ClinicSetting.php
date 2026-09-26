@@ -16,6 +16,7 @@ class ClinicSetting extends Model
         'allow_reschedule', 'allow_cancel', 'reschedule_cutoff_hours', 'cancel_cutoff_hours',
         'default_slot_duration_minutes', 'booking_notice_text', 'terms_text', 'privacy_policy_text',
         'walkin_enabled', 'token_system_enabled', 'max_advance_booking_days', 'min_booking_notice_minutes',
+        'reminder_hours_before',
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class ClinicSetting extends Model
             'token_system_enabled' => 'boolean',
             'max_advance_booking_days' => 'integer',
             'min_booking_notice_minutes' => 'integer',
+            'reminder_hours_before' => 'integer',
         ];
     }
 
@@ -61,6 +63,7 @@ class ClinicSetting extends Model
             'token_system_enabled' => ['sometimes', 'boolean'],
             'max_advance_booking_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'min_booking_notice_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
+            'reminder_hours_before' => ['sometimes', 'integer', 'min:0', 'max:168'],
         ];
     }
 }

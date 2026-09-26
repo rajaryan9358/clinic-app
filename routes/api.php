@@ -22,12 +22,10 @@ use App\Http\Controllers\Api\Clinic\RolePermissionController as ClinicRolePermis
 use App\Http\Controllers\Api\Clinic\ServiceController as ClinicServiceController;
 use App\Http\Controllers\Api\Clinic\SubscriptionController as ClinicSubscriptionController;
 use App\Http\Controllers\Api\Clinic\UserController as ClinicUserController;
-use App\Http\Controllers\Api\Clinic\WhatsappAccountController as ClinicWhatsappAccountController;
 use App\Http\Controllers\Api\Clinic\WhatsappConversationController as ClinicWhatsappConversationController;
 use App\Http\Controllers\Api\Clinic\WhatsappFlowSessionController as ClinicWhatsappFlowSessionController;
 use App\Http\Controllers\Api\Clinic\WhatsappMessageController as ClinicWhatsappMessageController;
 use App\Http\Controllers\Api\Clinic\ClinicProfileController as ClinicClinicProfileController;
-use App\Http\Controllers\Api\Clinic\WhatsappTemplateController as ClinicWhatsappTemplateController;
 use App\Http\Controllers\Api\SuperAdmin\AppointmentController as SuperAdminAppointmentController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController as SuperAdminAuditLogController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicController as SuperAdminClinicController;
@@ -51,11 +49,9 @@ use App\Http\Controllers\Api\SuperAdmin\RoleController as SuperAdminRoleControll
 use App\Http\Controllers\Api\SuperAdmin\ServiceController as SuperAdminServiceController;
 use App\Http\Controllers\Api\SuperAdmin\SystemSettingController as SuperAdminSystemSettingController;
 use App\Http\Controllers\Api\SuperAdmin\UserController as SuperAdminUserController;
-use App\Http\Controllers\Api\SuperAdmin\WhatsappAccountController as SuperAdminWhatsappAccountController;
 use App\Http\Controllers\Api\SuperAdmin\WhatsappConversationController as SuperAdminWhatsappConversationController;
 use App\Http\Controllers\Api\SuperAdmin\WhatsappFlowSessionController as SuperAdminWhatsappFlowSessionController;
 use App\Http\Controllers\Api\SuperAdmin\WhatsappMessageController as SuperAdminWhatsappMessageController;
-use App\Http\Controllers\Api\SuperAdmin\WhatsappTemplateController as SuperAdminWhatsappTemplateController;
 use App\Http\Controllers\Api\UploadController;
 use Illuminate\Support\Facades\Route;
 
@@ -91,6 +87,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
 
     Route::get('settings/system', [SuperAdminSystemSettingController::class, 'show']);
     Route::post('settings/system', [SuperAdminSystemSettingController::class, 'store']);
+    Route::post('settings/whatsapp/test', [SuperAdminSystemSettingController::class, 'testWhatsApp']);
 
     Route::get('plans', [SuperAdminPlanController::class, 'index']);
     Route::post('plans', [SuperAdminPlanController::class, 'store']);
@@ -120,8 +117,6 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     registerCrudRoutes('appointments', SuperAdminAppointmentController::class);
     registerCrudRoutes('followups', SuperAdminFollowupTaskController::class);
     registerCrudRoutes('reminders', SuperAdminReminderLogController::class);
-    registerCrudRoutes('whatsapp/accounts', SuperAdminWhatsappAccountController::class);
-    registerCrudRoutes('whatsapp/templates', SuperAdminWhatsappTemplateController::class);
     registerCrudRoutes('whatsapp/conversations', SuperAdminWhatsappConversationController::class);
     registerCrudRoutes('whatsapp/messages', SuperAdminWhatsappMessageController::class);
     registerCrudRoutes('whatsapp/sessions', SuperAdminWhatsappFlowSessionController::class);
@@ -196,8 +191,6 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     registerCrudRoutes('appointments', ClinicAppointmentController::class, 'appointments');
     registerCrudRoutes('followups', ClinicFollowupTaskController::class, 'followups');
     registerCrudRoutes('reminders', ClinicReminderLogController::class, 'reminders');
-    registerCrudRoutes('whatsapp/accounts', ClinicWhatsappAccountController::class, 'whatsapp');
-    registerCrudRoutes('whatsapp/templates', ClinicWhatsappTemplateController::class, 'whatsapp');
     registerCrudRoutes('whatsapp/conversations', ClinicWhatsappConversationController::class, 'whatsapp');
     registerCrudRoutes('whatsapp/messages', ClinicWhatsappMessageController::class, 'whatsapp');
     registerCrudRoutes('whatsapp/sessions', ClinicWhatsappFlowSessionController::class, 'whatsapp');
