@@ -231,7 +231,7 @@ class DashboardController extends Controller
         $nowTime   = Carbon::now()->format('H:i:s');
 
         $base = Appointment::query()
-            ->where('clinic_id', $clinicId)
+            ->where('appointments.clinic_id', $clinicId)
             ->whereDate('appointment_date', $today);
 
         // KPI counts
@@ -258,9 +258,13 @@ class DashboardController extends Controller
             ->values();
 
         // Upcoming appointments (not yet done, ordered by start_time)
+        // clinic_id/status/start_time are qualified with the appointments
+        // table below because doctors also has clinic_id and status columns,
+        // and once the leftJoins below are added those columns become
+        // ambiguous to MySQL unless qualified.
         $upcoming = (clone $base)
-            ->whereIn('status', ['pending', 'confirmed', 'checked_in'])
-            ->where('start_time', '>=', $nowTime)
+            ->whereIn('appointments.status', ['pending', 'confirmed', 'checked_in'])
+            ->where('appointments.start_time', '>=', $nowTime)
             ->leftJoin('patients', 'appointments.patient_id', '=', 'patients.id')
             ->leftJoin('doctors', 'appointments.doctor_id', '=', 'doctors.id')
             ->select(
@@ -313,11 +317,11 @@ class DashboardController extends Controller
             ->toArray() ?? [];
 
         $base = Appointment::query()
-            ->where('clinic_id', $clinicId)
+            ->where('appointments.clinic_id', $clinicId)
             ->whereDate('appointment_date', $today);
 
         if (count($assignedDoctorIds) > 0) {
-            $base->whereIn('doctor_id', $assignedDoctorIds);
+            $base->whereIn('appointments.doctor_id', $assignedDoctorIds);
         }
 
         $totalToday     = (clone $base)->count();
@@ -342,8 +346,8 @@ class DashboardController extends Controller
             ->values();
 
         $upcoming = (clone $base)
-            ->whereIn('status', ['pending', 'confirmed', 'checked_in'])
-            ->where('start_time', '>=', $nowTime)
+            ->whereIn('appointments.status', ['pending', 'confirmed', 'checked_in'])
+            ->where('appointments.start_time', '>=', $nowTime)
             ->leftJoin('patients', 'appointments.patient_id', '=', 'patients.id')
             ->leftJoin('doctors', 'appointments.doctor_id', '=', 'doctors.id')
             ->select(
