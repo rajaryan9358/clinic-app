@@ -35,7 +35,12 @@ class UserController extends BaseClinicCrudController
 
     /**
      * A non-admin editor (staff kind) may not update/delete/block a clinic_admin-kind
-     * user. clinic_admin and super_admin actors are unrestricted.
+     * user, nor a user whose current role carries any permission the editor doesn't
+     * hold themselves — otherwise a staff.create/staff.edit holder could take over a
+     * more privileged account (e.g. reset its password and log in as it). Self-edits
+     * are exempt here since the actor's and target's permissions are identical; they
+     * remain governed by assertNotWideningOwnAccess. clinic_admin and super_admin
+     * actors are unrestricted.
      */
     private function assertCanMutate(User $actor, User $target): void
     {
@@ -45,6 +50,17 @@ class UserController extends BaseClinicCrudController
 
         if ($target->roleKind() === 'clinic_admin') {
             abort(403, "You can't change a clinic admin.");
+        }
+
+        if ((int) $actor->id === (int) $target->id) {
+            return;
+        }
+
+        $targetPermissions = $target->roleModel()?->permissions->pluck('name') ?? collect();
+        $actorPermissions = $actor->getAllPermissions()->pluck('name');
+
+        if ($targetPermissions->diff($actorPermissions)->isNotEmpty()) {
+            abort(403, "You can't change a user with more access than you.");
         }
     }
 

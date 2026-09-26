@@ -42,6 +42,19 @@ class UserManagementService
             abort(403, "You can't assign the Clinic Admin role.");
         }
 
+        // A non-admin actor may only hand out permissions they themselves hold — otherwise a
+        // staff.create/staff.edit holder could mint a custom staff role (or reuse an existing
+        // one) carrying permissions well beyond their own and either assign it to another user
+        // or spin up a brand-new login with a known password, then log in as it.
+        if ($actor !== null && ! in_array($actor->roleKind(), ['clinic_admin', 'super_admin'], true)) {
+            $rolePermissions = $role->permissions->pluck('name');
+            $actorPermissions = $actor->getAllPermissions()->pluck('name');
+
+            if ($rolePermissions->diff($actorPermissions)->isNotEmpty()) {
+                abort(403, "You can't assign a role with permissions you don't have.");
+            }
+        }
+
         return $role;
     }
 

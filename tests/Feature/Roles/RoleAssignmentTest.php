@@ -143,11 +143,16 @@ class RoleAssignmentTest extends TestCase
     public function test_staff_editor_cannot_promote_another_staff_user_to_clinic_admin(): void
     {
         $editor = $this->staffEditor(['staff.view', 'staff.create', 'staff.edit', 'staff.delete']);
-        $recep = $this->makeUser('receptionist');
+        // Target's role must be a subset of the editor's own permissions, otherwise
+        // assertCanMutate's "more access than you" guard (tested separately in
+        // RoleEscalationTest) fires first. `receptionist` carries far more (patients.*,
+        // billing.*, ...) than this editor, so a plain staff.view peer is used here to
+        // isolate the clinic-admin-role-assignment rule this test targets.
+        $target = $this->staffEditor(['staff.view']);
 
         Sanctum::actingAs($editor);
 
-        $this->putJson("/api/clinic/users/{$recep->id}", [
+        $this->putJson("/api/clinic/users/{$target->id}", [
             'role' => 'clinic_admin',
         ])->assertStatus(403)
             ->assertJsonFragment(['message' => "You can't assign the Clinic Admin role."]);

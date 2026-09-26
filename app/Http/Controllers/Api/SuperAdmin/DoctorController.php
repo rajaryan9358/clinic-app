@@ -50,7 +50,7 @@ class DoctorController extends BaseCrudController
     public function store(Request $request)
     {
         $data = validator($request->all(), (new StoreDoctorRequest())->rules())->validate();
-        $doctor = $this->doctorManagementService->create($data);
+        $doctor = $this->doctorManagementService->create($data, $request->user());
 
         return $this->success('Doctor created successfully', $doctor, 201);
     }

@@ -26,7 +26,7 @@ class DoctorController extends BaseClinicCrudController
         $data = validator($request->all(), (new StoreDoctorRequest())->rules())->validate();
         $data['clinic_id'] = $request->attributes->get('clinic_id');
 
-        $doctor = $this->doctorManagementService->create($data);
+        $doctor = $this->doctorManagementService->create($data, $request->user());
 
         return $this->success('Doctor created successfully', $doctor, 201);
     }

@@ -15,9 +15,14 @@ class DoctorManagementService
 {
     /**
      * Resolve the role for a linked doctor login: the given `linked_user.role` (must
-     * be a doctor-kind role) or the system `doctor` role by default.
+     * be a doctor-kind role) or the system `doctor` role by default. A non-admin actor
+     * (e.g. a staff.create/doctors.create holder onboarding a doctor) may only hand
+     * out permissions they hold themselves — including via the default `doctor` role,
+     * which typically carries far more than a doctors.create-only actor has. This
+     * mirrors UserManagementService::assertAssignable and closes the same takeover
+     * path through the doctor-onboarding form.
      */
-    private function assertDoctorRole(?string $roleName): Role
+    private function assertDoctorRole(?string $roleName, ?User $actor = null): Role
     {
         $roleName = $roleName ?: 'doctor';
         $role = Role::where('name', $roleName)->where('guard_name', 'web')->first();
@@ -26,18 +31,27 @@ class DoctorManagementService
             throw ValidationException::withMessages(['linked_user.role' => ['The selected role is invalid.']]);
         }
 
+        if ($actor !== null && ! in_array($actor->roleKind(), ['clinic_admin', 'super_admin'], true)) {
+            $rolePermissions = $role->permissions->pluck('name');
+            $actorPermissions = $actor->getAllPermissions()->pluck('name');
+
+            if ($rolePermissions->diff($actorPermissions)->isNotEmpty()) {
+                abort(403, "You can't assign a role with permissions you don't have.");
+            }
+        }
+
         return $role;
     }
 
-    public function create(array $data): Doctor
+    public function create(array $data, ?User $actor = null): Doctor
     {
         app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'doctors');
 
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $actor) {
             $doctorUserId = null;
 
             if (! empty($data['create_linked_user']) && ! empty($data['linked_user'])) {
-                $role = $this->assertDoctorRole($data['linked_user']['role'] ?? null);
+                $role = $this->assertDoctorRole($data['linked_user']['role'] ?? null, $actor);
 
                 $doctorUser = User::create([
                     'clinic_id' => $data['clinic_id'],
