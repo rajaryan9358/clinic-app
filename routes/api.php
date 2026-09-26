@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PublicPrescriptionPdfController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\Clinic\AppointmentController as ClinicAppointmentController;
 use App\Http\Controllers\Api\Clinic\AuditLogController as ClinicAuditLogController;
@@ -73,6 +74,10 @@ if (! function_exists('registerCrudRoutes')) {
 }
 
 Route::post('webhooks/razorpay', RazorpayWebhookController::class);
+
+Route::get('public/prescriptions/{prescription}/pdf', PublicPrescriptionPdfController::class)
+    ->name('whatsapp.prescription-pdf')
+    ->middleware('signed');
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);

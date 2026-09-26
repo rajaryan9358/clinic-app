@@ -15,6 +15,7 @@ use App\Models\WhatsappMessage;
 use App\Services\AppointmentService;
 use App\Services\AppointmentPrescriptionAiService;
 use App\Services\AppointmentSummaryAiService;
+use App\Services\PrescriptionPdfRenderer;
 use App\Support\PermissionCatalogue;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,6 +32,7 @@ class AppointmentController extends BaseClinicCrudController
         private readonly AppointmentService $appointmentService,
         private readonly AppointmentPrescriptionAiService $prescriptionAi,
         private readonly AppointmentSummaryAiService $summaryAi,
+        private readonly PrescriptionPdfRenderer $prescriptionPdfRenderer,
     ) {}
 
     private function scopedAppointment(int $id, Request $request): Appointment
@@ -329,35 +331,7 @@ class AppointmentController extends BaseClinicCrudController
     public function prescriptionPdf(Request $request, int $id)
     {
         $appointment = $this->scopedAppointment($id, $request);
-        $clinicId = (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
-
-        $appointment->loadMissing([
-            'patient:id,full_name',
-            'doctor:id,full_name',
-        ]);
-
-        $latest = AppointmentPrescription::query()
-            ->where('clinic_id', $clinicId)
-            ->where('appointment_id', $appointment->id)
-            ->orderByDesc('id')
-            ->first();
-
-        $rxData = is_array($latest?->data) ? $latest->data : [];
-
-        $visitType = $appointment->visit_type ? str_replace('_', ' ', (string) $appointment->visit_type) : '-';
-        $date = optional($appointment->appointment_date)->format('Y-m-d') ?? '-';
-        $time = $appointment->start_time ? substr((string) $appointment->start_time, 0, 5) : '';
-
-        $pdf = Pdf::loadView('reports.prescription', [
-            'title' => 'Prescription',
-            'generatedAt' => now()->format('Y-m-d H:i'),
-            'patientName' => $appointment->patient?->full_name ?? ($appointment->patient_id ? ('Patient #'.$appointment->patient_id) : '-'),
-            'doctorName' => $appointment->doctor?->full_name ?? ($appointment->doctor_id ? ('Doctor #'.$appointment->doctor_id) : '-'),
-            'appointmentDate' => $date,
-            'appointmentTime' => $time,
-            'visitType' => $visitType,
-            'prescriptionData' => $rxData,
-        ])->setPaper('a4', 'portrait');
+        $pdf = $this->prescriptionPdfRenderer->render($appointment);
 
         return $pdf->download('prescription-' . $appointment->id . '.pdf');
     }

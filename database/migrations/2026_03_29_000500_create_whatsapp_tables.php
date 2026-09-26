@@ -28,8 +28,10 @@ return new class extends Migration
 
         Schema::create('whatsapp_messages', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
-            $table->foreignId('conversation_id')->constrained('whatsapp_conversations')->cascadeOnDelete();
+            // Nullable: platform-level sends (e.g. login OTP, App\Services\WhatsApp\PatientNotifier::loginOtp)
+            // have no clinic/conversation context.
+            $table->foreignId('clinic_id')->nullable()->constrained('clinics')->nullOnDelete();
+            $table->foreignId('conversation_id')->nullable()->constrained('whatsapp_conversations')->nullOnDelete();
             $table->foreignId('patient_id')->nullable()->constrained('patients')->nullOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
             $table->enum('direction', ['incoming', 'outgoing']);
