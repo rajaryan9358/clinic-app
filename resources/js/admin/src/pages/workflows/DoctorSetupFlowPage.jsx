@@ -198,18 +198,24 @@ function modeLabel(mode) {
     return mode;
 }
 
-export default function DoctorSetupFlowPage() {
+// The self-view-lock redirect (a doctor may only view their own doctor
+// record here) lives in the default-exported wrapper below, not here, so
+// this component can call every hook it needs unconditionally. (An
+// early-return between two hook calls can change how many hooks run
+// between renders of the same mounted instance, which React forbids and
+// crashes on.)
+function DoctorSetupFlowPageInner() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { context, roleKind, can } = useScope() || {};
+    const { roleKind, can } = useScope() || {};
     const canAddSchedule = Boolean(can?.('doctor_schedules.create'));
     const canRemoveSchedule = Boolean(can?.('doctor_schedules.delete'));
+    // Doctor-kind users edit their own details from their profile page (the
+    // generic doctor write route 403s for them); everyone else needs
+    // doctors.edit to change the profile fields or photo here.
+    const canEditDoctorProfile = roleKind !== 'doctor' && Boolean(can?.('doctors.edit'));
     const [searchParams] = useSearchParams();
-
-    if (roleKind === 'doctor' && context?.active_doctor_id && String(context.active_doctor_id) !== String(id)) {
-        return <Navigate to="/workflows/my-profile" replace />;
-    }
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
     const allowedTabs = useMemo(() => {
@@ -1062,7 +1068,7 @@ export default function DoctorSetupFlowPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                         <h3 className="text-lg font-semibold">Profile</h3>
-                        {roleKind !== 'doctor' && (
+                        {canEditDoctorProfile && (
                             <button
                                 type="button"
                                 onClick={saveProfile}
@@ -1086,7 +1092,7 @@ export default function DoctorSetupFlowPage() {
                                 </div>
                             )}
                         </div>
-                        {roleKind !== 'doctor' && (
+                        {canEditDoctorProfile && (
                             <div>
                                 <p className="text-sm font-medium text-slate-700">Doctor Photo</p>
                                 <p className="mt-0.5 text-xs text-slate-500">Portrait or square · JPG, PNG, WebP · max 2 MB</p>
@@ -2137,4 +2143,15 @@ export default function DoctorSetupFlowPage() {
 
         </div>
     );
+}
+
+export default function DoctorSetupFlowPage() {
+    const { id } = useParams();
+    const { context, roleKind } = useScope() || {};
+
+    if (roleKind === 'doctor' && context?.active_doctor_id && String(context.active_doctor_id) !== String(id)) {
+        return <Navigate to="/workflows/my-profile" replace />;
+    }
+
+    return <DoctorSetupFlowPageInner />;
 }

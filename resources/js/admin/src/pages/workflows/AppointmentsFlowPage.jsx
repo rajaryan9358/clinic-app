@@ -927,14 +927,16 @@ export default function AppointmentsFlowPage() {
 
                 {(mode === 'today' || mode === 'calendar') ? (
                     <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={generateTokens}
-                            disabled={tokenGenerating || loading}
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                        >
-                            {tokenGenerating ? 'Generating…' : hasTokens ? 'Regenerate Tokens' : 'Generate Tokens'}
-                        </button>
+                        {scope?.can?.('appointments.edit') ? (
+                            <button
+                                type="button"
+                                onClick={generateTokens}
+                                disabled={tokenGenerating || loading}
+                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                            >
+                                {tokenGenerating ? 'Generating…' : hasTokens ? 'Regenerate Tokens' : 'Generate Tokens'}
+                            </button>
+                        ) : null}
                         {hasTokens ? (
                             <button
                                 type="button"

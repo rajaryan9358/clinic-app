@@ -7,7 +7,12 @@ import { allowedStaffRolesForCreator, canAccessModule, canCreateModule, canEditM
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 
-export default function ModuleFormPage({ forcedModuleKey } = {}) {
+// The permission checks live in the default-exported wrapper below, not
+// here, so this component can call every hook it needs unconditionally.
+// (An early-return between two hook calls can change how many hooks run
+// between renders of the same mounted instance — e.g. once the scope
+// context finishes loading — which React forbids and crashes on.)
+function ModuleFormPageInner({ forcedModuleKey } = {}) {
     const { moduleKey: routeModuleKey, id } = useParams();
     const moduleKey = forcedModuleKey || routeModuleKey;
     const module = modules[moduleKey];
@@ -15,24 +20,7 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
-    const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
-
-    if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
-        return <Navigate to="/dashboard" replace />;
-    }
-
-    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
-        return <Navigate to="/dashboard" replace />;
-    }
-
-    if (!isEdit && !canCreateModule(user?.role, moduleKey, scope?.can)) {
-        return <Navigate to={`/modules/${moduleKey}`} replace />;
-    }
-
-    if (isEdit && !canEditModule(user?.role, moduleKey, scope?.can)) {
-        return <Navigate to={`/modules/${moduleKey}`} replace />;
-    }
 
     const isAppointmentCreate = moduleKey === 'appointments' && !isEdit;
     const isUserCreate = moduleKey === 'users' && !isEdit;
@@ -1086,4 +1074,30 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
             />
         </div>
     );
+}
+
+export default function ModuleFormPage({ forcedModuleKey } = {}) {
+    const { moduleKey: routeModuleKey, id } = useParams();
+    const moduleKey = forcedModuleKey || routeModuleKey;
+    const isEdit = Boolean(id);
+    const { user } = useAuth();
+    const scope = useScope();
+
+    if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    if (!isEdit && !canCreateModule(user?.role, moduleKey, scope?.can)) {
+        return <Navigate to={`/modules/${moduleKey}`} replace />;
+    }
+
+    if (isEdit && !canEditModule(user?.role, moduleKey, scope?.can)) {
+        return <Navigate to={`/modules/${moduleKey}`} replace />;
+    }
+
+    return <ModuleFormPageInner forcedModuleKey={forcedModuleKey} />;
 }

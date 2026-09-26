@@ -59,6 +59,16 @@ function RequirePerm({ perm, children }) {
     return children;
 }
 
+// Full-page loader shown for a clinic user while the /clinic/me/context
+// fetch is still in flight (initial load, or right after an in-tab login).
+function FullPageLoader() {
+    return (
+        <div className="flex min-h-screen items-center justify-center bg-gray-50">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        </div>
+    );
+}
+
 // Wraps the authenticated routes: when the clinic's subscription is locked
 // (context.subscription.allows_access === false or a 402 SUBSCRIPTION_REQUIRED
 // response was seen), a user who can manage the subscription is redirected to
@@ -67,8 +77,25 @@ function RequirePerm({ perm, children }) {
 // without ever calling GET /clinic/subscription, since most clinic roles
 // lack subscription.view.
 function AuthenticatedShell() {
+    const { user } = useAuth();
     const scope = useScope();
     const location = useLocation();
+    const isSuperAdmin = user?.role === 'super_admin';
+
+    // Wait for the clinic permissions context to load before mounting any
+    // page for a clinic user. Every permission-gated page below decides what
+    // to render (or redirect to) based on `scope.can()`/`scope.roleKind`; if
+    // that page mounted before the context arrived and then re-rendered once
+    // it did, `can()` could flip between two renders of the SAME mounted
+    // instance and change how many hooks that page called, crashing React.
+    // Gating here means every page's first render already has the real
+    // permissions, so that can never happen. Super admin pages gate on the
+    // synchronous `user.role` instead (never on `can()`), so they don't need
+    // to wait.
+    if (!isSuperAdmin && !scope?.ready) {
+        return <FullPageLoader />;
+    }
+
     const subscriptionLocked = scope?.subscriptionLocked;
 
     if (subscriptionLocked) {

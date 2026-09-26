@@ -39,15 +39,11 @@ function modeLabel(mode) {
 
 // ── page ──────────────────────────────────────────────────────────────────────
 export default function DoctorAvailabilityPage() {
-    const { context, roleKind, ready } = useScope() || {};
-
-    // Wait for the scope context to load before deciding: roleKind is empty
-    // during that brief window, and redirecting on that would incorrectly
-    // bounce a real doctor off their own availability page on page load.
-    if (ready && roleKind !== 'doctor') return <Navigate to="/dashboard" replace />;
-
+    const { context, roleKind, ready, can } = useScope() || {};
     const doctorId = context?.active_doctor_id;
     const base = '/clinic';
+    const canAddSchedule = Boolean(can?.('doctor_schedules.create'));
+    const canRemoveSchedule = Boolean(can?.('doctor_schedules.delete'));
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -174,6 +170,13 @@ export default function DoctorAvailabilityPage() {
         }
     };
 
+    // Wait for the scope context to load before deciding: roleKind is empty
+    // during that brief window, and redirecting on that would incorrectly
+    // bounce a real doctor off their own availability page on page load.
+    // This check runs after every hook above so hook order never changes
+    // between renders (React requires hooks to run unconditionally).
+    if (ready && roleKind !== 'doctor') return <Navigate to="/dashboard" replace />;
+
     if (!doctorId) return null;
 
     if (loading) {
@@ -209,14 +212,16 @@ export default function DoctorAvailabilityPage() {
                                 <h3 className="text-lg font-semibold">Add Schedule</h3>
                                 <p className="mt-0.5 text-xs text-slate-500">Recurring weekly working hours per day</p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={addSchedule}
-                                disabled={scheduleSaving}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                            >
-                                {scheduleSaving ? 'Saving…' : 'Add'}
-                            </button>
+                            {canAddSchedule ? (
+                                <button
+                                    type="button"
+                                    onClick={addSchedule}
+                                    disabled={scheduleSaving}
+                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                >
+                                    {scheduleSaving ? 'Saving…' : 'Add'}
+                                </button>
+                            ) : null}
                         </div>
 
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -307,7 +312,9 @@ export default function DoctorAvailabilityPage() {
                                                                     <span className="rounded-full border px-2 py-0.5 text-xs font-medium opacity-80">{modeLabel(s.consultation_mode)}</span>
                                                                     {!s.is_active && <span className="text-xs opacity-60">(inactive)</span>}
                                                                 </div>
-                                                                <button type="button" onClick={() => removeSchedule(s.id)} className="rounded-lg border border-current px-2 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                                {canRemoveSchedule ? (
+                                                                    <button type="button" onClick={() => removeSchedule(s.id)} className="rounded-lg border border-current px-2 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                                ) : null}
                                                             </div>
                                                             {slots.length > 0 && (
                                                                 <div className="mt-2 flex flex-wrap gap-1">
@@ -336,14 +343,16 @@ export default function DoctorAvailabilityPage() {
                                 <h3 className="text-lg font-semibold">Add Exception</h3>
                                 <p className="mt-0.5 text-xs text-slate-500">One-off overrides: leave, block or special hours</p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={addException}
-                                disabled={exceptionSaving}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                            >
-                                {exceptionSaving ? 'Saving…' : 'Add'}
-                            </button>
+                            {canAddSchedule ? (
+                                <button
+                                    type="button"
+                                    onClick={addException}
+                                    disabled={exceptionSaving}
+                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                >
+                                    {exceptionSaving ? 'Saving…' : 'Add'}
+                                </button>
+                            ) : null}
                         </div>
 
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -404,7 +413,9 @@ export default function DoctorAvailabilityPage() {
                                                 )}
                                                 {ex.reason && <span className="text-xs italic opacity-70">"{ex.reason}"</span>}
                                             </div>
-                                            <button type="button" onClick={() => removeException(ex.id)} className="rounded-lg border border-current px-2.5 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                            {canRemoveSchedule ? (
+                                                <button type="button" onClick={() => removeException(ex.id)} className="rounded-lg border border-current px-2.5 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                            ) : null}
                                         </div>
                                     );
                                 })}

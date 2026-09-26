@@ -84,21 +84,19 @@ function FilterControl({ field, value, onChange, relationOptions, relationLoadin
     );
 }
 
-export default function ModuleListPage({ forcedModuleKey } = {}) {
+// The permission check lives in the default-exported wrapper below, not
+// here, so this component can call every hook it needs unconditionally.
+// (Early-returning `<Navigate>` from between two hook calls means the
+// number of hooks called can change between renders of the SAME mounted
+// instance — e.g. once `moduleKey` changes, or once the scope context
+// finishes loading — which React forbids and crashes on.)
+function ModuleListPageInner({ forcedModuleKey } = {}) {
     const { moduleKey: routeModuleKey } = useParams();
     const moduleKey = forcedModuleKey || routeModuleKey;
     const navigate = useNavigate();
     const { user } = useAuth();
     const scope = useScope();
     const module = modules[moduleKey];
-
-    if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
-        return <Navigate to="/dashboard" replace />;
-    }
-
-    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
-        return <Navigate to="/dashboard" replace />;
-    }
 
     const [rows, setRows] = useState([]);
     const [meta, setMeta] = useState({ current_page: 1, per_page: 15, total: 0 });
@@ -1313,4 +1311,21 @@ Write an appropriate reply.`;
             />
         </div>
     );
+}
+
+export default function ModuleListPage({ forcedModuleKey } = {}) {
+    const { moduleKey: routeModuleKey } = useParams();
+    const moduleKey = forcedModuleKey || routeModuleKey;
+    const { user } = useAuth();
+    const scope = useScope();
+
+    if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    return <ModuleListPageInner forcedModuleKey={forcedModuleKey} />;
 }

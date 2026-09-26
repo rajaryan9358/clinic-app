@@ -7,7 +7,12 @@ import { canAccessModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 
-export default function ModuleViewPage() {
+// The permission check lives in the default-exported wrapper below, not
+// here, so this component can call every hook it needs unconditionally.
+// (An early-return between two hook calls can change how many hooks run
+// between renders of the same mounted instance — e.g. once the scope
+// context finishes loading — which React forbids and crashes on.)
+function ModuleViewPageInner() {
     const { moduleKey, id } = useParams();
     const module = modules[moduleKey];
     const { user } = useAuth();
@@ -25,14 +30,6 @@ export default function ModuleViewPage() {
     const [waFollowup, setWaFollowup] = useState({ due_date: '', task_type: 'whatsapp', assigned_to_user_id: '', note: '' });
     const [waAppt, setWaAppt] = useState({ doctor_id: '', appointment_date: '', start_time: '', visit_type: 'followup', booking_channel: 'whatsapp' });
     const [waActionMsg, setWaActionMsg] = useState({ assign: '', followup: '', appointment: '' });
-
-    if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
-        return <Navigate to="/dashboard" replace />;
-    }
-
-    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
-        return <Navigate to="/dashboard" replace />;
-    }
 
     useEffect(() => {
         const fetchOne = async () => {
@@ -112,8 +109,6 @@ export default function ModuleViewPage() {
         loadRelated();
     }, [moduleKey, id, base, module]);
 
-    if (!module) return <div className="rounded border bg-white p-4">Unknown module.</div>;
-
     const hiddenKeys = new Set(['password', 'remember_token', 'clinic_id', 'deleted_at']);
     const entries = Object.entries(record || {}).filter(([key]) => !hiddenKeys.has(key));
 
@@ -164,6 +159,8 @@ export default function ModuleViewPage() {
 
         return actions;
     }, [record?.status]);
+
+    if (!module) return <div className="rounded border bg-white p-4">Unknown module.</div>;
 
     const runAppointmentStatusChange = async (nextStatus) => {
         if (!nextStatus) return;
@@ -483,4 +480,20 @@ export default function ModuleViewPage() {
             </div>
         </div>
     );
+}
+
+export default function ModuleViewPage() {
+    const { moduleKey } = useParams();
+    const { user } = useAuth();
+    const scope = useScope();
+
+    if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    return <ModuleViewPageInner />;
 }

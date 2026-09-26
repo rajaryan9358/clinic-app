@@ -47,6 +47,13 @@ export function ScopeProvider({ children }) {
         const onAuthChanged = () => {
             const token = localStorage.getItem('auth_token');
             if (token) {
+                // Reset the gate before fetching: without this, an in-tab
+                // login right after a logout (or right after the initial
+                // "no token yet" resolution) would leave `ready` stuck at
+                // its previous `true` value while the new user's context is
+                // still in flight, letting pages mount against stale/empty
+                // permissions instead of waiting for the real ones.
+                setReady(false);
                 refresh();
             } else {
                 setContext(null);
@@ -79,12 +86,17 @@ export function ScopeProvider({ children }) {
     // full catalogue); everyone else is checked against the permissions list from
     // /clinic/me/context. Super admin has no clinic context at all, so `can` still
     // needs to return true for them.
+    //
+    // Fails CLOSED before the first context fetch has settled: returning
+    // true here (fail-open) let a page render one way with `!ready`, then
+    // re-render a different way once the real permissions arrived — an
+    // early-return based on `can()` running conditionally between two
+    // renders of the same mounted component changes how many hooks it
+    // calls and crashes React ("Rendered fewer hooks than expected"). The
+    // caller (AuthenticatedShell) is responsible for not mounting any
+    // permission-gated page until `ready` is true in the first place.
     const can = useCallback((permission) => {
-        // Before the first context fetch has settled, fail open rather than
-        // bouncing a permitted user off a page they're allowed to see — the
-        // backend still enforces every write, so this only affects a brief
-        // loading flash, never actual access.
-        if (!ready) return true;
+        if (!ready) return false;
         const kind = context?.role_kind;
         if (kind === 'clinic_admin' || kind === 'super_admin') return true;
         if (!permission) return true;

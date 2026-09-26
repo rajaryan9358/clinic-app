@@ -426,7 +426,7 @@ function AssistantDashboard({ data }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
     const { user } = useAuth();
-    const { context } = useScope() || {};
+    const { context, ready } = useScope() || {};
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
 
@@ -441,7 +441,18 @@ export default function DashboardPage() {
     const isReceptionist = roleKind === 'staff' && !isAssistant;
 
     useEffect(() => {
+        // Don't fetch until role_kind is known (or the caller is super_admin,
+        // whose branch never depends on it): otherwise this fires once for
+        // the generic/summary endpoint while roleKind is still unresolved,
+        // then again for the real per-role endpoint once it resolves — two
+        // in-flight requests whose responses can land out of order and leave
+        // `data` shaped for the wrong dashboard.
+        if (!isSuperAdmin && !ready) return;
+
+        let cancelled = false;
         const load = async () => {
+            setError('');
+            setData(null);
             try {
                 let url;
                 if (isReceptionist) {
@@ -454,13 +465,18 @@ export default function DashboardPage() {
                     url = `${base}/dashboard/summary`;
                 }
                 const res = await client.get(url);
+                if (cancelled) return;
                 setData(res.data.data);
             } catch (err) {
+                if (cancelled) return;
                 setError(err?.response?.data?.message || 'Failed to load dashboard');
             }
         };
         load();
-    }, [base, isSuperAdmin, isClinicAdmin, isReceptionist, isAssistant]);
+        return () => {
+            cancelled = true;
+        };
+    }, [base, isSuperAdmin, isClinicAdmin, isReceptionist, isAssistant, ready]);
 
     if (error) {
         return (
