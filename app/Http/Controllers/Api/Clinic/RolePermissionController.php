@@ -19,6 +19,20 @@ class RolePermissionController extends Controller
      */
     public function roles(Request $request)
     {
+        // `?kind=doctor` is a narrow, additive exception for the doctor
+        // onboarding form's optional "Login role" picker (Task 7): it lists
+        // doctor-kind roles only, never clinic_admin or the hidden
+        // super_admin role, and leaves the default listing below untouched.
+        if ($request->query('kind') === 'doctor') {
+            $roles = Role::query()
+                ->where('guard_name', 'web')
+                ->where('kind', 'doctor')
+                ->orderBy('label')
+                ->get(['name', 'label', 'kind', 'limit_to_assigned_doctors']);
+
+            return $this->success('Roles fetched successfully', $roles);
+        }
+
         $kinds = ['staff'];
         if (in_array($request->user()?->roleKind(), ['clinic_admin', 'super_admin'], true)) {
             $kinds[] = 'clinic_admin';
