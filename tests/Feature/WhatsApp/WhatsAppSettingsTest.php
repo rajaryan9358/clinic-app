@@ -5,6 +5,7 @@ namespace Tests\Feature\WhatsApp;
 use App\Models\User;
 use App\Services\WhatsApp\FakeWhatsAppGateway;
 use App\Services\WhatsApp\WhatsAppGateway;
+use App\Support\PlatformSettings;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -109,6 +110,20 @@ class WhatsAppSettingsTest extends TestCase
                 'not_a_real_type' => ['name' => 'foo', 'language' => 'en', 'enabled' => true],
             ],
         ])->assertStatus(422);
+    }
+
+    public function test_invalid_template_type_alongside_a_valid_token_persists_nothing(): void
+    {
+        Sanctum::actingAs($this->superAdmin());
+
+        $this->postJson('/api/super-admin/settings/system', [
+            'whatsapp_access_token' => 'should-not-be-saved',
+            'whatsapp_templates' => [
+                'not_a_real_type' => ['name' => 'foo', 'language' => 'en', 'enabled' => true],
+            ],
+        ])->assertStatus(422);
+
+        $this->assertNull(PlatformSettings::get('whatsapp_access_token'));
     }
 
     public function test_test_connection_endpoint_reports_ok_when_fake_gateway_is_configured(): void

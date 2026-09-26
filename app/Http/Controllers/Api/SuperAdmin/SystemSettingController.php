@@ -8,6 +8,7 @@ use App\Services\WhatsApp\TemplateSettings;
 use App\Services\WhatsApp\WhatsAppGateway;
 use App\Support\PlatformSettings;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SystemSettingController extends Controller
 {
@@ -38,90 +39,97 @@ class SystemSettingController extends Controller
             'whatsapp_templates' => ['sometimes', 'array'],
         ]);
 
-        // Leave blank to keep existing (UI behavior)
-        if (array_key_exists('openai_api_key', $validated)) {
-            $key = (string) ($validated['openai_api_key'] ?? '');
-            if ($key !== '') {
-                PlatformSettings::set('openai_api_key', $key);
+        return DB::transaction(function () use ($validated) {
+            // Validate whatsapp_templates before any setting is persisted, so a request
+            // that combines valid connection fields with an invalid template mapping
+            // fails without partially saving (all-or-nothing). The DB::transaction
+            // wrapper is a second line of defence in case any of the sets below ever
+            // gain their own validation that can fail after an earlier set() ran.
+            if (array_key_exists('whatsapp_templates', $validated)) {
+                TemplateSettings::save($validated['whatsapp_templates']);
             }
-        }
 
-        if (array_key_exists('openai_model', $validated)) {
-            $model = (string) ($validated['openai_model'] ?? '');
-            if ($model !== '') {
-                PlatformSettings::set('openai_model', $model);
+            // Leave blank to keep existing (UI behavior)
+            if (array_key_exists('openai_api_key', $validated)) {
+                $key = (string) ($validated['openai_api_key'] ?? '');
+                if ($key !== '') {
+                    PlatformSettings::set('openai_api_key', $key);
+                }
             }
-        }
 
-        if (array_key_exists('razorpay_key_id', $validated) && $validated['razorpay_key_id'] !== null) {
-            PlatformSettings::set('razorpay_key_id', $validated['razorpay_key_id']);
-        }
-
-        if (array_key_exists('razorpay_key_secret', $validated)) {
-            $secret = (string) ($validated['razorpay_key_secret'] ?? '');
-            if ($secret !== '') {
-                PlatformSettings::set('razorpay_key_secret', $secret);
+            if (array_key_exists('openai_model', $validated)) {
+                $model = (string) ($validated['openai_model'] ?? '');
+                if ($model !== '') {
+                    PlatformSettings::set('openai_model', $model);
+                }
             }
-        }
 
-        if (array_key_exists('razorpay_webhook_secret', $validated)) {
-            $secret = (string) ($validated['razorpay_webhook_secret'] ?? '');
-            if ($secret !== '') {
-                PlatformSettings::set('razorpay_webhook_secret', $secret);
+            if (array_key_exists('razorpay_key_id', $validated) && $validated['razorpay_key_id'] !== null) {
+                PlatformSettings::set('razorpay_key_id', $validated['razorpay_key_id']);
             }
-        }
 
-        if (array_key_exists('razorpay_mode', $validated) && $validated['razorpay_mode'] !== null) {
-            PlatformSettings::set('razorpay_mode', $validated['razorpay_mode']);
-        }
-
-        if (array_key_exists('subscription_grace_days', $validated) && $validated['subscription_grace_days'] !== null) {
-            PlatformSettings::set('subscription_grace_days', $validated['subscription_grace_days']);
-        }
-
-        if (array_key_exists('trial_days', $validated) && $validated['trial_days'] !== null) {
-            PlatformSettings::set('trial_days', $validated['trial_days']);
-        }
-
-        if (array_key_exists('whatsapp_phone_number_id', $validated) && $validated['whatsapp_phone_number_id'] !== null) {
-            PlatformSettings::set('whatsapp_phone_number_id', $validated['whatsapp_phone_number_id']);
-        }
-
-        if (array_key_exists('whatsapp_waba_id', $validated) && $validated['whatsapp_waba_id'] !== null) {
-            PlatformSettings::set('whatsapp_waba_id', $validated['whatsapp_waba_id']);
-        }
-
-        if (array_key_exists('whatsapp_graph_version', $validated) && $validated['whatsapp_graph_version'] !== null) {
-            PlatformSettings::set('whatsapp_graph_version', $validated['whatsapp_graph_version']);
-        }
-
-        // Secrets: leave blank to keep the stored value (same UI convention as Razorpay above).
-        if (array_key_exists('whatsapp_access_token', $validated)) {
-            $token = (string) ($validated['whatsapp_access_token'] ?? '');
-            if ($token !== '') {
-                PlatformSettings::set('whatsapp_access_token', $token);
+            if (array_key_exists('razorpay_key_secret', $validated)) {
+                $secret = (string) ($validated['razorpay_key_secret'] ?? '');
+                if ($secret !== '') {
+                    PlatformSettings::set('razorpay_key_secret', $secret);
+                }
             }
-        }
 
-        if (array_key_exists('whatsapp_app_secret', $validated)) {
-            $secret = (string) ($validated['whatsapp_app_secret'] ?? '');
-            if ($secret !== '') {
-                PlatformSettings::set('whatsapp_app_secret', $secret);
+            if (array_key_exists('razorpay_webhook_secret', $validated)) {
+                $secret = (string) ($validated['razorpay_webhook_secret'] ?? '');
+                if ($secret !== '') {
+                    PlatformSettings::set('razorpay_webhook_secret', $secret);
+                }
             }
-        }
 
-        if (array_key_exists('whatsapp_webhook_verify_token', $validated)) {
-            $token = (string) ($validated['whatsapp_webhook_verify_token'] ?? '');
-            if ($token !== '') {
-                PlatformSettings::set('whatsapp_webhook_verify_token', $token);
+            if (array_key_exists('razorpay_mode', $validated) && $validated['razorpay_mode'] !== null) {
+                PlatformSettings::set('razorpay_mode', $validated['razorpay_mode']);
             }
-        }
 
-        if (array_key_exists('whatsapp_templates', $validated)) {
-            TemplateSettings::save($validated['whatsapp_templates']);
-        }
+            if (array_key_exists('subscription_grace_days', $validated) && $validated['subscription_grace_days'] !== null) {
+                PlatformSettings::set('subscription_grace_days', $validated['subscription_grace_days']);
+            }
 
-        return $this->success('System settings saved successfully', $this->payload());
+            if (array_key_exists('trial_days', $validated) && $validated['trial_days'] !== null) {
+                PlatformSettings::set('trial_days', $validated['trial_days']);
+            }
+
+            if (array_key_exists('whatsapp_phone_number_id', $validated) && $validated['whatsapp_phone_number_id'] !== null) {
+                PlatformSettings::set('whatsapp_phone_number_id', $validated['whatsapp_phone_number_id']);
+            }
+
+            if (array_key_exists('whatsapp_waba_id', $validated) && $validated['whatsapp_waba_id'] !== null) {
+                PlatformSettings::set('whatsapp_waba_id', $validated['whatsapp_waba_id']);
+            }
+
+            if (array_key_exists('whatsapp_graph_version', $validated) && $validated['whatsapp_graph_version'] !== null) {
+                PlatformSettings::set('whatsapp_graph_version', $validated['whatsapp_graph_version']);
+            }
+
+            // Secrets: leave blank to keep the stored value (same UI convention as Razorpay above).
+            if (array_key_exists('whatsapp_access_token', $validated)) {
+                $token = (string) ($validated['whatsapp_access_token'] ?? '');
+                if ($token !== '') {
+                    PlatformSettings::set('whatsapp_access_token', $token);
+                }
+            }
+
+            if (array_key_exists('whatsapp_app_secret', $validated)) {
+                $secret = (string) ($validated['whatsapp_app_secret'] ?? '');
+                if ($secret !== '') {
+                    PlatformSettings::set('whatsapp_app_secret', $secret);
+                }
+            }
+
+            if (array_key_exists('whatsapp_webhook_verify_token', $validated)) {
+                $token = (string) ($validated['whatsapp_webhook_verify_token'] ?? '');
+                if ($token !== '') {
+                    PlatformSettings::set('whatsapp_webhook_verify_token', $token);
+                }
+            }
+
+            return $this->success('System settings saved successfully', $this->payload());
+        });
     }
 
     public function testWhatsApp(Request $request, WhatsAppGateway $gateway)
