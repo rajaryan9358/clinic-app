@@ -1,18 +1,16 @@
 import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 
 export default function MyDoctorProfilePage() {
-    const { user } = useAuth();
-    const { context, refresh } = useScope() || {};
+    const { context, refresh, roleKind } = useScope() || {};
     const location = useLocation();
 
     useEffect(() => {
-        if (user?.role === 'doctor') refresh?.();
-    }, [user?.role]);
+        if (roleKind === 'doctor') refresh?.();
+    }, [roleKind]);
 
-    if (user?.role !== 'doctor') {
+    if (roleKind !== 'doctor') {
         return <Navigate to="/dashboard" replace />;
     }
 

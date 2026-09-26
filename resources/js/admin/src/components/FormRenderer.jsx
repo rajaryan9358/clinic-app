@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AppIcon from './AppIcon';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useScope } from '../context/ScopeContext';
 import { isAutoDocRole } from '../config/access';
 
 function inferLabel(item) {
@@ -174,6 +175,7 @@ function InputControl({ field, value, onChange, relationOptions, relationLoading
 
 export default function FormRenderer({ title, fields, values, onChange, onSubmit, submitLabel, error, onCancel, renderAfterField, renderTop }) {
     const { user } = useAuth();
+    const { roleKind } = useScope() || {};
     const basePath = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const relationControllersRef = useRef({});
 
@@ -198,10 +200,10 @@ export default function FormRenderer({ title, fields, values, onChange, onSubmit
             // clinic_id only visible to super_admin
             if (user?.role !== 'super_admin' && field.key === 'clinic_id') return false;
             // doctor_id hidden for doctor role (booking is always for themselves)
-            if (isAutoDocRole(user?.role) && field.key === 'doctor_id') return false;
+            if (isAutoDocRole(roleKind) && field.key === 'doctor_id') return false;
             return true;
         });
-    }, [fields, user]);
+    }, [fields, user, roleKind]);
 
     const relationResources = useMemo(() => {
         const unique = new Set();

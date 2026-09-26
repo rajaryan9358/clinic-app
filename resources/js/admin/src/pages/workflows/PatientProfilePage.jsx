@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
 
@@ -131,6 +132,8 @@ function fmtGroupDate(ymd) {
 export default function PatientProfilePage() {
     const { id } = useParams();
     const { user } = useAuth();
+    const scope = useScope();
+    const canEditPatient = Boolean(scope?.can?.('patients.edit'));
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
     const [tab, setTab] = useState('notes');
@@ -372,7 +375,9 @@ export default function PatientProfilePage() {
                     >
                         Download patient report
                     </button>
-                    <Link to={`/modules/patients/${id}/edit`} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white">Edit</Link>
+                    {canEditPatient ? (
+                        <Link to={`/modules/patients/${id}/edit`} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white">Edit</Link>
+                    ) : null}
                 </div>
             </div>
 
@@ -419,13 +424,15 @@ export default function PatientProfilePage() {
                                 <h3 className="text-lg font-semibold">Notes</h3>
                                 <p className="mt-0.5 text-sm text-slate-600">Internal notes for this patient.</p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setNoteDialogOpen(true)}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                            >
-                                Add Note
-                            </button>
+                            {canEditPatient ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setNoteDialogOpen(true)}
+                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                                >
+                                    Add Note
+                                </button>
+                            ) : null}
                         </div>
                     </div>
 
@@ -548,14 +555,16 @@ export default function PatientProfilePage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                         <h3 className="text-lg font-semibold">Medical Profile</h3>
-                        <button
-                            type="button"
-                            onClick={saveMedical}
-                            disabled={medicalSaving}
-                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                        >
-                            {medicalSaving ? 'Saving…' : 'Save'}
-                        </button>
+                        {canEditPatient ? (
+                            <button
+                                type="button"
+                                onClick={saveMedical}
+                                disabled={medicalSaving}
+                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            >
+                                {medicalSaving ? 'Saving…' : 'Save'}
+                            </button>
+                        ) : null}
                     </div>
 
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -569,9 +578,10 @@ export default function PatientProfilePage() {
                             <div key={key}>
                                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</label>
                                 <textarea
-                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                                     rows={3}
                                     value={medical[key]}
+                                    disabled={!canEditPatient}
                                     onChange={(e) => setMedical((p) => ({ ...p, [key]: e.target.value }))}
                                 />
                             </div>
@@ -579,9 +589,10 @@ export default function PatientProfilePage() {
                         <div className="md:col-span-2">
                             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Notes</label>
                             <textarea
-                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                                 rows={4}
                                 value={medical.notes}
+                                disabled={!canEditPatient}
                                 onChange={(e) => setMedical((p) => ({ ...p, notes: e.target.value }))}
                             />
                         </div>

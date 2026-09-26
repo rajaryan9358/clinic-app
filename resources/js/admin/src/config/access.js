@@ -14,7 +14,35 @@ export function isSuperAdminHiddenModuleKey(moduleKey) {
 // Modules that cannot be created via the generic form
 export const NON_CREATABLE_MODULE_KEYS = ['clinicSettings', 'auditLogs'];
 
-export function canCreateModule(role, moduleKey) {
+// Module key → permission module name (the `{module}` in `{module}.{view|create|edit|delete}`).
+export const MODULE_PERMISSION = {
+    patients: 'patients',
+    appointments: 'appointments',
+    doctors: 'doctors',
+    services: 'services',
+    users: 'staff',
+    followups: 'followups',
+    reminders: 'reminders',
+    whatsappConversations: 'whatsapp',
+    whatsappAccounts: 'whatsapp',
+    whatsappTemplates: 'whatsapp',
+    whatsappMessages: 'whatsapp',
+    whatsappSessions: 'whatsapp',
+    invoices: 'billing',
+    payments: 'billing',
+    reviews: 'reviews',
+    auditLogs: 'audit_logs',
+    clinicSettings: 'clinic_settings',
+    domains: 'clinic_settings',
+};
+
+function clinicPermissionFor(moduleKey, action) {
+    const permModule = MODULE_PERMISSION[String(moduleKey)];
+    if (!permModule) return null;
+    return `${permModule}.${action}`;
+}
+
+export function canCreateModule(role, moduleKey, can) {
     if (!moduleKey) return false;
     const key = String(moduleKey);
     const r = String(role || '');
@@ -27,22 +55,38 @@ export function canCreateModule(role, moduleKey) {
     // Domains: only super_admin
     if (key === 'domains') return r === 'super_admin';
 
-    // Staff users: not allowed for receptionist, assistant, doctor
-    if (key === 'users') return !['receptionist', 'assistant', 'doctor'].includes(r);
+    if (r === 'super_admin') return true;
 
-    // Doctors: not allowed for receptionist, assistant, doctor
-    if (key === 'doctors') return !['receptionist', 'assistant', 'doctor'].includes(r);
-
-    // Services: not allowed for receptionist (read-only), assistant, doctor
-    if (key === 'services') return !['receptionist', 'assistant', 'doctor'].includes(r);
-
-    // Invoices/payments: receptionist can create, not others below
-    if (key === 'invoices' || key === 'payments') return !['assistant', 'doctor'].includes(r);
-
-    return true;
+    const perm = clinicPermissionFor(key, 'create');
+    if (!perm) return true;
+    return typeof can === 'function' ? can(perm) : false;
 }
 
-export function canAccessModule(role, moduleKey) {
+export function canEditModule(role, moduleKey, can) {
+    if (!moduleKey) return false;
+    const key = String(moduleKey);
+    const r = String(role || '');
+
+    if (r === 'super_admin') return true;
+
+    const perm = clinicPermissionFor(key, 'edit');
+    if (!perm) return true;
+    return typeof can === 'function' ? can(perm) : false;
+}
+
+export function canDeleteModule(role, moduleKey, can) {
+    if (!moduleKey) return false;
+    const key = String(moduleKey);
+    const r = String(role || '');
+
+    if (r === 'super_admin') return true;
+
+    const perm = clinicPermissionFor(key, 'delete');
+    if (!perm) return true;
+    return typeof can === 'function' ? can(perm) : false;
+}
+
+export function canAccessModule(role, moduleKey, can) {
     if (!moduleKey) return false;
     const r = String(role || '');
     const key = String(moduleKey);
@@ -54,28 +98,9 @@ export function canAccessModule(role, moduleKey) {
         return !isSuperAdminHiddenModuleKey(key);
     }
 
-    // Doctor: patients + services (read-only via isReadOnly in ModuleListPage)
-    if (r === 'doctor') {
-        return ['patients', 'services'].includes(key);
-    }
-
-    // Assistant: appointments (workflow), patients
-    if (r === 'assistant') {
-        return ['patients'].includes(key);
-    }
-
-    // Receptionist: patients, services, invoices, payments, reviews, whatsapp, reminders
-    if (r === 'receptionist') {
-        return ['patients', 'services', 'invoices', 'payments', 'reviews',
-            'whatsappConversations', 'reminders'].includes(key);
-    }
-
-    // Clinic admin: almost everything except audit (for clinic admins, restricted via backend)
-    if (r === 'clinic_admin') {
-        return !['clinics', 'domains', 'auditLogs', 'followups'].includes(key);
-    }
-
-    return true;
+    const perm = clinicPermissionFor(key, 'view');
+    if (!perm) return true;
+    return typeof can === 'function' ? can(perm) : false;
 }
 
 /** Whether doctor_id should be hidden (booking for self) */

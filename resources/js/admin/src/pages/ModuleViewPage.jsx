@@ -5,11 +5,13 @@ import AppIcon from '../components/AppIcon';
 import { modules } from '../config/modules';
 import { canAccessModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
+import { useScope } from '../context/ScopeContext';
 
 export default function ModuleViewPage() {
     const { moduleKey, id } = useParams();
     const module = modules[moduleKey];
     const { user } = useAuth();
+    const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const [record, setRecord] = useState(null);
     const [related, setRelated] = useState({ messages: null });
@@ -28,7 +30,7 @@ export default function ModuleViewPage() {
         return <Navigate to="/dashboard" replace />;
     }
 
-    if (!canAccessModule(user?.role, moduleKey)) {
+    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
         return <Navigate to="/dashboard" replace />;
     }
 
@@ -303,7 +305,9 @@ export default function ModuleViewPage() {
                                 <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={apptStatusReason} onChange={(e) => setApptStatusReason(e.target.value)} />
 
                                 <div className="flex flex-wrap gap-2">
-                                    {lifecycleActions.map((a) => (
+                                    {lifecycleActions
+                                        .filter((a) => scope?.can?.(a.next === 'cancelled' ? 'appointments.cancel' : 'appointments.check_in'))
+                                        .map((a) => (
                                         <button
                                             key={a.next}
                                             type="button"
@@ -324,23 +328,25 @@ export default function ModuleViewPage() {
                             </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 p-4">
-                            <p className="text-sm font-semibold text-slate-800">Reschedule</p>
-                            <div className="mt-2 grid gap-2">
-                                <input type="date" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.appointment_date} onChange={(e) => setReschedule((p) => ({ ...p, appointment_date: e.target.value }))} />
-                                <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.start_time} onChange={(e) => setReschedule((p) => ({ ...p, start_time: e.target.value }))} />
-                                <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.end_time} onChange={(e) => setReschedule((p) => ({ ...p, end_time: e.target.value }))} />
-                                <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={reschedule.reason} onChange={(e) => setReschedule((p) => ({ ...p, reason: e.target.value }))} />
-                                <button
-                                    type="button"
-                                    disabled={!reschedule.appointment_date || !reschedule.start_time || actionSaving}
-                                    onClick={runAppointmentReschedule}
-                                    className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                >
-                                    {actionSaving ? 'Working…' : 'Reschedule'}
-                                </button>
+                        {scope?.can?.('appointments.edit') ? (
+                            <div className="rounded-xl border border-slate-200 p-4">
+                                <p className="text-sm font-semibold text-slate-800">Reschedule</p>
+                                <div className="mt-2 grid gap-2">
+                                    <input type="date" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.appointment_date} onChange={(e) => setReschedule((p) => ({ ...p, appointment_date: e.target.value }))} />
+                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.start_time} onChange={(e) => setReschedule((p) => ({ ...p, start_time: e.target.value }))} />
+                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.end_time} onChange={(e) => setReschedule((p) => ({ ...p, end_time: e.target.value }))} />
+                                    <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={reschedule.reason} onChange={(e) => setReschedule((p) => ({ ...p, reason: e.target.value }))} />
+                                    <button
+                                        type="button"
+                                        disabled={!reschedule.appointment_date || !reschedule.start_time || actionSaving}
+                                        onClick={runAppointmentReschedule}
+                                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    >
+                                        {actionSaving ? 'Working…' : 'Reschedule'}
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        ) : null}
                     </div>
                 </div>
             ) : null}

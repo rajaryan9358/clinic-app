@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import client from '../../api/client';
-import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 
 const DEFAULT_PRIMARY   = '#2563EB';
@@ -84,9 +83,9 @@ function TextField({ label, value, onChange, type = 'text' }) {
 }
 
 export default function ClinicProfilePage() {
-    const { user } = useAuth();
-    const readOnly = user?.role === 'clinic_admin';
-    const { context } = useScope() || {};
+    const scope = useScope() || {};
+    const { context } = scope;
+    const readOnly = !scope.can?.('clinic_profile.edit');
     const trialEndsAt = context?.subscription?.trial_ends_at;
 
     const [clinic, setClinic] = useState(null);

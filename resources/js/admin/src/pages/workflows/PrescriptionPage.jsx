@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
 
 function prettyDate(ymd) {
@@ -17,6 +18,8 @@ function prettyDate(ymd) {
 export default function PrescriptionPage() {
     const { id } = useParams();
     const { user } = useAuth();
+    const scope = useScope();
+    const canPrescribe = Boolean(scope?.can?.('appointments.prescribe'));
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
     const [loading, setLoading] = useState(true);
@@ -51,7 +54,7 @@ export default function PrescriptionPage() {
                 if (!cancelled) {
                     setAppointment(appt);
                     setPrescription(rx);
-                    setVoice((p) => ({ ...p, open: !rx, error: '' }));
+                    setVoice((p) => ({ ...p, open: !rx && canPrescribe, error: '' }));
                 }
             } catch (e) {
                 if (!cancelled) setError(e?.response?.data?.message || e?.message || 'Failed to load appointment');
@@ -224,7 +227,7 @@ export default function PrescriptionPage() {
                     >
                         Print
                     </button>
-                    {!prescription ? (
+                    {!prescription && canPrescribe ? (
                         <button
                             type="button"
                             onClick={() => setVoice((p) => ({ ...p, open: true, error: '' }))}

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useScope } from '../../context/ScopeContext';
 import AppointmentDetailDrawer from '../../components/AppointmentDetailDrawer';
 import StatusBadge from '../../components/StatusBadge';
 import AppIcon from '../../components/AppIcon';
@@ -15,9 +16,9 @@ function modeButton(active) {
 
 export default function AppointmentsFlowPage() {
     const { user } = useAuth();
+    const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
-    const isClinicAdmin = user?.role === 'clinic_admin';
-    const canUsePrescription = ['doctor', 'assistant'].includes(String(user?.role || ''));
+    const canUsePrescription = Boolean(scope?.can?.('appointments.prescribe'));
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
@@ -514,11 +515,18 @@ export default function AppointmentsFlowPage() {
             actions.push({ label: 'Mark Rescheduled', kind: 'reschedule' });
         }
 
-        return actions.map((a) => ({
-            kind: a.kind || 'lifecycle',
-            label: a.label,
-            next: a.next || null,
-        }));
+        return actions
+            .map((a) => ({
+                kind: a.kind || 'lifecycle',
+                label: a.label,
+                next: a.next || null,
+            }))
+            .filter((a) => {
+                if (a.kind === 'cancel') return Boolean(scope?.can?.('appointments.cancel'));
+                if (a.kind === 'reschedule') return Boolean(scope?.can?.('appointments.edit'));
+                // lifecycle / complete: confirm, check-in, start, complete, no-show, restore, reopen
+                return Boolean(scope?.can?.('appointments.check_in'));
+            });
     };
 
     const rowById = useMemo(() => {
@@ -587,7 +595,7 @@ export default function AppointmentsFlowPage() {
                     title = 'Check-in Not Allowed Yet';
                     message = `Check-in is allowed from ${prettyDateTime(allowedFrom)} (15 minutes before the appointment).`;
                     confirmDisabled = true;
-                    showForce = String(user?.role || '') === 'clinic_admin';
+                    showForce = scope?.roleKind === 'clinic_admin' || scope?.roleKind === 'super_admin';
                 }
             }
         }
@@ -600,7 +608,7 @@ export default function AppointmentsFlowPage() {
                     title = 'No-show Not Allowed Yet';
                     message = `No-show is allowed only after ${prettyDateTime(allowedAfter)} (15 minutes after the appointment).`;
                     confirmDisabled = true;
-                    showForce = String(user?.role || '') === 'clinic_admin';
+                    showForce = scope?.roleKind === 'clinic_admin' || scope?.roleKind === 'super_admin';
                 }
             }
         }

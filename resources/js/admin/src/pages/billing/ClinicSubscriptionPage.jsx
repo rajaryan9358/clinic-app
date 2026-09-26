@@ -3,7 +3,6 @@ import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
 import { Btn, Card, EmptyState, ErrorText, LoadingState, SectionHeader, SuccessText } from '../../components/billing/ui.jsx';
-import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import { formatDate, formatDateTime } from '../../utils/dateFormat';
 import { formatINR } from '../../utils/money';
@@ -62,9 +61,8 @@ const loadCheckoutScript = () => new Promise((resolve, reject) => {
 });
 
 export default function ClinicSubscriptionPage() {
-    const { user } = useAuth();
     const scope = useScope();
-    const isAdmin = user?.role === 'clinic_admin';
+    const isAdmin = Boolean(scope?.can?.('subscription.manage'));
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);

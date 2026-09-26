@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { modules } from '../config/modules';
-import { navigationByRole, resolveNavHref } from '../config/navigation';
+import { navigationFor, resolveNavHref } from '../config/navigation';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import AppIcon from './AppIcon';
@@ -72,10 +72,12 @@ function roleBadgeColor(role) {
 
 export default function Layout({ children }) {
     const { user, logout } = useAuth();
-    const { context, setActiveDoctorId } = useScope() || {};
+    const scope = useScope() || {};
+    const { context, setActiveDoctorId } = scope;
     const location = useLocation();
-    const role = user?.role || 'assistant';
-    const navSections = navigationByRole[role] || navigationByRole.assistant;
+    const role = user?.role || 'staff';
+    const navSections = navigationFor(user, scope);
+    const displayRoleLabel = scope.roleLabel || roleLabel(role);
 
     const renderNavLink = (item) => {
         const href = resolveNavHref(item);
@@ -152,7 +154,7 @@ export default function Layout({ children }) {
             {subscriptionBanner && (
                 <div className={`fixed inset-x-0 top-0 z-40 flex items-center justify-center gap-3 px-4 py-1.5 text-xs font-semibold ${subscriptionBanner.tone === 'red' ? 'bg-red-600 text-white' : 'bg-amber-400 text-amber-900'}`}>
                     {subscriptionBanner.text}
-                    {subscriptionBanner.payNow && role === 'clinic_admin' && (
+                    {subscriptionBanner.payNow && scope.can?.('subscription.manage') && (
                         <Link to="/workflows/subscription" className="rounded-full bg-amber-900/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-900/30">
                             Pay now →
                         </Link>
@@ -205,7 +207,7 @@ export default function Layout({ children }) {
                         <div className="hidden flex-col items-end sm:flex">
                             <span className="text-sm font-semibold text-gray-900 leading-tight">{user?.full_name || user?.email || 'User'}</span>
                             <span className={`mt-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold ${roleBadgeColor(role)}`}>
-                                {roleLabel(role)}
+                                {displayRoleLabel}
                             </span>
                         </div>
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
@@ -248,7 +250,7 @@ export default function Layout({ children }) {
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-semibold text-gray-900">{user?.full_name || user?.email}</p>
-                            <p className="truncate text-[10px] text-gray-500">{roleLabel(role)}</p>
+                            <p className="truncate text-[10px] text-gray-500">{displayRoleLabel}</p>
                         </div>
                     </div>
                 </div>

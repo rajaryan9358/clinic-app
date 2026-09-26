@@ -202,20 +202,22 @@ export default function DoctorSetupFlowPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { context } = useScope() || {};
+    const { context, roleKind, can } = useScope() || {};
+    const canAddSchedule = Boolean(can?.('doctor_schedules.create'));
+    const canRemoveSchedule = Boolean(can?.('doctor_schedules.delete'));
     const [searchParams] = useSearchParams();
 
-    if (user?.role === 'doctor' && context?.active_doctor_id && String(context.active_doctor_id) !== String(id)) {
+    if (roleKind === 'doctor' && context?.active_doctor_id && String(context.active_doctor_id) !== String(id)) {
         return <Navigate to="/workflows/my-profile" replace />;
     }
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
     const allowedTabs = useMemo(() => {
-        if (String(user?.role || '') === 'doctor') {
+        if (roleKind === 'doctor') {
             return new Set(['calendar', 'availability', 'summary', 'profile']);
         }
         return new Set(['calendar', 'availability', 'summary', 'profile', 'services']);
-    }, [user?.role]);
+    }, [roleKind]);
     const initialTab = useMemo(() => {
         const t = String(searchParams.get('tab') || '').trim();
         return allowedTabs.has(t) ? t : 'calendar';
@@ -1060,7 +1062,7 @@ export default function DoctorSetupFlowPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                         <h3 className="text-lg font-semibold">Profile</h3>
-                        {user?.role !== 'doctor' && (
+                        {roleKind !== 'doctor' && (
                             <button
                                 type="button"
                                 onClick={saveProfile}
@@ -1084,7 +1086,7 @@ export default function DoctorSetupFlowPage() {
                                 </div>
                             )}
                         </div>
-                        {user?.role !== 'doctor' && (
+                        {roleKind !== 'doctor' && (
                             <div>
                                 <p className="text-sm font-medium text-slate-700">Doctor Photo</p>
                                 <p className="mt-0.5 text-xs text-slate-500">Portrait or square · JPG, PNG, WebP · max 2 MB</p>
@@ -1111,7 +1113,7 @@ export default function DoctorSetupFlowPage() {
                         )}
                     </div>
 
-                    {user?.role === 'doctor' ? (
+                    {roleKind === 'doctor' ? (
                         <div className="grid gap-4 md:grid-cols-2">
                             {[
                                 { label: 'Title',               value: profileDraft.title },
@@ -1280,14 +1282,16 @@ export default function DoctorSetupFlowPage() {
                                     <h3 className="text-lg font-semibold">Add Schedule</h3>
                                     <p className="mt-0.5 text-xs text-slate-500">Recurring weekly working hours per day</p>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={addSchedule}
-                                    disabled={scheduleSaving}
-                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                >
-                                    {scheduleSaving ? 'Saving…' : 'Add'}
-                                </button>
+                                {canAddSchedule ? (
+                                    <button
+                                        type="button"
+                                        onClick={addSchedule}
+                                        disabled={scheduleSaving}
+                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    >
+                                        {scheduleSaving ? 'Saving…' : 'Add'}
+                                    </button>
+                                ) : null}
                             </div>
 
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1380,7 +1384,9 @@ export default function DoctorSetupFlowPage() {
                                                                             <span className="rounded-full border px-2 py-0.5 text-xs font-medium opacity-80">{modeLabel(s.consultation_mode)}</span>
                                                                             {!s.is_active && <span className="text-xs opacity-60">(inactive)</span>}
                                                                         </div>
-                                                                        <button type="button" onClick={() => removeSchedule(s.id)} className="rounded-lg border border-current px-2 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                                        {canRemoveSchedule ? (
+                                                                            <button type="button" onClick={() => removeSchedule(s.id)} className="rounded-lg border border-current px-2 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                                        ) : null}
                                                                     </div>
                                                                     {slots.length > 0 && (
                                                                         <div className="mt-2 flex flex-wrap gap-1">
@@ -1410,14 +1416,16 @@ export default function DoctorSetupFlowPage() {
                                     <h3 className="text-lg font-semibold">Add Exception</h3>
                                     <p className="mt-0.5 text-xs text-slate-500">One-off overrides: leave, block or special hours</p>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={addException}
-                                    disabled={exceptionSaving}
-                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                >
-                                    {exceptionSaving ? 'Saving…' : 'Add'}
-                                </button>
+                                {canAddSchedule ? (
+                                    <button
+                                        type="button"
+                                        onClick={addException}
+                                        disabled={exceptionSaving}
+                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    >
+                                        {exceptionSaving ? 'Saving…' : 'Add'}
+                                    </button>
+                                ) : null}
                             </div>
 
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1484,7 +1492,9 @@ export default function DoctorSetupFlowPage() {
                                                     )}
                                                     {ex.reason && <span className="text-xs italic opacity-70">"{ex.reason}"</span>}
                                                 </div>
-                                                <button type="button" onClick={() => removeException(ex.id)} className="rounded-lg border border-current px-2.5 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                {canRemoveSchedule ? (
+                                                    <button type="button" onClick={() => removeException(ex.id)} className="rounded-lg border border-current px-2.5 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                ) : null}
                                             </div>
                                         );
                                     })}
@@ -2037,21 +2047,23 @@ export default function DoctorSetupFlowPage() {
                             >
                                 Cancel
                             </button>
-                            <button
-                                type="button"
-                                disabled={availSheet.mode === 'schedule' ? scheduleSaving : exceptionSaving}
-                                onClick={async () => {
-                                    if (availSheet.mode === 'schedule') {
-                                        await addSchedule();
-                                    } else {
-                                        await addException();
-                                    }
-                                    setAvailSheet({ open: false, mode: 'schedule' });
-                                }}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                            >
-                                {(availSheet.mode === 'schedule' ? scheduleSaving : exceptionSaving) ? 'Saving…' : 'Save'}
-                            </button>
+                            {canAddSchedule ? (
+                                <button
+                                    type="button"
+                                    disabled={availSheet.mode === 'schedule' ? scheduleSaving : exceptionSaving}
+                                    onClick={async () => {
+                                        if (availSheet.mode === 'schedule') {
+                                            await addSchedule();
+                                        } else {
+                                            await addException();
+                                        }
+                                        setAvailSheet({ open: false, mode: 'schedule' });
+                                    }}
+                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                >
+                                    {(availSheet.mode === 'schedule' ? scheduleSaving : exceptionSaving) ? 'Saving…' : 'Save'}
+                                </button>
+                            ) : null}
                         </div>
                     </div>
                 </div>

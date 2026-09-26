@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useScope } from '../context/ScopeContext';
 import AppIcon from './AppIcon';
 import StatusBadge from './StatusBadge';
 
@@ -59,7 +60,11 @@ function TimelineItem({ title, meta, description }) {
 
 export default function AppointmentDetailDrawer({ open, appointmentId, onClose, onChanged }) {
     const { user } = useAuth();
+    const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
+    const canCancel = Boolean(scope?.can?.('appointments.cancel'));
+    const canCheckIn = Boolean(scope?.can?.('appointments.check_in'));
+    const canPrescribe = Boolean(scope?.can?.('appointments.prescribe'));
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -233,7 +238,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
             acts.push({ label: 'No Show', status: 'no_show', style: 'orange' });
         if (!isTerminal)
             acts.push({ label: 'Cancel', status: 'cancelled', style: 'rose' });
-        return acts;
+        return acts.filter((a) => (a.status === 'cancelled' ? canCancel : canCheckIn));
     })();
     const actionStyleMap = {
         indigo:  'bg-indigo-600 hover:bg-indigo-700 text-white',
@@ -524,7 +529,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                         <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
                                         Stop Recording
                                     </button>
-                                ) : (
+                                ) : canPrescribe ? (
                                     <button
                                         type="button"
                                         onClick={startSummaryRecording}
@@ -533,7 +538,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                         <AppIcon name="section" className="h-4 w-4" />
                                         Record &amp; Generate Summary
                                     </button>
-                                )}
+                                ) : null}
                             </div>
                         ) : null}
 
@@ -580,7 +585,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                                             Stop Recording
                                         </button>
-                                    ) : (
+                                    ) : canPrescribe ? (
                                         <button
                                             type="button"
                                             onClick={startSummaryRecording}
@@ -588,7 +593,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                         >
                                             Regenerate
                                         </button>
-                                    )}
+                                    ) : null}
                                 </div>
                             </div>
                         ) : null}

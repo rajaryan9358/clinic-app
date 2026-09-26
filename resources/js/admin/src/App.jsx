@@ -45,24 +45,34 @@ function OnlySuperAdmin({ children }) {
 }
 
 function BlockDoctor({ children }) {
-    const { user } = useAuth();
-    if (user?.role === 'doctor') return <Navigate to="/workflows/appointments" replace />;
+    const scope = useScope();
+    if (scope?.roleKind === 'doctor') return <Navigate to="/workflows/appointments" replace />;
+    return children;
+}
+
+// Redirects to /dashboard unless the current user (super_admin/clinic_admin
+// kinds always pass) holds the given permission. Used to guard routes whose
+// pages assume the caller can already view/act on the resource.
+function RequirePerm({ perm, children }) {
+    const scope = useScope();
+    if (perm && !scope?.can?.(perm)) return <Navigate to="/dashboard" replace />;
     return children;
 }
 
 // Wraps the authenticated routes: when the clinic's subscription is locked
 // (context.subscription.allows_access === false or a 402 SUBSCRIPTION_REQUIRED
-// response was seen), clinic_admin is redirected to the subscription page
-// (unless already there, to avoid a redirect loop) and every other clinic
-// role sees a full-page lock screen instead of the app.
+// response was seen), a user who can manage the subscription is redirected to
+// the subscription page (unless already there, to avoid a redirect loop) and
+// every other clinic user sees a full-page lock screen instead of the app —
+// without ever calling GET /clinic/subscription, since most clinic roles
+// lack subscription.view.
 function AuthenticatedShell() {
-    const { user } = useAuth();
     const scope = useScope();
     const location = useLocation();
     const subscriptionLocked = scope?.subscriptionLocked;
 
     if (subscriptionLocked) {
-        if (user?.role === 'clinic_admin') {
+        if (scope?.can?.('subscription.manage')) {
             if (location.pathname !== '/workflows/subscription') {
                 return <Navigate to="/workflows/subscription" replace />;
             }
@@ -85,15 +95,15 @@ function AuthenticatedShell() {
                 <Route path="/billing/subscription-transactions" element={<OnlySuperAdmin><SubscriptionTransactionsPage /></OnlySuperAdmin>} />
 
                 {/* ── Clinic Admin Workflows ── */}
-                <Route path="/workflows/clinic-profile" element={<BlockSuperAdmin><ClinicProfilePage /></BlockSuperAdmin>} />
-                <Route path="/workflows/subscription" element={<BlockSuperAdmin><ClinicSubscriptionPage /></BlockSuperAdmin>} />
+                <Route path="/workflows/clinic-profile" element={<BlockSuperAdmin><RequirePerm perm="clinic_profile.view"><ClinicProfilePage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/subscription" element={<BlockSuperAdmin><RequirePerm perm="subscription.view"><ClinicSubscriptionPage /></RequirePerm></BlockSuperAdmin>} />
 
                 {/* ── Shared Workflows ── */}
-                <Route path="/workflows/create-staff" element={<CreateStaffWizardPage />} />
-                <Route path="/workflows/setup-doctor" element={<SetupDoctorWizardPage />} />
-                <Route path="/workflows/appointments" element={<BlockSuperAdmin><AppointmentsFlowPage /></BlockSuperAdmin>} />
-                <Route path="/workflows/appointments/new" element={<BlockSuperAdmin><ModuleFormPage forcedModuleKey="appointments" /></BlockSuperAdmin>} />
-                <Route path="/workflows/appointments/:id/prescription" element={<BlockSuperAdmin><PrescriptionPage /></BlockSuperAdmin>} />
+                <Route path="/workflows/create-staff" element={<RequirePerm perm="staff.create"><CreateStaffWizardPage /></RequirePerm>} />
+                <Route path="/workflows/setup-doctor" element={<RequirePerm perm="doctors.create"><SetupDoctorWizardPage /></RequirePerm>} />
+                <Route path="/workflows/appointments" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentsFlowPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/appointments/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><ModuleFormPage forcedModuleKey="appointments" /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/appointments/:id/prescription" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><PrescriptionPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/communication/delivery-issues" element={<BlockSuperAdmin><CommunicationDeliveryIssuesPage /></BlockSuperAdmin>} />
                 <Route path="/workflows/my-profile" element={<MyDoctorProfilePage />} />
                 <Route path="/workflows/my-availability" element={<DoctorAvailabilityPage />} />

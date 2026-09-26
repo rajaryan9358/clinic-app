@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useScope } from '../context/ScopeContext';
 import LineChart from '../components/charts/LineChart';
 import DonutChart from '../components/charts/DonutChart';
 import BarListChart from '../components/charts/BarListChart';
@@ -425,14 +426,19 @@ function AssistantDashboard({ data }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
     const { user } = useAuth();
+    const { context } = useScope() || {};
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
 
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const isSuperAdmin = user?.role === 'super_admin';
-    const isClinicAdmin = user?.role === 'clinic_admin';
-    const isReceptionist = user?.role === 'receptionist';
-    const isAssistant = user?.role === 'assistant';
+    const roleKind = context?.role_kind;
+    const isClinicAdmin = roleKind === 'clinic_admin';
+    // Staff kind with role_limits_assigned_doctors set sees the assistant
+    // dashboard; every other staff kind (default: receptionist-style role or
+    // any custom staff role without the limit) sees the receptionist one.
+    const isAssistant = roleKind === 'staff' && Boolean(context?.role_limits_assigned_doctors);
+    const isReceptionist = roleKind === 'staff' && !isAssistant;
 
     useEffect(() => {
         const load = async () => {

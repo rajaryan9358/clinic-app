@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import client from '../../api/client';
-import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
 
@@ -40,10 +39,9 @@ function modeLabel(mode) {
 
 // ── page ──────────────────────────────────────────────────────────────────────
 export default function DoctorAvailabilityPage() {
-    const { user } = useAuth();
-    const { context } = useScope() || {};
+    const { context, roleKind } = useScope() || {};
 
-    if (user?.role !== 'doctor') return <Navigate to="/dashboard" replace />;
+    if (roleKind !== 'doctor') return <Navigate to="/dashboard" replace />;
 
     const doctorId = context?.active_doctor_id;
     const base = '/clinic';

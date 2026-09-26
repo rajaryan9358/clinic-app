@@ -3,8 +3,9 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import client from '../api/client';
 import FormRenderer from '../components/FormRenderer';
 import { modules } from '../config/modules';
-import { allowedStaffRolesForCreator, canAccessModule, canCreateModule, isSuperAdminHiddenModuleKey, NON_CREATABLE_MODULE_KEYS } from '../config/access';
+import { allowedStaffRolesForCreator, canAccessModule, canCreateModule, canEditModule, isSuperAdminHiddenModuleKey, NON_CREATABLE_MODULE_KEYS } from '../config/access';
 import { useAuth } from '../context/AuthContext';
+import { useScope } from '../context/ScopeContext';
 
 export default function ModuleFormPage({ forcedModuleKey } = {}) {
     const { moduleKey: routeModuleKey, id } = useParams();
@@ -14,17 +15,22 @@ export default function ModuleFormPage({ forcedModuleKey } = {}) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
+    const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
     if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
         return <Navigate to="/dashboard" replace />;
     }
-    
-    if (!canAccessModule(user?.role, moduleKey)) {
+
+    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
         return <Navigate to="/dashboard" replace />;
     }
 
-    if (!isEdit && !canCreateModule(user?.role, moduleKey)) {
+    if (!isEdit && !canCreateModule(user?.role, moduleKey, scope?.can)) {
+        return <Navigate to={`/modules/${moduleKey}`} replace />;
+    }
+
+    if (isEdit && !canEditModule(user?.role, moduleKey, scope?.can)) {
         return <Navigate to={`/modules/${moduleKey}`} replace />;
     }
 

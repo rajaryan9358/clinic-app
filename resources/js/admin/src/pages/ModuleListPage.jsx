@@ -8,8 +8,9 @@ import AppIcon from '../components/AppIcon';
 import StatusBadge from '../components/StatusBadge';
 import ClinicStatusBadge from '../components/billing/ClinicStatusBadge.jsx';
 import { modules } from '../config/modules';
-import { canAccessModule, canCreateModule, isSuperAdminHiddenModuleKey } from '../config/access';
+import { canAccessModule, canCreateModule, canDeleteModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
+import { useScope } from '../context/ScopeContext';
 
 function prettyLabel(key) {
     return String(key)
@@ -88,13 +89,14 @@ export default function ModuleListPage({ forcedModuleKey } = {}) {
     const moduleKey = forcedModuleKey || routeModuleKey;
     const navigate = useNavigate();
     const { user } = useAuth();
+    const scope = useScope();
     const module = modules[moduleKey];
 
     if (user?.role === 'super_admin' && isSuperAdminHiddenModuleKey(moduleKey)) {
         return <Navigate to="/dashboard" replace />;
     }
 
-    if (!canAccessModule(user?.role, moduleKey)) {
+    if (!canAccessModule(user?.role, moduleKey, scope?.can)) {
         return <Navigate to="/dashboard" replace />;
     }
 
@@ -523,8 +525,10 @@ Write an appropriate reply.`;
     // Clinics are created through the onboarding wizard, not the generic form.
     const addHref = moduleKey === 'clinics' ? '/workflows/onboard-clinic' : `/modules/${moduleKey}/new`;
 
-    const canCreate = canCreateModule(user?.role, moduleKey);
-    const isReadOnly = ['receptionist', 'doctor'].includes(user?.role) && moduleKey === 'services';
+    const canCreate = canCreateModule(user?.role, moduleKey, scope?.can);
+    const canEdit = canEditModule(user?.role, moduleKey, scope?.can);
+    const canDelete = canDeleteModule(user?.role, moduleKey, scope?.can);
+    const isReadOnly = !canEdit;
 
 
     return (
@@ -918,7 +922,7 @@ Write an appropriate reply.`;
                         setViewRecord(row);
                     }}
                     onEdit={isReadOnly ? undefined : (row) => navigate(`/modules/${moduleKey}/${row.id}/edit`)}
-                    onDelete={isReadOnly || moduleKey === 'clinicSettings'
+                    onDelete={!canDelete || moduleKey === 'clinicSettings'
                         ? undefined
                         : (row) => {
                             setConfirm({ open: true, row, busy: false });
