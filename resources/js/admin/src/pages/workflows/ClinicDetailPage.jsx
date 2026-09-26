@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
 import ClinicStatusBadge from '../../components/billing/ClinicStatusBadge.jsx';
 import SubscriptionCard from '../../components/billing/SubscriptionCard.jsx';
+import { useAssignableRoles } from '../../hooks/useAssignableRoles';
 import { formatDate } from '../../utils/dateFormat';
 
 const TABS = [
@@ -363,17 +364,54 @@ function TextInput({ value, onChange, placeholder, type = 'text', disabled = fal
     );
 }
 
-function SelectInput({ value, onChange, options }) {
+function SelectInput({ value, onChange, options, disabled = false }) {
     return (
         <select
             value={value || ''}
+            disabled={disabled}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className={`w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-gray-50 text-gray-500' : ''}`}
         >
             {options.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
             ))}
         </select>
+    );
+}
+
+function DoctorMultiSelect({ options, value, onChange, loading, error }) {
+    const selected = Array.isArray(value) ? value.map(String) : [];
+    const toggle = (id) => {
+        const idStr = String(id);
+        const next = selected.includes(idStr) ? selected.filter((v) => v !== idStr) : [...selected, idStr];
+        onChange(next);
+    };
+
+    if (loading) return <p className="text-sm text-gray-400">Loading doctors…</p>;
+    if (error) return <p className="text-sm text-red-600">{error}</p>;
+    if (!options.length) return <p className="text-sm text-gray-400">No doctors yet.</p>;
+
+    return (
+        <div className="max-h-48 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+            {options.map((doc) => {
+                const checked = selected.includes(String(doc.id));
+                const name = [doc.title, doc.full_name].filter(Boolean).join(' ').trim() || `Doctor #${doc.id}`;
+                return (
+                    <label
+                        key={doc.id}
+                        className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors ${checked ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggle(doc.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-gray-800">{name}</span>
+                    </label>
+                );
+            })}
+        </div>
     );
 }
 
@@ -820,6 +858,16 @@ function StaffTab({ clinicId }) {
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
 
+    // Roles assignable to a clinic's staff from this super admin screen:
+    // staff/clinic_admin kinds only (never doctor or the hidden super_admin
+    // role — spec §4/§5, `useAssignableRoles` already filters to those kinds
+    // for the `/super-admin` base).
+    const { roles } = useAssignableRoles('/super-admin');
+    const roleOptions = useMemo(() => roles.map((r) => ({ value: r.name, label: r.label })), [roles]);
+    const currentRoleMeta = useMemo(() => roles.find((r) => r.name === form.role) || null, [roles, form.role]);
+
+    const [doctorOptions, setDoctorOptions] = useState({ loading: true, error: '', items: [] });
+
     const load = async () => {
         setLoading(true);
         setError('');
@@ -835,16 +883,40 @@ function StaffTab({ clinicId }) {
 
     useEffect(() => { load(); }, [clinicId]);
 
+    useEffect(() => {
+        let cancelled = false;
+        setDoctorOptions((p) => ({ ...p, loading: true, error: '' }));
+        client.get('/super-admin/doctors', { params: { clinic_id: clinicId, per_page: 200 } })
+            .then((res) => {
+                if (cancelled) return;
+                setDoctorOptions({ loading: false, error: '', items: Array.isArray(res.data?.data) ? res.data.data : [] });
+            })
+            .catch((e) => {
+                if (cancelled) return;
+                setDoctorOptions({ loading: false, error: e?.response?.data?.message || 'Failed to load doctors', items: [] });
+            });
+        return () => { cancelled = true; };
+    }, [clinicId]);
+
     const openAdd = () => {
-        setForm({ clinic_id: clinicId, full_name: '', email: '', phone: '', password: '', role: 'receptionist' });
+        const fallback = roles.find((r) => r.name === 'receptionist') || roles[0];
+        setForm({ clinic_id: clinicId, full_name: '', email: '', phone: '', password: '', role: fallback?.name || '', doctor_ids: [] });
         setSaveError('');
         setSheet({ open: true, user: null });
     };
 
-    const openEdit = (user) => {
-        setForm({ ...user, password: '' });
+    const openEdit = async (user) => {
         setSaveError('');
+        setForm({ ...user, password: '', doctor_ids: [] });
         setSheet({ open: true, user });
+        try {
+            // The list row doesn't carry doctor_ids; fetch the full record so an
+            // existing assignment isn't blanked out by an unseen empty picker.
+            const { data } = await client.get(`/super-admin/users/${user.id}`);
+            setForm({ ...data.data, password: '' });
+        } catch {
+            // Keep the list row's fields; doctor_ids stays empty if this fails.
+        }
     };
 
     const closeSheet = () => setSheet({ open: false, user: null });
@@ -856,6 +928,7 @@ function StaffTab({ clinicId }) {
         try {
             const payload = { ...form };
             if (!payload.password) delete payload.password;
+            if (!currentRoleMeta?.limit_to_assigned_doctors) delete payload.doctor_ids;
             if (sheet.user) {
                 await client.put(`/super-admin/users/${sheet.user.id}`, payload);
             } else {
@@ -943,12 +1016,19 @@ function StaffTab({ clinicId }) {
                         <TextInput type="password" {...f('password')} placeholder="••••••••" />
                     </Field>
                     <Field label="Role" required>
-                        <SelectInput {...f('role')} options={[
-                            { value: 'clinic_admin', label: 'Clinic Admin' },
-                            { value: 'receptionist', label: 'Receptionist' },
-                            { value: 'assistant', label: 'Assistant' },
-                        ]} />
+                        <SelectInput {...f('role')} options={roleOptions} />
                     </Field>
+                    {currentRoleMeta?.limit_to_assigned_doctors ? (
+                        <Field label="Assigned Doctors" hint="Only see these doctors' patients and appointments.">
+                            <DoctorMultiSelect
+                                options={doctorOptions.items}
+                                loading={doctorOptions.loading}
+                                error={doctorOptions.error}
+                                value={form.doctor_ids}
+                                onChange={(next) => setForm((p) => ({ ...p, doctor_ids: next }))}
+                            />
+                        </Field>
+                    ) : null}
                 </div>
             </Sheet>
         </>

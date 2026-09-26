@@ -16,6 +16,7 @@ const ROUTE_ICONS = {
     '/workflows/my-profile': 'user-circle',
     '/workflows/communication/delivery-issues': 'alert-triangle',
     '/workflows/subscription': 'credit-card',
+    '/workflows/roles': 'key',
 };
 
 // Map module keys → icon names

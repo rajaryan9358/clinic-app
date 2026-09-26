@@ -62,11 +62,18 @@ function InputControl({ field, value, onChange, relationOptions, relationLoading
     }
 
     if (field.type === 'select') {
+        // Options are either plain strings (value === label, e.g. a status
+        // enum) or { value, label } objects (e.g. a role picker showing a
+        // human label while sending the role's name) — normalize once here.
+        const options = (field.options || []).map((opt) => (
+            typeof opt === 'string' ? { value: opt, label: opt } : opt
+        ));
+
         return (
             <select className={inputBase} value={value ?? ''} onChange={(e) => onChange(field.key, e.target.value)}>
                 <option value="">Select {field.label}</option>
-                {(field.options || []).map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
+                {options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
             </select>
         );

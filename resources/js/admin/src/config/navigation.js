@@ -49,6 +49,7 @@ export const navigationByRole = {
             section: 'Admin',
             items: [
                 moduleItem('auditLogs', { label: 'Audit Logs' }),
+                routeItem('/workflows/roles', 'Roles'),
             ],
         },
         {

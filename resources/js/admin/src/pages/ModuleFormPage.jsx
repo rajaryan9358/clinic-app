@@ -3,9 +3,10 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import client from '../api/client';
 import FormRenderer from '../components/FormRenderer';
 import { modules } from '../config/modules';
-import { allowedStaffRolesForCreator, canAccessModule, canCreateModule, canEditModule, isSuperAdminHiddenModuleKey, NON_CREATABLE_MODULE_KEYS } from '../config/access';
+import { canAccessModule, canCreateModule, canEditModule, isSuperAdminHiddenModuleKey, NON_CREATABLE_MODULE_KEYS } from '../config/access';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
+import { useAssignableRoles } from '../hooks/useAssignableRoles';
 
 // The permission checks live in the default-exported wrapper below, not
 // here, so this component can call every hook it needs unconditionally.
@@ -26,6 +27,13 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
     const isUserCreate = moduleKey === 'users' && !isEdit;
     const isDoctorCreate = moduleKey === 'doctors' && !isEdit;
     const isUserModule = moduleKey === 'users';
+
+    // Roles assignable via this form (spec §3/§4): staff-kind roles for a
+    // clinic actor (plus clinic_admin when the actor is clinic_admin kind —
+    // `/clinic/roles` already applies that filter server-side), or
+    // staff/clinic_admin-kind roles for the super admin. Doctor-kind roles
+    // and the hidden super_admin role are never listed by either endpoint.
+    const rolesState = useAssignableRoles(isUserModule ? base : null);
 
     // Pre-fill appointment fields from query params (e.g. when opened from the doctor calendar).
     const [values, setValues] = useState(() => {
@@ -66,27 +74,51 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
     const [serviceOptions, setServiceOptions] = useState({ loading: false, error: '', items: [] });
 
     const fields = module?.formFields || [];
+
+    // The super_admin role is deliberately excluded from GET /*/roles (it's
+    // hidden from the builder entirely — spec §5), so the super admin's own
+    // users form offers it as a synthetic option, but only while creating a
+    // clinic-less user (spec §4: "super_admin only for clinic-less users").
+    const roleOptions = useMemo(() => {
+        const list = (rolesState.roles || []).map((r) => ({
+            value: r.name,
+            label: r.label,
+            limitToAssignedDoctors: Boolean(r.limit_to_assigned_doctors),
+        }));
+        if (isUserModule && user?.role === 'super_admin' && !values?.clinic_id) {
+            list.push({ value: 'super_admin', label: 'Super Admin', limitToAssignedDoctors: false });
+        }
+        return list;
+    }, [rolesState.roles, isUserModule, user?.role, values?.clinic_id]);
+
     const fieldsForRenderer = useMemo(() => {
         if (!isAppointmentCreate) {
             if (isUserModule) {
-                const allowedRoles = new Set(allowedStaffRolesForCreator(user?.role));
+                const allowedRoles = new Map(roleOptions.map((o) => [o.value, o]));
                 const currentRole = String(values?.role || '');
+                const currentRoleOption = allowedRoles.get(currentRole);
 
                 return fields
                     .map((f) => {
-                        if (f.key !== 'role' || f.type !== 'select') return f;
-
-                        // If the record's role is outside what this actor can manage, do not
-                        // render a dropdown that exposes disallowed roles.
-                        if (isEdit && currentRole && !allowedRoles.has(currentRole)) {
-                            return { ...f, hidden: true };
+                        if (f.key === 'role' && f.type === 'select') {
+                            // If the record's role is outside what this actor can manage, do not
+                            // render a dropdown that exposes disallowed roles.
+                            if (isEdit && currentRole && !currentRoleOption) {
+                                return { ...f, hidden: true };
+                            }
+                            return {
+                                ...f,
+                                options: roleOptions.map((o) => ({ value: o.value, label: o.label })),
+                            };
                         }
-
-                        const options = Array.isArray(f.options) ? f.options : [];
-                        return {
-                            ...f,
-                            options: options.filter((opt) => allowedRoles.has(typeof opt === 'string' ? opt : opt?.value)),
-                        };
+                        if (f.key === 'doctor_ids') {
+                            // Only meaningful for a role with limit_to_assigned_doctors (spec §4/§6).
+                            if (!currentRoleOption?.limitToAssignedDoctors) {
+                                return { ...f, hidden: true };
+                            }
+                            return f;
+                        }
+                        return f;
                     })
                     .filter((f) => !f?.hidden);
             }
@@ -112,7 +144,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         // Step 4: rest of selections
         const step4Hidden = new Set([...alwaysHidden, 'clinic_id', 'doctor_id', 'service_id']);
         return fields.filter((f) => !step4Hidden.has(f.key));
-    }, [fields, isAppointmentCreate, appointmentStep, user?.role, isUserModule, isEdit, values?.role]);
+    }, [fields, isAppointmentCreate, appointmentStep, user?.role, isUserModule, isEdit, values?.role, roleOptions]);
 
     const selectedPatient = useMemo(() => {
         const pid = values?.patient_id;

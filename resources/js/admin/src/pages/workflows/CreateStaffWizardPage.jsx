@@ -2,40 +2,51 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import FormRenderer from '../../components/FormRenderer';
-import { allowedStaffRolesForCreator } from '../../config/access';
+import { useAssignableRoles } from '../../hooks/useAssignableRoles';
 import { useAuth } from '../../context/AuthContext';
 
 const text = (key, label, required = false) => ({ key, label, type: 'text', required });
 const select = (key, label, options, required = false) => ({ key, label, type: 'select', options, required });
+const relation = (key, label, resource, multiple = false) => ({ key, label, type: 'relation', resource, multiple });
 
 export default function CreateStaffWizardPage() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const isClinic = user?.role !== 'super_admin';
-    const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
-    const roleOptions = useMemo(() => {
-        // Clinic wizard never creates super_admin / clinic_admin.
-        return allowedStaffRolesForCreator(user?.role).filter((r) => !['super_admin', 'clinic_admin'].includes(String(r)));
-    }, [user?.role]);
+    // This wizard is clinic-only (see the redirect below); `/clinic/roles`
+    // already returns staff-kind roles plus clinic_admin when the actor is
+    // clinic_admin kind — no further filtering needed here (spec §4).
+    const { loading: rolesLoading, roles } = useAssignableRoles(isClinic ? '/clinic' : null);
+    const roleOptions = useMemo(() => roles.map((r) => ({ value: r.name, label: r.label })), [roles]);
 
     const [values, setValues] = useState({
         full_name: '',
         email: '',
         phone: '',
         password: '',
-        role: 'receptionist',
+        role: '',
         status: 'active',
+        doctor_ids: [],
     });
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        if (!roleOptions.length) return;
-        if (!roleOptions.includes(String(values.role || ''))) {
-            setValues((p) => ({ ...p, role: roleOptions[0] }));
-        }
-    }, [roleOptions, values.role]);
+        if (!roles.length) return;
+        if (roles.some((r) => r.name === values.role)) return;
+        const fallback = roles.find((r) => r.name === 'receptionist') || roles[0];
+        setValues((p) => ({ ...p, role: fallback.name }));
+    }, [roles, values.role]);
+
+    const currentRole = useMemo(() => roles.find((r) => r.name === values.role) || null, [roles, values.role]);
+
+    // Clear a stale doctor selection if the role changes to one that no
+    // longer scopes access to assigned doctors (spec §4/§6).
+    useEffect(() => {
+        if (currentRole?.limit_to_assigned_doctors) return;
+        setValues((p) => (p.doctor_ids?.length ? { ...p, doctor_ids: [] } : p));
+    }, [currentRole]);
 
     if (!isClinic) {
         return (
@@ -43,6 +54,14 @@ export default function CreateStaffWizardPage() {
                 <h2 className="text-lg font-semibold">Use the Super Admin flows</h2>
                 <p className="mt-1 text-sm text-slate-600">Staff creation from this wizard is intended for clinic users.</p>
                 <Link to="/dashboard" className="mt-4 inline-block rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white">Go to Dashboard</Link>
+            </div>
+        );
+    }
+
+    if (rolesLoading) {
+        return (
+            <div className="flex items-center justify-center py-14">
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
             </div>
         );
     }
@@ -58,6 +77,7 @@ export default function CreateStaffWizardPage() {
         text('password', 'Password', true),
         select('role', 'Role', roleOptions, true),
         select('status', 'Status', ['active', 'inactive', 'blocked']),
+        ...(currentRole?.limit_to_assigned_doctors ? [relation('doctor_ids', 'Assigned Doctors', 'doctors', true)] : []),
     ];
 
     const submit = async () => {
@@ -69,7 +89,11 @@ export default function CreateStaffWizardPage() {
         }
         setSaving(true);
         try {
-            await client.post(`${base}/users`, values);
+            const payload = { ...values };
+            if (!currentRole?.limit_to_assigned_doctors) {
+                delete payload.doctor_ids;
+            }
+            await client.post('/clinic/users', payload);
             navigate('/modules/users');
         } catch (e) {
             setError(e?.response?.data?.message || e?.message || 'Failed to create staff user');

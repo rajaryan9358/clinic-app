@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -79,9 +79,35 @@ export default function SetupDoctorWizardPage() {
         buffer_time_minutes: '5',
         status: 'active',
         password: '',
+        login_role: 'doctor',
     });
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
+
+    // Doctor-kind roles for the optional "Login role" picker (Task 7): the
+    // system `doctor` role always exists, so this list starts non-empty and
+    // a custom doctor-kind role (created in the super admin Roles page)
+    // simply appears alongside it. If the actor lacks staff.view (the
+    // permission this endpoint's default branch is gated on — its
+    // `?kind=doctor` branch reuses the same gate) the picker just falls back
+    // to the plain "Doctor" default below.
+    const [doctorRoles, setDoctorRoles] = useState({ loading: true, items: [] });
+
+    useEffect(() => {
+        if (!isClinic) return;
+        let cancelled = false;
+        client.get('/clinic/roles', { params: { kind: 'doctor' } })
+            .then((res) => {
+                if (cancelled) return;
+                const items = Array.isArray(res.data?.data) ? res.data.data : [];
+                setDoctorRoles({ loading: false, items });
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setDoctorRoles({ loading: false, items: [] });
+            });
+        return () => { cancelled = true; };
+    }, [isClinic]);
 
     if (!isClinic) {
         return (
@@ -122,8 +148,20 @@ export default function SetupDoctorWizardPage() {
                 slot_duration_minutes: values.slot_duration_minutes !== '' ? Number(values.slot_duration_minutes) : 15,
                 buffer_time_minutes: values.buffer_time_minutes !== '' ? Number(values.buffer_time_minutes) : 5,
                 status: values.status,
-                password: values.password || undefined,
             };
+
+            const password = String(values.password || '').trim();
+            if (password) {
+                payload.create_linked_user = true;
+                payload.linked_user = {
+                    full_name: values.full_name || undefined,
+                    email: values.email || undefined,
+                    phone: values.phone || undefined,
+                    password,
+                    role: values.login_role || undefined,
+                };
+            }
+
             await client.post(`${base}/doctors`, payload);
             navigate('/modules/doctors');
         } catch (e) {
@@ -263,6 +301,15 @@ export default function SetupDoctorWizardPage() {
                         <Field label="Password" hint="Leave blank to skip login creation.">
                             <TextInput type="password" value={values.password} onChange={set('password')} placeholder="••••••••" />
                         </Field>
+                        {doctorRoles.items.length > 1 ? (
+                            <Field label="Login Role" hint="Which doctor-kind role this login gets.">
+                                <SelectInput
+                                    value={values.login_role}
+                                    onChange={set('login_role')}
+                                    options={doctorRoles.items.map((r) => ({ value: r.name, label: r.label }))}
+                                />
+                            </Field>
+                        ) : null}
                     </SectionCard>
 
                     <div className="flex justify-between pt-1">

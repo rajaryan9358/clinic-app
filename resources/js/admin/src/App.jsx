@@ -22,6 +22,7 @@ import DoctorAvailabilityPage from './pages/workflows/DoctorAvailabilityPage';
 import ClinicDetailPage from './pages/workflows/ClinicDetailPage';
 import ClinicProfilePage from './pages/workflows/ClinicProfilePage';
 import SystemSettingsPage from './pages/workflows/SystemSettingsPage';
+import RolesPage from './pages/workflows/RolesPage';
 import PlansPage from './pages/billing/PlansPage';
 import SubscriptionTransactionsPage from './pages/billing/SubscriptionTransactionsPage';
 import ClinicSubscriptionPage from './pages/billing/ClinicSubscriptionPage';
@@ -118,6 +119,7 @@ function AuthenticatedShell() {
                 <Route path="/workflows/clinics" element={<OnlySuperAdmin><ModuleListPage forcedModuleKey="clinics" /></OnlySuperAdmin>} />
                 <Route path="/workflows/clinics/:id" element={<OnlySuperAdmin><ClinicDetailPage /></OnlySuperAdmin>} />
                 <Route path="/workflows/system-settings" element={<OnlySuperAdmin><SystemSettingsPage /></OnlySuperAdmin>} />
+                <Route path="/workflows/roles" element={<OnlySuperAdmin><RolesPage /></OnlySuperAdmin>} />
                 <Route path="/billing/plans" element={<OnlySuperAdmin><PlansPage /></OnlySuperAdmin>} />
                 <Route path="/billing/subscription-transactions" element={<OnlySuperAdmin><SubscriptionTransactionsPage /></OnlySuperAdmin>} />
 

@@ -107,13 +107,3 @@ export function canAccessModule(role, moduleKey, can) {
 export function isAutoDocRole(role) {
     return String(role || '') === 'doctor';
 }
-
-/** Which staff roles the current actor is allowed to create/manage (UI hint; backend is source of truth). */
-export function allowedStaffRolesForCreator(actorRole) {
-    const r = String(actorRole || '');
-    // NOTE: creating doctor logins is handled via doctor onboarding (linked user),
-    // not the generic staff user form.
-    if (r === 'super_admin') return ['super_admin', 'clinic_admin', 'receptionist', 'assistant'];
-    if (r === 'clinic_admin') return ['receptionist', 'assistant'];
-    return [];
-}
