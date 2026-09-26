@@ -874,12 +874,14 @@ export default function AppointmentsFlowPage() {
                     >
                         Download PDF report
                     </button>
-                    <Link
-                        to="/workflows/appointments/new"
-                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    >
-                        New Appointment
-                    </Link>
+                    {scope?.can?.('appointments.create') ? (
+                        <Link
+                            to="/workflows/appointments/new"
+                            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                        >
+                            New Appointment
+                        </Link>
+                    ) : null}
                 </div>
             </div>
 

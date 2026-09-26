@@ -39,9 +39,12 @@ function modeLabel(mode) {
 
 // ── page ──────────────────────────────────────────────────────────────────────
 export default function DoctorAvailabilityPage() {
-    const { context, roleKind } = useScope() || {};
+    const { context, roleKind, ready } = useScope() || {};
 
-    if (roleKind !== 'doctor') return <Navigate to="/dashboard" replace />;
+    // Wait for the scope context to load before deciding: roleKind is empty
+    // during that brief window, and redirecting on that would incorrectly
+    // bounce a real doctor off their own availability page on page load.
+    if (ready && roleKind !== 'doctor') return <Navigate to="/dashboard" replace />;
 
     const doctorId = context?.active_doctor_id;
     const base = '/clinic';
