@@ -27,9 +27,11 @@ use App\Http\Controllers\Api\Clinic\UserController as ClinicUserController;
 use App\Http\Controllers\Api\Clinic\WhatsappConversationController as ClinicWhatsappConversationController;
 use App\Http\Controllers\Api\Clinic\WhatsappFlowSessionController as ClinicWhatsappFlowSessionController;
 use App\Http\Controllers\Api\Clinic\WhatsappMessageController as ClinicWhatsappMessageController;
+use App\Http\Controllers\Api\Portal\AppointmentController as PortalAppointmentController;
 use App\Http\Controllers\Api\Portal\AuthController as PortalAuthController;
 use App\Http\Controllers\Api\Portal\ConsentController as PortalConsentController;
 use App\Http\Controllers\Api\Portal\DashboardController as PortalDashboardController;
+use App\Http\Controllers\Api\Portal\DoctorController as PortalDoctorController;
 use App\Http\Controllers\Api\Portal\FamilyController as PortalFamilyController;
 use App\Http\Controllers\Api\Portal\LinkController as PortalLinkController;
 use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
@@ -122,6 +124,15 @@ Route::prefix('portal')->group(function () {
 
             Route::get('family', [PortalFamilyController::class, 'index']);
             Route::post('family', [PortalFamilyController::class, 'store']);
+
+            Route::get('appointments', [PortalAppointmentController::class, 'index']);
+            Route::get('appointments/{id}', [PortalAppointmentController::class, 'show']);
+            Route::post('appointments', [PortalAppointmentController::class, 'store']);
+            Route::post('appointments/{id}/cancel', [PortalAppointmentController::class, 'cancel']);
+            Route::post('appointments/{id}/reschedule', [PortalAppointmentController::class, 'reschedule']);
+
+            Route::get('doctors', [PortalDoctorController::class, 'index']);
+            Route::get('doctors/{id}/slots', [PortalDoctorController::class, 'slots']);
         });
     });
 });

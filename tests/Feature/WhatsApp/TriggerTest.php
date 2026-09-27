@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\WhatsApp;
 
+use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\AppointmentPrescription;
+use App\Models\AppointmentStatusLog;
 use App\Models\Clinic;
 use App\Models\Doctor;
 use App\Models\DoctorSchedule;
@@ -158,6 +160,68 @@ class TriggerTest extends TestCase
             ->where('notification_type', 'booking_confirmed')
             ->count());
 
+        $this->assertCount(1, $this->fake->sent);
+        $this->assertSame('booking_confirmed', $this->fake->sent[0]['template']);
+    }
+
+    /**
+     * Task 5 (patient-portal booking): AppointmentService::create()'s
+     * $source parameter defaults to 'staff' (unchanged behaviour above);
+     * a 'patient' booking with booking_channel 'portal' must record the
+     * status log with source 'patient' and send no WhatsApp at all — the
+     * confirmation waits until staff/super-admin actually confirms it.
+     */
+    public function test_portal_channel_booking_sends_no_whatsapp_message(): void
+    {
+        $date = Carbon::now()->addDays(3)->startOfDay();
+        $this->scheduleFor($date);
+
+        $appointment = app(AppointmentService::class)->create([
+            'clinic_id' => $this->clinic->id,
+            'doctor_id' => $this->doctor->id,
+            'patient_id' => $this->patient->id,
+            'appointment_date' => $date->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '10:30',
+            'visit_type' => 'new',
+            'booking_channel' => 'portal',
+            'status' => 'pending',
+        ], 'patient');
+
+        $this->assertSame(0, WhatsappMessage::where('appointment_id', $appointment->id)->count());
+        $this->assertCount(0, $this->fake->sent);
+
+        $log = AppointmentStatusLog::where('appointment_id', $appointment->id)->first();
+        $this->assertNotNull($log);
+        $this->assertSame('patient', $log->source);
+    }
+
+    /**
+     * changeStatus() only fires bookingConfirmed for a pending -> confirmed
+     * transition when booking_channel is 'portal' — this is what lets
+     * staff confirming a portal booking send the (only) confirmation.
+     */
+    public function test_confirming_a_portal_booking_sends_booking_confirmed(): void
+    {
+        $date = Carbon::now()->addDays(3)->startOfDay();
+        $this->scheduleFor($date);
+
+        $appointment = app(AppointmentService::class)->create([
+            'clinic_id' => $this->clinic->id,
+            'doctor_id' => $this->doctor->id,
+            'patient_id' => $this->patient->id,
+            'appointment_date' => $date->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '10:30',
+            'visit_type' => 'new',
+            'booking_channel' => 'portal',
+            'status' => 'pending',
+        ], 'patient');
+
+        app(AppointmentService::class)->changeStatus($appointment, AppointmentStatus::CONFIRMED);
+
+        $this->assertSame(1, WhatsappMessage::where('appointment_id', $appointment->id)
+            ->where('notification_type', 'booking_confirmed')->count());
         $this->assertCount(1, $this->fake->sent);
         $this->assertSame('booking_confirmed', $this->fake->sent[0]['template']);
     }

@@ -290,11 +290,65 @@ class AppointmentService
         return sprintf('%02d:%02d', $h, $m);
     }
 
-    public function create(array $data): Appointment
+    /**
+     * Throws when the doctor already has a non-cancelled/rescheduled
+     * appointment overlapping [start, end) (or exactly at $start when no
+     * $end is given) on $date. Extracted from reschedule()'s conflict
+     * query so create() (for source 'patient') can reuse the exact same
+     * check.
+     */
+    public function assertSlotFree(int $clinicId, int $doctorId, string $date, string $start, ?string $end, ?int $excludeAppointmentId = null): void
+    {
+        $conflictQuery = Appointment::query()
+            ->forClinic($clinicId)
+            ->where('doctor_id', $doctorId)
+            ->whereDate('appointment_date', $date)
+            ->whereNotIn('status', [AppointmentStatus::CANCELLED->value, AppointmentStatus::RESCHEDULED->value]);
+
+        if ($excludeAppointmentId) {
+            $conflictQuery->whereKeyNot($excludeAppointmentId);
+        }
+
+        if ($end) {
+            $conflictQuery->whereTime('start_time', '<', $end)
+                ->where(function ($q) use ($start) {
+                    $q->whereNull('end_time')->orWhereTime('end_time', '>', $start);
+                });
+        } else {
+            $conflictQuery->whereTime('start_time', '=', $start);
+        }
+
+        if ($conflictQuery->exists()) {
+            throw ValidationException::withMessages([
+                'start_time' => 'Selected slot is already booked.',
+            ]);
+        }
+    }
+
+    /**
+     * $source distinguishes who booked (recorded on the status log): 'staff'
+     * (default, unchanged behaviour) or 'patient' (portal bookings). Only
+     * 'patient' bookings are checked against `assertSlotFree` here — staff
+     * booking behaviour (no conflict check) is unchanged. A 'portal'
+     * booking_channel skips the immediate bookingConfirmed notification
+     * (portal bookings start 'pending' with no WhatsApp; staff confirming
+     * them sends it via changeStatus below).
+     */
+    public function create(array $data, string $source = 'staff'): Appointment
     {
         app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'appointments');
 
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $source) {
+            if ($source === 'patient') {
+                $this->assertSlotFree(
+                    (int) $data['clinic_id'],
+                    (int) $data['doctor_id'],
+                    $this->toYmd($data['appointment_date']) ?? (string) $data['appointment_date'],
+                    (string) $data['start_time'],
+                    (isset($data['end_time']) && $data['end_time'] !== null) ? (string) $data['end_time'] : null,
+                );
+            }
+
             $patientId = $data['patient_id'] ?? null;
 
             $status = $data['status'] ?? 'pending';
@@ -331,19 +385,21 @@ class AppointmentService
                 'appointment_id' => $appointment->id,
                 'new_status' => $status,
                 'changed_by_user_id' => $data['booked_by_user_id'] ?? null,
-                'source' => 'staff',
+                'source' => $source,
                 'created_at' => now(),
             ]);
 
-            $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->bookingConfirmed($appointment));
+            if (($data['booking_channel'] ?? null) !== 'portal') {
+                $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->bookingConfirmed($appointment));
+            }
 
             return $appointment;
         });
     }
 
-    public function changeStatus(Appointment $appointment, AppointmentStatus $status, ?int $actorUserId = null, ?string $reason = null, bool $force = false): Appointment
+    public function changeStatus(Appointment $appointment, AppointmentStatus $status, ?int $actorUserId = null, ?string $reason = null, bool $force = false, string $source = 'staff'): Appointment
     {
-        return DB::transaction(function () use ($appointment, $status, $actorUserId, $reason, $force) {
+        return DB::transaction(function () use ($appointment, $status, $actorUserId, $reason, $force, $source) {
             $oldStatus = $appointment->status;
 
             if (! $force) {
@@ -393,7 +449,7 @@ class AppointmentService
                 'old_status' => $oldStatus,
                 'new_status' => $status->value,
                 'changed_by_user_id' => $actorUserId,
-                'source' => 'staff',
+                'source' => $source,
                 'reason' => $reason,
                 'created_at' => now(),
             ]);
@@ -402,13 +458,24 @@ class AppointmentService
                 $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->appointmentUpdated($appointment, 'cancelled'));
             }
 
+            // A portal booking is created 'pending' with no WhatsApp (see
+            // create() above); the confirmation is sent only once it's
+            // actually confirmed, whichever staff/super-admin path does
+            // that. A staff-created (non-portal) appointment already got
+            // its bookingConfirmed at creation, so this must not re-send.
+            if ($oldStatus === AppointmentStatus::PENDING->value
+                && $status === AppointmentStatus::CONFIRMED
+                && $appointment->booking_channel === 'portal') {
+                $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->bookingConfirmed($appointment));
+            }
+
             return $appointment->refresh();
         });
     }
 
-    public function reschedule(Appointment $appointment, array $newData, ?int $actorUserId = null, ?string $reason = null): Appointment
+    public function reschedule(Appointment $appointment, array $newData, ?int $actorUserId = null, ?string $reason = null, string $source = 'staff', ?string $newStatus = null): Appointment
     {
-        return DB::transaction(function () use ($appointment, $newData, $actorUserId, $reason) {
+        return DB::transaction(function () use ($appointment, $newData, $actorUserId, $reason, $source, $newStatus) {
             $currentStatus = (string) ($appointment->status ?? '');
             if (in_array($currentStatus, [AppointmentStatus::CANCELLED->value, AppointmentStatus::COMPLETED->value], true)) {
                 throw ValidationException::withMessages([
@@ -426,31 +493,23 @@ class AppointmentService
                 ? ($newData['end_time'] !== null ? (string) $newData['end_time'] : null)
                 : ($appointment->end_time ? (string) $appointment->end_time : null);
 
-            $conflictQuery = Appointment::query()
-                ->forClinic($appointment->clinic_id)
-                ->where('doctor_id', $appointment->doctor_id)
-                ->whereDate('appointment_date', $targetDate)
-                ->whereNotIn('status', [AppointmentStatus::CANCELLED->value, AppointmentStatus::RESCHEDULED->value])
-                ->whereKeyNot($appointment->id);
+            $this->assertSlotFree(
+                (int) $appointment->clinic_id,
+                (int) $appointment->doctor_id,
+                $targetDate,
+                $targetStart,
+                $targetEnd,
+                $appointment->id,
+            );
 
-            if ($targetEnd) {
-                $conflictQuery->whereTime('start_time', '<', $targetEnd)
-                    ->where(function ($q) use ($targetStart) {
-                        $q->whereNull('end_time')->orWhereTime('end_time', '>', $targetStart);
-                    });
-            } else {
-                $conflictQuery->whereTime('start_time', '=', $targetStart);
-            }
-
-            if ($conflictQuery->exists()) {
-                throw ValidationException::withMessages([
-                    'start_time' => 'Selected slot is already booked.',
-                ]);
-            }
+            $oldStatusForLog = $appointment->status;
 
             $appointment->appointment_date = $targetDate;
             $appointment->start_time = $targetStart;
             $appointment->end_time = $targetEnd;
+            if ($newStatus !== null) {
+                $appointment->status = $newStatus;
+            }
             $appointment->save();
 
             AppointmentRescheduleLog::create([
@@ -468,6 +527,19 @@ class AppointmentService
                 'reason' => $reason,
                 'created_at' => now(),
             ]);
+
+            if ($newStatus !== null) {
+                AppointmentStatusLog::create([
+                    'clinic_id' => $appointment->clinic_id,
+                    'appointment_id' => $appointment->id,
+                    'old_status' => $oldStatusForLog,
+                    'new_status' => $newStatus,
+                    'changed_by_user_id' => $actorUserId,
+                    'source' => $source,
+                    'reason' => $reason,
+                    'created_at' => now(),
+                ]);
+            }
 
             // The reminder command skips any appointment that already has an
             // 'appointment_reminder' log, so once the slot moves, drop the
