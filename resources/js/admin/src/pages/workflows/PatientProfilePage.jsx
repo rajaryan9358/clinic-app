@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -172,6 +172,13 @@ export default function PatientProfilePage() {
 
     // "Managed by" picker state
     const [managedBy, setManagedBy] = useState({ open: false, query: '', options: [], searching: false, saving: false, error: '' });
+    const managedByQueryRef = useRef('');
+
+    // "Add family link" picker state
+    const [familyLinkForm, setFamilyLinkForm] = useState({ open: false, query: '', options: [], searching: false, relation: '', saving: false, error: '' });
+    const familyLinkQueryRef = useRef('');
+    const [familyLinkRemoving, setFamilyLinkRemoving] = useState(null);
+    const [familyLinkRemoveError, setFamilyLinkRemoveError] = useState('');
 
     const loadProfile = async () => {
         setLoadingProfile(true);
@@ -344,12 +351,19 @@ export default function PatientProfilePage() {
     };
 
     const searchManagedByOptions = async (q) => {
+        managedByQueryRef.current = q;
         setManagedBy((p) => ({ ...p, searching: true }));
         try {
-            const { data } = await client.get(`${base}/patients`, { params: { search: q, per_page: 20 } });
+            const params = { search: q, per_page: 20 };
+            if (user?.role === 'super_admin' && profile?.patient?.clinic_id) {
+                params.clinic_id = profile.patient.clinic_id;
+            }
+            const { data } = await client.get(`${base}/patients`, { params });
+            if (managedByQueryRef.current !== q) return; // a newer search superseded this response
             const rows = (data?.data || []).filter((p) => !p.managed_by_patient_id && String(p.id) !== String(id));
             setManagedBy((p) => ({ ...p, options: rows, searching: false }));
         } catch {
+            if (managedByQueryRef.current !== q) return;
             setManagedBy((p) => ({ ...p, options: [], searching: false }));
         }
     };
@@ -374,7 +388,73 @@ export default function PatientProfilePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [managedBy.open, managedBy.query]);
 
+    const searchFamilyLinkOptions = async (q) => {
+        familyLinkQueryRef.current = q;
+        setFamilyLinkForm((p) => ({ ...p, searching: true }));
+        try {
+            const params = { search: q, per_page: 20 };
+            if (user?.role === 'super_admin' && profile?.patient?.clinic_id) {
+                params.clinic_id = profile.patient.clinic_id;
+            }
+            const { data } = await client.get(`${base}/patients`, { params });
+            if (familyLinkQueryRef.current !== q) return; // a newer search superseded this response
+            const rows = (data?.data || []).filter((p) => String(p.id) !== String(id));
+            setFamilyLinkForm((p) => ({ ...p, options: rows, searching: false }));
+        } catch {
+            if (familyLinkQueryRef.current !== q) return;
+            setFamilyLinkForm((p) => ({ ...p, options: [], searching: false }));
+        }
+    };
+
+    const addFamilyLink = async (relatedPatientId) => {
+        setFamilyLinkForm((p) => ({ ...p, saving: true, error: '' }));
+        try {
+            await client.post(`${base}/patients/${id}/family-links`, {
+                related_patient_id: relatedPatientId,
+                relation: familyLinkForm.relation || null,
+            });
+            setFamilyLinkForm({ open: false, query: '', options: [], searching: false, relation: '', saving: false, error: '' });
+            await loadProfile();
+        } catch (e) {
+            setFamilyLinkForm((p) => ({ ...p, saving: false, error: e?.response?.data?.message || e?.message || 'Failed to add family link.' }));
+        }
+    };
+
+    const removeFamilyLink = async (linkId) => {
+        setFamilyLinkRemoving(linkId);
+        setFamilyLinkRemoveError('');
+        try {
+            await client.delete(`${base}/patients/${id}/family-links/${linkId}`);
+            await loadProfile();
+        } catch (e) {
+            setFamilyLinkRemoveError(e?.response?.data?.message || e?.message || 'Failed to remove family link.');
+        } finally {
+            setFamilyLinkRemoving(null);
+        }
+    };
+
     useEffect(() => {
+        if (!familyLinkForm.open) return;
+        const t = setTimeout(() => {
+            searchFamilyLinkOptions(familyLinkForm.query);
+        }, 250);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [familyLinkForm.open, familyLinkForm.query]);
+
+    useEffect(() => {
+        // A client-side navigation from one patient to another reuses this
+        // mounted component, so any in-flight/previously-shown per-patient
+        // state (a just-issued portal link URL, an open "managed by"
+        // search, a pending "add family link" form) must be cleared —
+        // otherwise it can flash patient A's data while patient B loads.
+        setPortalLink({ sending: false, error: '', url: '', expiresAt: '', whatsappStatus: '', copied: false });
+        setManagedBy({ open: false, query: '', options: [], searching: false, saving: false, error: '' });
+        setFamilyLinkForm({ open: false, query: '', options: [], searching: false, relation: '', saving: false, error: '' });
+        setFamilyLinkRemoving(null);
+        setFamilyLinkRemoveError('');
+        managedByQueryRef.current = '';
+        familyLinkQueryRef.current = '';
         loadProfile();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [base, id]);
@@ -629,21 +709,102 @@ export default function PatientProfilePage() {
                     </div>
 
                     <div className="mt-4">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Family Links</div>
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Family Links</div>
+                            {canEditPatient && !familyLinkForm.open ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setFamilyLinkForm((p) => ({ ...p, open: true }))}
+                                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Add family link
+                                </button>
+                            ) : null}
+                        </div>
+
+                        {familyLinkRemoveError ? (
+                            <div className="mt-2 text-xs text-rose-600">{familyLinkRemoveError}</div>
+                        ) : null}
+
                         {(family.links || []).length ? (
                             <ul className="mt-1 space-y-1 text-sm text-slate-800">
                                 {family.links.map((l) => (
-                                    <li key={l.id}>
-                                        {l.related_patient?.full_name || `Patient #${l.related_patient_id}`}
-                                        {l.relation ? ` · ${l.relation}` : ''}
-                                        {' — '}
-                                        <span className="text-xs text-slate-500">Can use this patient's portal</span>
+                                    <li key={l.id} className="flex items-center justify-between gap-2">
+                                        <span>
+                                            {l.related_patient?.full_name || `Patient #${l.related_patient_id}`}
+                                            {l.relation ? ` · ${l.relation}` : ''}
+                                            {' — '}
+                                            <span className="text-xs text-slate-500">Can use this patient's portal</span>
+                                        </span>
+                                        {canEditPatient ? (
+                                            <button
+                                                type="button"
+                                                disabled={familyLinkRemoving === l.id}
+                                                onClick={() => removeFamilyLink(l.id)}
+                                                className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                                            >
+                                                {familyLinkRemoving === l.id ? 'Removing…' : 'Remove'}
+                                            </button>
+                                        ) : null}
                                     </li>
                                 ))}
                             </ul>
                         ) : (
                             <p className="mt-1 text-sm text-slate-500">None</p>
                         )}
+
+                        {familyLinkForm.open ? (
+                            <div className="relative mt-3">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="Search patients…"
+                                    value={familyLinkForm.query}
+                                    onChange={(e) => setFamilyLinkForm((p) => ({ ...p, query: e.target.value }))}
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Relation (optional, e.g. spouse)"
+                                    value={familyLinkForm.relation}
+                                    onChange={(e) => setFamilyLinkForm((p) => ({ ...p, relation: e.target.value }))}
+                                    maxLength={50}
+                                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                                />
+                                <div className="mt-1 max-h-48 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                                    {familyLinkForm.searching ? (
+                                        <div className="px-3 py-2 text-sm text-slate-500">Searching…</div>
+                                    ) : familyLinkForm.options.length ? (
+                                        familyLinkForm.options.map((opt) => (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                disabled={familyLinkForm.saving}
+                                                onClick={() => addFamilyLink(opt.id)}
+                                                className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                                            >
+                                                {opt.full_name}{opt.phone ? ` · ${opt.phone}` : ''}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-3 py-2 text-sm text-slate-500">No patients found.</div>
+                                    )}
+                                </div>
+                                {familyLinkForm.error ? (
+                                    <div className="mt-1 text-xs text-rose-600">{familyLinkForm.error}</div>
+                                ) : null}
+                                <div className="mt-2">
+                                    <button
+                                        type="button"
+                                        disabled={familyLinkForm.saving}
+                                        onClick={() => setFamilyLinkForm({ open: false, query: '', options: [], searching: false, relation: '', saving: false, error: '' })}
+                                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
             ) : null}

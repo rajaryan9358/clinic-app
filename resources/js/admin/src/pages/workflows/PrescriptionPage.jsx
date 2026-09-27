@@ -43,6 +43,13 @@ export default function PrescriptionPage() {
 
     useEffect(() => {
         let cancelled = false;
+        // A client-side navigation from one appointment's prescription to
+        // another reuses this mounted component, so any in-flight/shown
+        // finalize/send state from the previous appointment must be
+        // cleared — otherwise it can flash the old appointment's confirm
+        // dialog or result message while the new one loads.
+        setSend({ confirming: false, sending: false, message: '', isError: false });
+        setFinalize({ confirming: false, saving: false, message: '', isError: false });
         const run = async () => {
             setLoading(true);
             setError('');

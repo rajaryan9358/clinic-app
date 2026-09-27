@@ -211,6 +211,8 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::get('patients/{id}/report.pdf', [SuperAdminPatientProfileController::class, 'reportPdf']);
     Route::post('patients/{id}/portal-link', [SuperAdminPatientPortalLinkController::class, 'store']);
     Route::put('patients/{id}/managed-by', [SuperAdminPatientFamilyController::class, 'updateManagedBy']);
+    Route::post('patients/{id}/family-links', [SuperAdminPatientFamilyController::class, 'storeFamilyLink']);
+    Route::delete('patients/{id}/family-links/{linkId}', [SuperAdminPatientFamilyController::class, 'destroyFamilyLink']);
 
     Route::get('doctors/{id}/profile', [SuperAdminDoctorProfileController::class, 'profile']);
     Route::put('doctors/{id}/profile', [SuperAdminDoctorProfileController::class, 'updateProfile']);
@@ -299,6 +301,8 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::get('patients/{id}/report.pdf', [ClinicPatientProfileController::class, 'reportPdf'])->middleware('perm:patients.view');
     Route::post('patients/{id}/portal-link', [ClinicPatientPortalLinkController::class, 'store'])->middleware('perm:patients.portal_link');
     Route::put('patients/{id}/managed-by', [ClinicPatientFamilyController::class, 'updateManagedBy'])->middleware('perm:patients.edit');
+    Route::post('patients/{id}/family-links', [ClinicPatientFamilyController::class, 'storeFamilyLink'])->middleware('perm:patients.edit');
+    Route::delete('patients/{id}/family-links/{linkId}', [ClinicPatientFamilyController::class, 'destroyFamilyLink'])->middleware('perm:patients.edit');
 
     Route::get('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'profile'])->middleware('perm:doctors.view');
     Route::put('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'updateProfile'])->middleware('perm:doctors.edit');
