@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import AppointmentCard from '../components/AppointmentCard';
@@ -6,11 +6,13 @@ import { Button, Card, ErrorText, Spinner } from '../components/ui';
 
 /**
  * `GET appointments/{id}` detail: clinic/maps link, cancel (with an inline
- * confirm + optional reason) and reschedule, gated by `can_cancel` /
- * `can_reschedule` / `change_blocked_reason` from AppointmentPresenter, plus
- * "View prescription" (resolved by scanning the prescriptions list for this
- * appointment — there's no by-appointment lookup endpoint) and "Book
- * follow-up".
+ * confirm + optional reason) and reschedule, each independently gated by
+ * `can_cancel`/`cancel_blocked_reason` and `can_reschedule`/
+ * `reschedule_blocked_reason` from AppointmentPresenter (cancel and
+ * reschedule have their own clinic settings/cutoffs, so one can be blocked
+ * while the other isn't), plus "View prescription" (resolved by scanning
+ * the prescriptions list for this appointment — there's no by-appointment
+ * lookup endpoint) and "Book follow-up".
  */
 export default function VisitDetail() {
     const { id } = useParams();
@@ -30,19 +32,27 @@ export default function VisitDetail() {
     const [rxLoading, setRxLoading] = useState(false);
     const [rxError, setRxError] = useState('');
 
-    const load = useCallback(() => {
+    // Guarded with `active` (not just a plain fetch) so a slow response for
+    // an earlier `id` can never clobber state after the user has already
+    // navigated to a different visit's detail page.
+    useEffect(() => {
+        let active = true;
         setLoading(true);
         setLoadError('');
-        return api
-            .get(`/appointments/${id}`)
-            .then(({ data }) => setAppointment(data.data))
-            .catch((err) => setLoadError(err?.response?.data?.message || 'Could not load this visit.'))
-            .finally(() => setLoading(false));
+        api.get(`/appointments/${id}`)
+            .then(({ data }) => {
+                if (active) setAppointment(data.data);
+            })
+            .catch((err) => {
+                if (active) setLoadError(err?.response?.data?.message || 'Could not load this visit.');
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => {
+            active = false;
+        };
     }, [id]);
-
-    useEffect(() => {
-        load();
-    }, [load]);
 
     async function submitCancel() {
         setCancelSubmitting(true);
@@ -92,7 +102,17 @@ export default function VisitDetail() {
         return <ErrorText>{loadError || 'Visit not found.'}</ErrorText>;
     }
 
-    const blocked = !appointment.can_cancel && !appointment.can_reschedule && appointment.change_blocked_reason;
+    // Cancel and reschedule are blocked independently (separate clinic
+    // settings/cutoffs), so each gets its own reason rather than a single
+    // combined message that would hide, say, "you can still reschedule"
+    // behind "changes are closed". When both happen to share the exact
+    // same reason (e.g. the visit is already completed), show it once.
+    const cancelBlockedReason = !appointment.can_cancel ? appointment.cancel_blocked_reason : null;
+    const rescheduleBlockedReason = !appointment.can_reschedule ? appointment.reschedule_blocked_reason : null;
+    const sharedBlockedReason =
+        cancelBlockedReason && rescheduleBlockedReason && cancelBlockedReason === rescheduleBlockedReason
+            ? cancelBlockedReason
+            : null;
 
     return (
         <div className="space-y-4">
@@ -146,7 +166,14 @@ export default function VisitDetail() {
                 </Card>
             )}
 
-            {blocked ? <ErrorText>{appointment.change_blocked_reason}</ErrorText> : null}
+            {sharedBlockedReason ? (
+                <ErrorText>{sharedBlockedReason}</ErrorText>
+            ) : (
+                <>
+                    {cancelBlockedReason ? <ErrorText>Cancel: {cancelBlockedReason}</ErrorText> : null}
+                    {rescheduleBlockedReason ? <ErrorText>Reschedule: {rescheduleBlockedReason}</ErrorText> : null}
+                </>
+            )}
 
             <div className="space-y-2">
                 {appointment.can_reschedule && !cancelling && (

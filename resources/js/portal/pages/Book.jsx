@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
-import { addDays, formatDateStrip, formatTime, isoDate } from '../lib/format';
+import DateStrip from '../components/DateStrip';
+import SlotGrid from '../components/SlotGrid';
+import useDoctorSlots from '../hooks/useDoctorSlots';
+import { addDays, isoDate } from '../lib/format';
 import { Button, Card, ErrorText, Spinner } from '../components/ui';
 
 const STRIP_DAYS = 14;
@@ -18,11 +21,12 @@ const MODE_LABELS = {
 };
 
 /**
- * `/book`: doctor -> date -> slot -> visit type/mode -> reason -> submit.
- * Honours `?doctor_id=&visit_type=` presets (from "Book follow-up" links on
- * VisitDetail/PrescriptionDetail) by preselecting them; the rest of the flow
- * still has to be completed by the patient since neither a date nor a slot
- * can be assumed.
+ * `/book`: doctor -> date -> slot (DateStrip/SlotGrid/useDoctorSlots —
+ * shared with Reschedule.jsx) -> visit type/mode -> reason -> submit.
+ * Honours `?doctor_id=&visit_type=` presets (from "Book follow-up" links
+ * on VisitDetail/PrescriptionDetail) by preselecting them; the rest of the
+ * flow still has to be completed by the patient since neither a date nor a
+ * slot can be assumed.
  */
 export default function Book() {
     const navigate = useNavigate();
@@ -40,12 +44,17 @@ export default function Book() {
         const today = new Date();
         return Array.from({ length: STRIP_DAYS }, (_, i) => isoDate(addDays(today, i)));
     }, []);
-    const [date, setDate] = useState(null);
 
-    const [slots, setSlots] = useState([]);
-    const [slotsLoading, setSlotsLoading] = useState(false);
-    const [slotsError, setSlotsError] = useState('');
-    const [slot, setSlot] = useState(null);
+    const {
+        date,
+        slots,
+        loading: slotsLoading,
+        error: slotsError,
+        selectedSlot: slot,
+        setSelectedSlot: setSlot,
+        load: loadSlots,
+        reset: resetSlots,
+    } = useDoctorSlots();
 
     const [visitType, setVisitType] = useState(presetVisitType === 'followup' ? 'followup' : 'new');
     const [mode, setMode] = useState(null);
@@ -83,22 +92,11 @@ export default function Book() {
 
     function selectDoctor(d) {
         setDoctorId(d.id);
-        setDate(null);
-        setSlots([]);
-        setSlot(null);
-        setSlotsError('');
-    }
-
-    function loadSlots(chosenDate, dId) {
-        setDate(chosenDate);
-        setSlot(null);
-        setSlots([]);
-        setSlotsError('');
-        setSlotsLoading(true);
-        api.get(`/doctors/${dId}/slots`, { params: { date: chosenDate } })
-            .then(({ data }) => setSlots(data.data?.slots || []))
-            .catch((err) => setSlotsError(err?.response?.data?.message || 'Could not load available times.'))
-            .finally(() => setSlotsLoading(false));
+        // A previously selected date/slot belonged to the old doctor's
+        // availability — drop it (and invalidate any request still in
+        // flight for it) rather than letting stale slots survive the
+        // doctor switch.
+        resetSlots();
     }
 
     async function submit() {
@@ -118,7 +116,7 @@ export default function Book() {
         } catch (err) {
             setSubmitError(err?.response?.data?.message || 'Could not book this visit.');
             if (err?.response?.status === 409) {
-                loadSlots(date, doctorId);
+                loadSlots(doctorId, date);
             }
         } finally {
             setSubmitting(false);
@@ -157,60 +155,14 @@ export default function Book() {
             {doctorId && (
                 <div>
                     <h2 className="mb-2 text-sm font-medium text-slate-500">Date</h2>
-                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                        {dates.map((d) => {
-                            const parts = formatDateStrip(d);
-                            const active = d === date;
-                            return (
-                                <button
-                                    key={d}
-                                    type="button"
-                                    onClick={() => loadSlots(d, doctorId)}
-                                    className={`flex min-w-[3.5rem] flex-col items-center rounded-xl px-2 py-2 text-xs font-medium ${
-                                        active ? 'bg-[var(--accent)] text-white' : 'bg-white text-slate-600 ring-1 ring-slate-100'
-                                    }`}
-                                >
-                                    <span>{parts.weekday}</span>
-                                    <span className="text-base">{parts.day}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
+                    <DateStrip dates={dates} selectedDate={date} onSelect={(d) => loadSlots(doctorId, d)} />
                 </div>
             )}
 
             {doctorId && date && (
                 <div>
                     <h2 className="mb-2 text-sm font-medium text-slate-500">Time</h2>
-                    <Card>
-                        {slotsLoading && (
-                            <div className="flex justify-center py-6">
-                                <Spinner className="h-5 w-5 text-[var(--accent)]" />
-                            </div>
-                        )}
-                        {!slotsLoading && slotsError && <ErrorText>{slotsError}</ErrorText>}
-                        {!slotsLoading && !slotsError && slots.length === 0 && (
-                            <p className="py-4 text-center text-sm text-slate-500">No times available on this date.</p>
-                        )}
-                        {!slotsLoading && !slotsError && slots.length > 0 && (
-                            <div className="grid grid-cols-3 gap-2">
-                                {slots.map((s) => (
-                                    <button
-                                        key={s.start_time}
-                                        type="button"
-                                        onClick={() => setSlot(s)}
-                                        className={`rounded-xl px-2 py-2 text-sm font-medium ${
-                                            slot?.start_time === s.start_time
-                                                ? 'bg-[var(--accent)] text-white'
-                                                : 'bg-slate-100 text-slate-700'
-                                        }`}
-                                    >
-                                        {formatTime(s.start_time)}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </Card>
+                    <SlotGrid loading={slotsLoading} error={slotsError} slots={slots} selectedSlot={slot} onSelect={setSlot} />
                 </div>
             )}
 

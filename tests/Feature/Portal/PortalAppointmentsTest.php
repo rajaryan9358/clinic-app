@@ -202,6 +202,38 @@ class PortalAppointmentsTest extends TestCase
         $this->portalGet("/api/portal/appointments/{$othersAppointment->id}", $token, $patient->id)->assertNotFound();
     }
 
+    public function test_item_exposes_independent_cancel_and_reschedule_blocked_reasons(): void
+    {
+        // allow_cancel disabled, allow_reschedule left enabled: cancel and
+        // reschedule must be judged independently rather than collapsing
+        // into a single flag/reason, since a patient who can still
+        // reschedule must not lose that button/explanation just because
+        // cancelling happens to be off.
+        $clinic = $this->makeClinic(['allow_cancel' => false, 'allow_reschedule' => true]);
+        $doctor = $this->makeDoctorWithSchedule($clinic);
+        $patient = $this->consentedPatient($clinic);
+        $token = $this->portalToken($patient);
+
+        $threeHoursOut = $this->now->copy()->addHours(3);
+        $appt = $this->directAppointment($clinic, $doctor, $patient, [
+            'appointment_date' => $threeHoursOut->toDateString(),
+            'start_time' => $threeHoursOut->format('H:i:s'),
+            'status' => 'confirmed',
+        ]);
+
+        $detail = $this->portalGet("/api/portal/appointments/{$appt->id}", $token, $patient->id);
+        $detail->assertOk();
+
+        $data = $detail->json('data');
+        $this->assertFalse($data['can_cancel']);
+        $this->assertTrue($data['can_reschedule']);
+        $this->assertSame('Changes are closed for this visit. Please call the clinic.', $data['cancel_blocked_reason']);
+        $this->assertNull($data['reschedule_blocked_reason']);
+        // Back-compat: the collapsed field still reflects whichever
+        // action is blocked.
+        $this->assertSame($data['cancel_blocked_reason'], $data['change_blocked_reason']);
+    }
+
     // --- Booking -------------------------------------------------------
 
     public function test_book_creates_pending_portal_appointment_without_whatsapp(): void

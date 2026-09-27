@@ -10,9 +10,13 @@ use App\Services\Portal\PortalBookingPolicy;
  * portal SPA renders.
  *
  * `item()` (the dashboard's `next_appointment` and the appointments list)
- * adds `can_cancel`/`can_reschedule`/`change_blocked_reason`, derived from
+ * adds `can_cancel`/`can_reschedule` plus their own
+ * `cancel_blocked_reason`/`reschedule_blocked_reason`, derived from
  * `PortalBookingPolicy::canChange()` — resolved from the container since
- * this is a static serialiser, not a controller.
+ * this is a static serialiser, not a controller. `change_blocked_reason`
+ * (the two reasons collapsed into one, cancel taking priority) is kept
+ * alongside them for callers that only need a single "why is this whole
+ * visit locked" message.
  * `detail()` extends `item()` for the single-appointment view with the
  * clinic's address/maps link, the cancellation reason, and whether a
  * final prescription exists — the *controller* resolves that via
@@ -43,6 +47,8 @@ final class AppointmentPresenter
             ],
             'can_cancel' => $cancelBlockedReason === null,
             'can_reschedule' => $rescheduleBlockedReason === null,
+            'cancel_blocked_reason' => $cancelBlockedReason,
+            'reschedule_blocked_reason' => $rescheduleBlockedReason,
             'change_blocked_reason' => $cancelBlockedReason ?? $rescheduleBlockedReason,
         ];
     }
