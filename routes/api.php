@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PublicPrescriptionPdfController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
+use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Api\Clinic\AppointmentController as ClinicAppointmentController;
 use App\Http\Controllers\Api\Clinic\AuditLogController as ClinicAuditLogController;
 use App\Http\Controllers\Api\Clinic\ClinicSettingController as ClinicClinicSettingController;
@@ -74,6 +75,9 @@ if (! function_exists('registerCrudRoutes')) {
 }
 
 Route::post('webhooks/razorpay', RazorpayWebhookController::class);
+
+Route::get('webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify']);
+Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 
 Route::get('public/prescriptions/{prescription}/pdf', PublicPrescriptionPdfController::class)
     ->name('whatsapp.prescription-pdf')
