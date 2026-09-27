@@ -17,6 +17,9 @@ return new class extends Migration
             $table->longText('transcript_text')->nullable();
             $table->json('data')->nullable();
             $table->json('raw')->nullable();
+            $table->enum('status', ['draft', 'final'])->default('draft');
+            $table->timestamp('finalized_at')->nullable();
+            $table->foreignId('finalized_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->index(['clinic_id', 'appointment_id']);

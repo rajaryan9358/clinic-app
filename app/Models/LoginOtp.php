@@ -12,7 +12,7 @@ class LoginOtp extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'clinic_id', 'phone_or_email', 'otp_code', 'purpose', 'expires_at', 'verified_at', 'created_at',
+        'clinic_id', 'phone_or_email', 'otp_code', 'purpose', 'attempts', 'expires_at', 'verified_at', 'created_at',
     ];
 
     protected function casts(): array

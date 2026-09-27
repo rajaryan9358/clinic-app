@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('clinic_id')->unique()->constrained('clinics')->cascadeOnDelete();
             $table->boolean('booking_enabled')->default(true);
+            $table->boolean('portal_enabled')->default(true);
             $table->boolean('whatsapp_booking_enabled')->default(true);
             $table->boolean('auto_confirm_appointments')->default(false);
             $table->boolean('allow_reschedule')->default(true);
@@ -90,14 +91,26 @@ return new class extends Migration
             $table->id();
             $table->foreignId('clinic_id')->nullable()->constrained('clinics')->nullOnDelete();
             $table->string('phone_or_email');
-            $table->string('otp_code', 10);
+            $table->string('otp_code', 64);
             $table->enum('purpose', ['login', 'verify_phone', 'verify_email', 'password_reset']);
+            $table->unsignedTinyInteger('attempts')->default(0);
             $table->timestamp('expires_at');
             $table->timestamp('verified_at')->nullable();
             $table->timestamp('created_at')->useCurrent();
 
             $table->index(['phone_or_email', 'purpose'], 'otp_contact_purpose_idx');
             $table->index('expires_at');
+        });
+
+        Schema::create('patient_login_links', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
+            $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
+            $table->string('token_hash', 64)->unique();
+            $table->timestamp('expires_at');
+            $table->timestamp('consumed_at')->nullable();
+            $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('file_uploads', function (Blueprint $table) {
@@ -121,6 +134,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('file_uploads');
+        Schema::dropIfExists('patient_login_links');
         Schema::dropIfExists('login_otps');
         Schema::dropIfExists('audit_logs');
         Schema::dropIfExists('payments');

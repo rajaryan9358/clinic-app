@@ -33,7 +33,7 @@ return new class extends Migration
             $table->enum('visit_type', ['new', 'followup', 'routine', 'urgent']);
             $table->enum('consultation_mode', ['in_person', 'video', 'phone'])->default('in_person');
             $table->foreignId('booking_source_id')->nullable()->constrained('booking_sources')->nullOnDelete();
-            $table->enum('booking_channel', ['walk_in', 'phone', 'website', 'whatsapp', 'google', 'staff', 'other']);
+            $table->enum('booking_channel', ['walk_in', 'phone', 'website', 'whatsapp', 'google', 'staff', 'portal', 'other']);
             $table->enum('status', ['pending', 'confirmed', 'checked_in', 'in_consultation', 'completed', 'cancelled', 'no_show', 'rescheduled'])->default('pending');
             $table->enum('payment_status', ['unpaid', 'partial', 'paid', 'waived'])->default('unpaid');
             $table->decimal('appointment_fee', 10, 2)->nullable();

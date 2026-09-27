@@ -3,16 +3,19 @@
 namespace App\Models;
 
 use App\Traits\BelongsToClinicScope;
+use Illuminate\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\HasApiTokens;
 
-class Patient extends Model
+class Patient extends Model implements AuthenticatableContract
 {
-    use HasFactory, SoftDeletes, BelongsToClinicScope;
+    use Authenticatable, HasApiTokens, HasFactory, SoftDeletes, BelongsToClinicScope;
 
     protected static function booted(): void
     {
@@ -45,7 +48,7 @@ class Patient extends Model
         'phone', 'alternate_phone', 'email', 'blood_group', 'address_line_1', 'address_line_2', 'city',
         'state', 'pincode', 'occupation', 'referred_by', 'preferred_doctor_id', 'communication_consent',
         'whatsapp_opt_in', 'sms_opt_in', 'email_opt_in', 'first_visit_date', 'last_visit_date',
-        'visit_count', 'no_show_count', 'status_tag',
+        'visit_count', 'no_show_count', 'status_tag', 'managed_by_patient_id',
     ];
 
     protected function casts(): array
@@ -58,6 +61,7 @@ class Patient extends Model
             'whatsapp_opt_in' => 'boolean',
             'sms_opt_in' => 'boolean',
             'email_opt_in' => 'boolean',
+            'consent_given_at' => 'datetime',
         ];
     }
 
@@ -74,5 +78,15 @@ class Patient extends Model
     public function notes(): HasMany
     {
         return $this->hasMany(PatientNote::class);
+    }
+
+    public function managedBy(): BelongsTo
+    {
+        return $this->belongsTo(Patient::class, 'managed_by_patient_id');
+    }
+
+    public function dependents(): HasMany
+    {
+        return $this->hasMany(Patient::class, 'managed_by_patient_id');
     }
 }

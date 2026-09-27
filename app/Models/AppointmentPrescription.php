@@ -14,11 +14,15 @@ class AppointmentPrescription extends Model
         'transcript_text',
         'data',
         'raw',
+        'status',
+        'finalized_at',
+        'finalized_by_user_id',
     ];
 
     protected $casts = [
         'data' => 'array',
         'raw' => 'array',
+        'finalized_at' => 'datetime',
     ];
 
     public function appointment()

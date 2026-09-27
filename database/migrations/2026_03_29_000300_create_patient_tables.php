@@ -30,6 +30,9 @@ return new class extends Migration
             $table->string('occupation')->nullable();
             $table->string('referred_by')->nullable();
             $table->foreignId('preferred_doctor_id')->nullable()->constrained('doctors')->nullOnDelete();
+            $table->foreignId('managed_by_patient_id')->nullable()->constrained('patients')->nullOnDelete();
+            $table->timestamp('consent_given_at')->nullable();
+            $table->string('consent_version', 20)->nullable();
             $table->boolean('communication_consent')->default(true);
             $table->boolean('whatsapp_opt_in')->default(true);
             $table->boolean('sms_opt_in')->default(true);
@@ -44,6 +47,7 @@ return new class extends Migration
 
             $table->index(['clinic_id', 'phone']);
             $table->index(['clinic_id', 'status_tag']);
+            $table->index('managed_by_patient_id');
         });
 
         Schema::create('patient_medical_profiles', function (Blueprint $table) {

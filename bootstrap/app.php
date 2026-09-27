@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'perm' => \App\Http\Middleware\EnsurePermission::class,
+            'portal.auth' => \App\Http\Middleware\AuthenticatePortal::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

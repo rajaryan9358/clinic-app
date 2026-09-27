@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\Portal\AuthController as PortalAuthController;
 use App\Http\Controllers\Api\PublicPrescriptionPdfController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
@@ -88,6 +89,15 @@ Route::prefix('auth')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
+    });
+});
+
+Route::prefix('portal')->group(function () {
+    // Task 2-3 add the public auth/* endpoints here (request-code, verify, magic link).
+
+    Route::middleware('portal.auth')->group(function () {
+        Route::get('auth/me', [PortalAuthController::class, 'me']);
+        Route::post('auth/logout', [PortalAuthController::class, 'logout']);
     });
 });
 

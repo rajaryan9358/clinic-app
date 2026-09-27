@@ -42,6 +42,16 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        'sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
+        ],
+
+        'portal' => [
+            'driver' => 'sanctum',
+            'provider' => 'patients',
+        ],
     ],
 
     /*
@@ -71,6 +81,11 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+
+        'patients' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Patient::class,
+        ],
     ],
 
     /*

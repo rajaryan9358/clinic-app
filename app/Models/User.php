@@ -53,6 +53,22 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Spatie Permission resolves the "current" guard for permission checks
+     * from `auth.defaults.guard`, which `Sanctum::actingAs()` /
+     * `Auth::shouldUse()` mutate at runtime (e.g. to "sanctum") for the
+     * duration of the request. Roles and permissions are always seeded
+     * with `guard_name = 'web'` (see RolesAndPermissionsSeeder), so pin
+     * this model to that guard explicitly rather than letting it drift
+     * with whichever guard last authenticated the request — otherwise
+     * `$user->can(...)` looks up permissions under the wrong guard name
+     * and silently returns false. See Spatie\Permission\Guard::getNames().
+     */
+    public function guardName(): string
+    {
+        return 'web';
+    }
+
     public function clinic(): BelongsTo
     {
         return $this->belongsTo(Clinic::class);
