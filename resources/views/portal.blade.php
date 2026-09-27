@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Patient Portal</title>
+    @viteReactRefresh
+    @vite(['resources/css/app.css', 'resources/js/portal/main.jsx'])
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="portal-root"></div>
+</body>
+</html>

@@ -9,3 +9,10 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+/* Patient portal accent color: overridden per-clinic by Shell.jsx, this
+   is the fallback teal used before a clinic's primary_color is known
+   (login/magic-link/consent screens, and clinics with no color set). */
+#portal-root {
+    --accent: #0f766e;
+}

@@ -7,3 +7,5 @@ Route::get('/', function () {
 });
 
 Route::view('/admin/{any?}', 'admin')->where('any', '.*');
+
+Route::view('/portal/{any?}', 'portal')->where('any', '.*');
