@@ -296,9 +296,22 @@ class AppointmentService
      * $end is given) on $date. Extracted from reschedule()'s conflict
      * query so create() (for source 'patient') can reuse the exact same
      * check.
+     *
+     * Must be called inside the caller's transaction (create()/reschedule()
+     * both wrap their call in DB::transaction). A plain exists() check has
+     * a race: two concurrent requests for the same slot can both read "no
+     * conflict" before either has inserted/moved its row. There's no unique
+     * index to fall back on either, since a cancelled/rescheduled row must
+     * be free to reuse the same slot. So we serialise per doctor instead:
+     * lock the doctor row first (SELECT ... FOR UPDATE) so a second
+     * concurrent booking/reschedule for the same doctor blocks until the
+     * first transaction commits or rolls back, and then sees the
+     * now-committed conflicting row.
      */
     public function assertSlotFree(int $clinicId, int $doctorId, string $date, string $start, ?string $end, ?int $excludeAppointmentId = null): void
     {
+        Doctor::query()->whereKey($doctorId)->lockForUpdate()->first();
+
         $conflictQuery = Appointment::query()
             ->forClinic($clinicId)
             ->where('doctor_id', $doctorId)

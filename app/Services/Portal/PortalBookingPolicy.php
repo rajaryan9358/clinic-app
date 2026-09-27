@@ -31,13 +31,30 @@ use Illuminate\Validation\ValidationException;
 final class PortalBookingPolicy
 {
     /**
+     * Per-clinic-id memo for settings(), which every other method here
+     * (canChange/freeSlots/slotFor/assertDateInWindow) calls at least once
+     * per request, often for the same clinic. Deliberately an instance
+     * property, not static: PortalBookingPolicy is resolved fresh from the
+     * container per request in production, but Laravel's container (and
+     * Octane) can reuse a singleton across requests/tests, and a static
+     * cache would then leak one request's/test's settings into the next.
+     *
+     * @var array<int, array{allow_cancel: bool, cancel_cutoff_hours: int, allow_reschedule: bool, reschedule_cutoff_hours: int, max_advance_booking_days: int, min_booking_notice_minutes: int, booking_enabled: bool}>
+     */
+    private array $settingsByClinicId = [];
+
+    /**
      * @return array{allow_cancel: bool, cancel_cutoff_hours: int, allow_reschedule: bool, reschedule_cutoff_hours: int, max_advance_booking_days: int, min_booking_notice_minutes: int, booking_enabled: bool}
      */
     public function settings(int $clinicId): array
     {
+        if (isset($this->settingsByClinicId[$clinicId])) {
+            return $this->settingsByClinicId[$clinicId];
+        }
+
         $row = ClinicSetting::where('clinic_id', $clinicId)->first();
 
-        return [
+        return $this->settingsByClinicId[$clinicId] = [
             'allow_cancel' => $row !== null ? (bool) $row->allow_cancel : true,
             'cancel_cutoff_hours' => $row !== null ? (int) $row->cancel_cutoff_hours : 2,
             'allow_reschedule' => $row !== null ? (bool) $row->allow_reschedule : true,

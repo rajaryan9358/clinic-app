@@ -297,6 +297,24 @@ class PortalAppointmentsTest extends TestCase
         $this->assertSame(0, Appointment::count());
     }
 
+    public function test_book_when_booking_disabled_returns_422_exact_message(): void
+    {
+        $clinic = $this->makeClinic(['booking_enabled' => false]);
+        $doctor = $this->makeDoctorWithSchedule($clinic);
+        $patient = $this->consentedPatient($clinic);
+        $token = $this->portalToken($patient);
+
+        $response = $this->portalPost('/api/portal/appointments', $token, $patient->id, [
+            'doctor_id' => $doctor->id,
+            'appointment_date' => $this->now->copy()->addDay()->toDateString(),
+            'start_time' => '09:00',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame("The clinic can't take online bookings right now. Please call the clinic.", $response->json('message'));
+        $this->assertSame(0, Appointment::count());
+    }
+
     public function test_second_booking_of_same_slot_is_409(): void
     {
         $doctor = $this->makeDoctorWithSchedule($this->clinic);
@@ -550,7 +568,7 @@ class PortalAppointmentsTest extends TestCase
             'status' => 'inactive',
         ]);
         $otherClinic = $this->makeClinic();
-        $this->makeDoctorWithSchedule($otherClinic);
+        $otherClinicDoctor = $this->makeDoctorWithSchedule($otherClinic);
 
         $patient = $this->consentedPatient($this->clinic);
         $token = $this->portalToken($patient);
@@ -560,6 +578,7 @@ class PortalAppointmentsTest extends TestCase
         $ids = array_column($doctorsResponse->json('data'), 'id');
         $this->assertContains($doctor->id, $ids);
         $this->assertNotContains($inactiveDoctor->id, $ids);
+        $this->assertNotContains($otherClinicDoctor->id, $ids);
 
         $doctorPayload = collect($doctorsResponse->json('data'))->firstWhere('id', $doctor->id);
         sort($doctorPayload['consultation_modes']);

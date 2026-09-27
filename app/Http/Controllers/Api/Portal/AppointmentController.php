@@ -11,6 +11,7 @@ use App\Models\Patient;
 use App\Services\AppointmentService;
 use App\Services\Portal\PortalBookingPolicy;
 use App\Support\Portal\AppointmentPresenter;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -100,13 +101,9 @@ class AppointmentController extends Controller
         $doctorId = (int) $validated['doctor_id'];
         $date = (string) $validated['appointment_date'];
 
-        try {
-            $slot = $this->bookingPolicy->slotFor($clinicId, $doctorId, $date, (string) $validated['start_time']);
-        } catch (ValidationException $e) {
-            $errors = $e->errors();
-            $message = $errors['appointment_date'][0] ?? ($errors['start_time'][0] ?? 'Please choose one of the available times.');
-
-            return $this->error($message, $errors, 422);
+        $slot = $this->resolveSlot($clinicId, $doctorId, $date, (string) $validated['start_time']);
+        if ($slot instanceof JsonResponse) {
+            return $slot;
         }
 
         try {
@@ -124,17 +121,7 @@ class AppointmentController extends Controller
                 'notes' => $validated['reason'] ?? null,
             ], 'patient');
         } catch (ValidationException $e) {
-            $errors = $e->errors();
-
-            if (isset($errors['start_time'])) {
-                return $this->error('That slot was just taken. Please pick another.', $errors, 409);
-            }
-
-            if (isset($errors['plan'])) {
-                return $this->error($errors['plan'][0], $errors, 422);
-            }
-
-            throw $e;
+            return $this->bookingConflictResponse($e);
         }
 
         return $this->success('Appointment requested.', AppointmentPresenter::item($appointment->load('doctor')), 201);
@@ -193,19 +180,15 @@ class AppointmentController extends Controller
 
         $date = (string) $validated['appointment_date'];
 
-        try {
-            $slot = $this->bookingPolicy->slotFor(
-                (int) $appointment->clinic_id,
-                (int) $appointment->doctor_id,
-                $date,
-                (string) $validated['start_time'],
-                $appointment->id,
-            );
-        } catch (ValidationException $e) {
-            $errors = $e->errors();
-            $message = $errors['appointment_date'][0] ?? ($errors['start_time'][0] ?? 'Please choose one of the available times.');
-
-            return $this->error($message, $errors, 422);
+        $slot = $this->resolveSlot(
+            (int) $appointment->clinic_id,
+            (int) $appointment->doctor_id,
+            $date,
+            (string) $validated['start_time'],
+            $appointment->id,
+        );
+        if ($slot instanceof JsonResponse) {
+            return $slot;
         }
 
         try {
@@ -222,15 +205,50 @@ class AppointmentController extends Controller
                 AppointmentStatus::PENDING->value,
             );
         } catch (ValidationException $e) {
-            $errors = $e->errors();
-
-            if (isset($errors['start_time'])) {
-                return $this->error('That slot was just taken. Please pick another.', $errors, 409);
-            }
-
-            throw $e;
+            return $this->bookingConflictResponse($e);
         }
 
         return $this->success('Appointment rescheduled.', AppointmentPresenter::item($updated->load('doctor')));
+    }
+
+    /**
+     * Shared by store()/reschedule(): resolves a submitted date/start_time
+     * to the matching offered slot via PortalBookingPolicy::slotFor(), or
+     * returns the 422 response for "not an offered time"/"outside the
+     * booking window" so the caller can early-return it.
+     */
+    private function resolveSlot(int $clinicId, int $doctorId, string $date, string $start, ?int $excludeAppointmentId = null): array|JsonResponse
+    {
+        try {
+            return $this->bookingPolicy->slotFor($clinicId, $doctorId, $date, $start, $excludeAppointmentId);
+        } catch (ValidationException $e) {
+            $errors = $e->errors();
+            $message = $errors['appointment_date'][0] ?? ($errors['start_time'][0] ?? 'Please choose one of the available times.');
+
+            return $this->error($message, $errors, 422);
+        }
+    }
+
+    /**
+     * Shared by store()/reschedule(): translates the ValidationException
+     * that AppointmentService::create()/reschedule() throw for a slot that
+     * got taken between resolveSlot() and the write (start_time -> 409) or,
+     * for store() only, a plan limit hit (plan -> 422 with the plan's own
+     * message). Any other validation error is a bug, not a user-facing
+     * case, so it's rethrown rather than swallowed.
+     */
+    private function bookingConflictResponse(ValidationException $e): JsonResponse
+    {
+        $errors = $e->errors();
+
+        if (isset($errors['start_time'])) {
+            return $this->error('That slot was just taken. Please pick another.', $errors, 409);
+        }
+
+        if (isset($errors['plan'])) {
+            return $this->error($errors['plan'][0], $errors, 422);
+        }
+
+        throw $e;
     }
 }
