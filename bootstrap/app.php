@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'perm' => \App\Http\Middleware\EnsurePermission::class,
             'portal.auth' => \App\Http\Middleware\AuthenticatePortal::class,
+            'portal.consent' => \App\Http\Middleware\RequirePortalConsent::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

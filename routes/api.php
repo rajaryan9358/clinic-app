@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Clinic\FollowupTaskController as ClinicFollowupTask
 use App\Http\Controllers\Api\Clinic\InvoiceController as ClinicInvoiceController;
 use App\Http\Controllers\Api\Clinic\MeController as ClinicMeController;
 use App\Http\Controllers\Api\Clinic\PatientController as ClinicPatientController;
+use App\Http\Controllers\Api\Clinic\PatientFamilyController as ClinicPatientFamilyController;
 use App\Http\Controllers\Api\Clinic\PatientPortalLinkController as ClinicPatientPortalLinkController;
 use App\Http\Controllers\Api\Clinic\PatientProfileController as ClinicPatientProfileController;
 use App\Http\Controllers\Api\Clinic\PaymentController as ClinicPaymentController;
@@ -27,6 +28,9 @@ use App\Http\Controllers\Api\Clinic\WhatsappConversationController as ClinicWhat
 use App\Http\Controllers\Api\Clinic\WhatsappFlowSessionController as ClinicWhatsappFlowSessionController;
 use App\Http\Controllers\Api\Clinic\WhatsappMessageController as ClinicWhatsappMessageController;
 use App\Http\Controllers\Api\Portal\AuthController as PortalAuthController;
+use App\Http\Controllers\Api\Portal\ConsentController as PortalConsentController;
+use App\Http\Controllers\Api\Portal\DashboardController as PortalDashboardController;
+use App\Http\Controllers\Api\Portal\FamilyController as PortalFamilyController;
 use App\Http\Controllers\Api\Portal\LinkController as PortalLinkController;
 use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
 use App\Http\Controllers\Api\PublicPrescriptionPdfController;
@@ -43,6 +47,7 @@ use App\Http\Controllers\Api\SuperAdmin\DomainController as SuperAdminDomainCont
 use App\Http\Controllers\Api\SuperAdmin\FollowupTaskController as SuperAdminFollowupTaskController;
 use App\Http\Controllers\Api\SuperAdmin\InvoiceController as SuperAdminInvoiceController;
 use App\Http\Controllers\Api\SuperAdmin\PatientController as SuperAdminPatientController;
+use App\Http\Controllers\Api\SuperAdmin\PatientFamilyController as SuperAdminPatientFamilyController;
 use App\Http\Controllers\Api\SuperAdmin\PatientPortalLinkController as SuperAdminPatientPortalLinkController;
 use App\Http\Controllers\Api\SuperAdmin\PatientProfileController as SuperAdminPatientProfileController;
 use App\Http\Controllers\Api\SuperAdmin\PaymentController as SuperAdminPaymentController;
@@ -106,6 +111,18 @@ Route::prefix('portal')->group(function () {
         Route::get('auth/me', [PortalAuthController::class, 'me']);
         Route::post('auth/logout', [PortalAuthController::class, 'logout']);
         Route::post('auth/switch-clinic', [PortalAuthController::class, 'switchClinic']);
+
+        Route::get('consent', [PortalConsentController::class, 'show']);
+        Route::post('consent', [PortalConsentController::class, 'store']);
+
+        // Every feature route from here on requires an up-to-date
+        // privacy-notice acceptance on the acting profile.
+        Route::middleware('portal.consent')->group(function () {
+            Route::get('dashboard', [PortalDashboardController::class, 'show']);
+
+            Route::get('family', [PortalFamilyController::class, 'index']);
+            Route::post('family', [PortalFamilyController::class, 'store']);
+        });
     });
 });
 
@@ -176,6 +193,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::post('patients/{id}/global-summary', [SuperAdminPatientProfileController::class, 'generateGlobalSummary']);
     Route::get('patients/{id}/report.pdf', [SuperAdminPatientProfileController::class, 'reportPdf']);
     Route::post('patients/{id}/portal-link', [SuperAdminPatientPortalLinkController::class, 'store']);
+    Route::put('patients/{id}/managed-by', [SuperAdminPatientFamilyController::class, 'updateManagedBy']);
 
     Route::get('doctors/{id}/profile', [SuperAdminDoctorProfileController::class, 'profile']);
     Route::put('doctors/{id}/profile', [SuperAdminDoctorProfileController::class, 'updateProfile']);
@@ -262,6 +280,7 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::post('patients/{id}/global-summary', [ClinicPatientProfileController::class, 'generateGlobalSummary'])->middleware('perm:patients.edit');
     Route::get('patients/{id}/report.pdf', [ClinicPatientProfileController::class, 'reportPdf'])->middleware('perm:patients.view');
     Route::post('patients/{id}/portal-link', [ClinicPatientPortalLinkController::class, 'store'])->middleware('perm:patients.portal_link');
+    Route::put('patients/{id}/managed-by', [ClinicPatientFamilyController::class, 'updateManagedBy'])->middleware('perm:patients.edit');
 
     Route::get('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'profile'])->middleware('perm:doctors.view');
     Route::put('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'updateProfile'])->middleware('perm:doctors.edit');

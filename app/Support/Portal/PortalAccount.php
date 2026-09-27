@@ -32,8 +32,6 @@ final class PortalAccount
 
     public static function payload(Patient $account): array
     {
-        $profiles = PortalProfiles::allowedFor($account);
-
         $phone = PhoneNumber::normalise($account->phone);
         $holders = $phone ? PortalProfiles::accountHoldersForPhone($phone) : collect();
         if (! $holders->contains(fn (Patient $p) => $p->id === $account->id)) {
@@ -57,14 +55,7 @@ final class PortalAccount
                 'full_name' => $account->full_name,
                 'phone' => $account->phone,
             ],
-            'profiles' => $profiles->map(fn (array $row) => [
-                'id' => $row['patient']->id,
-                'full_name' => $row['patient']->full_name,
-                'dob' => $row['patient']->dob?->toDateString(),
-                'gender' => $row['patient']->gender,
-                'relation' => $row['relation'],
-                'consent_current' => $row['patient']->consent_version === PortalConsent::VERSION,
-            ])->values()->all(),
+            'profiles' => self::profiles($account),
             'clinics' => $clinicRows,
             'clinic' => $currentClinic ? [
                 'id' => $currentClinic->id,
@@ -75,6 +66,24 @@ final class PortalAccount
                 'address' => self::address($currentClinic),
             ] : null,
         ];
+    }
+
+    /**
+     * The profiles an account may act for, in the shape both
+     * `/auth/me` and `GET /portal/family` return.
+     *
+     * @return array<int, array{id: int, full_name: string, dob: ?string, gender: ?string, relation: string, consent_current: bool}>
+     */
+    public static function profiles(Patient $account): array
+    {
+        return PortalProfiles::allowedFor($account)->map(fn (array $row) => [
+            'id' => $row['patient']->id,
+            'full_name' => $row['patient']->full_name,
+            'dob' => $row['patient']->dob?->toDateString(),
+            'gender' => $row['patient']->gender,
+            'relation' => $row['relation'],
+            'consent_current' => $row['patient']->consent_version === PortalConsent::VERSION,
+        ])->values()->all();
     }
 
     private static function address(Clinic $clinic): ?string
