@@ -121,6 +121,7 @@ return new class extends Migration
 
             $table->index(['clinic_id', 'delivery_status']);
             $table->index(['clinic_id', 'reminder_type']);
+            $table->unique(['appointment_id', 'reminder_type']);
         });
     }
 

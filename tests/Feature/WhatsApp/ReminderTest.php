@@ -8,11 +8,14 @@ use App\Models\ClinicSetting;
 use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\ReminderLog;
+use App\Models\WhatsappMessage;
 use App\Services\WhatsApp\FakeWhatsAppGateway;
+use App\Services\WhatsApp\PatientNotifier;
 use App\Services\WhatsApp\WhatsAppGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -235,5 +238,56 @@ class ReminderTest extends TestCase
         // Idempotent: a second run does not re-attempt it.
         $this->artisan('whatsapp:send-reminders')->assertSuccessful();
         $this->assertSame(1, ReminderLog::count());
+    }
+
+    /**
+     * Fix round 1, finding 1: an exception while handling one candidate
+     * (e.g. a notifier failure) must not abort the whole run — the
+     * already-created log for that appointment is marked 'failed' (so it
+     * isn't retried forever) and the remaining candidates are still
+     * processed.
+     */
+    public function test_notifier_exception_for_one_appointment_does_not_abort_the_run(): void
+    {
+        ClinicSetting::create(['clinic_id' => $this->clinic->id, 'reminder_hours_before' => 24]);
+
+        $this->travelTo(Carbon::parse('2026-09-28 10:00', 'Asia/Kolkata'));
+
+        $patient = $this->patient('Ravi Kumar');
+        $first = $this->appointment($patient, '2026-09-29', '09:00:00');
+        $second = $this->appointment($patient, '2026-09-29', '09:15:00');
+
+        $throwingNotifier = new class($first->id) extends PatientNotifier
+        {
+            public function __construct(private readonly int $throwForAppointmentId) {}
+
+            public function appointmentReminder(Appointment $appointment, ?ReminderLog $log = null): WhatsappMessage
+            {
+                if ($appointment->id === $this->throwForAppointmentId) {
+                    throw new RuntimeException('Simulated notifier failure');
+                }
+
+                return parent::appointmentReminder($appointment, $log);
+            }
+        };
+        $this->app->instance(PatientNotifier::class, $throwingNotifier);
+
+        $this->artisan('whatsapp:send-reminders')->assertSuccessful();
+
+        $this->assertCount(1, $this->fake->sent);
+
+        $firstLog = ReminderLog::where('appointment_id', $first->id)->first();
+        $this->assertNotNull($firstLog);
+        $this->assertSame('failed', $firstLog->delivery_status);
+        $this->assertStringContainsString('Simulated notifier failure', (string) $firstLog->failure_reason);
+
+        $secondLog = ReminderLog::where('appointment_id', $second->id)->first();
+        $this->assertNotNull($secondLog);
+        $this->assertSame('sent', $secondLog->delivery_status);
+
+        // Idempotent: a second run does not retry the failed one, and sends nothing new.
+        $this->artisan('whatsapp:send-reminders')->assertSuccessful();
+        $this->assertCount(1, $this->fake->sent);
+        $this->assertSame(2, ReminderLog::count());
     }
 }
