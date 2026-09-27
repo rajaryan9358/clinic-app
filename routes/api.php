@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Portal\AuthController as PortalAuthController;
+use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
 use App\Http\Controllers\Api\PublicPrescriptionPdfController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
@@ -93,11 +94,14 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::prefix('portal')->group(function () {
-    // Task 2-3 add the public auth/* endpoints here (request-code, verify, magic link).
+    Route::post('auth/request-code', [PortalOtpController::class, 'requestCode'])->middleware('throttle:portal-otp');
+    Route::post('auth/verify', [PortalOtpController::class, 'verify']);
+    // Task 3 adds the magic-link endpoints here.
 
     Route::middleware('portal.auth')->group(function () {
         Route::get('auth/me', [PortalAuthController::class, 'me']);
         Route::post('auth/logout', [PortalAuthController::class, 'logout']);
+        Route::post('auth/switch-clinic', [PortalAuthController::class, 'switchClinic']);
     });
 });
 

@@ -28,6 +28,7 @@ class AuthenticatePortal
         if (! $account
             || $account->trashed()
             || ! $account->tokenCan('portal')
+            || $account->managed_by_patient_id !== null
             || ! PortalProfiles::portalEnabled($account->clinic_id)) {
             return response()->json([
                 'success' => false,
