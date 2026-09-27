@@ -241,11 +241,7 @@ class AppointmentController extends BaseCrudController
             ->with(['patient:id,full_name,phone', 'doctor:id,full_name'])
             ->findOrFail($id);
 
-        $latest = AppointmentPrescription::query()
-            ->where('clinic_id', $appointment->clinic_id)
-            ->where('appointment_id', $appointment->id)
-            ->orderByDesc('id')
-            ->first();
+        $latest = PrescriptionResolver::latest($appointment->id);
 
         return $this->success('Prescription fetched successfully', [
             'appointment_id' => $appointment->id,
@@ -284,11 +280,7 @@ class AppointmentController extends BaseCrudController
             ->with(['patient:id,full_name,phone', 'doctor:id,full_name'])
             ->findOrFail($id);
 
-        $latest = AppointmentPrescription::query()
-            ->where('clinic_id', $appointment->clinic_id)
-            ->where('appointment_id', $appointment->id)
-            ->orderByDesc('id')
-            ->first();
+        $latest = PrescriptionResolver::latest($appointment->id);
 
         if (! $latest) {
             abort(404, 'No prescription found for this appointment.');

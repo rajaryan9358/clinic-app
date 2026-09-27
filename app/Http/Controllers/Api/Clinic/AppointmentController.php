@@ -279,13 +279,8 @@ class AppointmentController extends BaseClinicCrudController
     public function prescription(Request $request, int $id)
     {
         $appointment = $this->scopedAppointment($id, $request);
-        $clinicId = (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
 
-        $latest = AppointmentPrescription::query()
-            ->where('clinic_id', $clinicId)
-            ->where('appointment_id', $appointment->id)
-            ->orderByDesc('id')
-            ->first();
+        $latest = PrescriptionResolver::latest($appointment->id);
 
         return $this->success('Prescription fetched successfully', [
             'appointment_id' => $appointment->id,
@@ -321,13 +316,8 @@ class AppointmentController extends BaseClinicCrudController
     public function sendPrescription(Request $request, int $id)
     {
         $appointment = $this->scopedAppointment($id, $request);
-        $clinicId = (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
 
-        $latest = AppointmentPrescription::query()
-            ->where('clinic_id', $clinicId)
-            ->where('appointment_id', $appointment->id)
-            ->orderByDesc('id')
-            ->first();
+        $latest = PrescriptionResolver::latest($appointment->id);
 
         if (! $latest) {
             abort(404, 'No prescription found for this appointment.');

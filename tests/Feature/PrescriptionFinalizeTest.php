@@ -174,6 +174,44 @@ class PrescriptionFinalizeTest extends TestCase
         $this->assertSame('This prescription is already final.', $response->json('message'));
     }
 
+    /**
+     * A prescription can be re-recorded (voice) after an earlier one was
+     * already finalized. Finalizing the new draft must only touch that
+     * row — the older final row's status/finalized_at/data must be left
+     * exactly as they were, since it may still be what was actually sent
+     * to the patient.
+     */
+    public function test_clinic_finalize_with_older_final_leaves_it_unchanged(): void
+    {
+        $olderFinal = $this->rx([
+            'status' => 'final',
+            'finalized_at' => Carbon::parse('2026-01-01 09:00:00'),
+            'data' => ['notes' => 'Original advice'],
+        ]);
+        $olderFinal->finalized_by_user_id = null;
+        $olderFinal->save();
+        $olderFinalizedAt = $olderFinal->finalized_at;
+
+        $newDraft = $this->rx(['status' => 'draft', 'data' => ['notes' => 'Revised advice']]);
+
+        $admin = $this->clinicAdmin();
+        Sanctum::actingAs($admin);
+        $response = $this->postJson("/api/clinic/appointments/{$this->appointment->id}/prescription/finalize");
+
+        $response->assertOk();
+        $this->assertSame($newDraft->id, $response->json('data.id'));
+
+        $newDraft->refresh();
+        $this->assertSame('final', $newDraft->status);
+        $this->assertSame($admin->id, $newDraft->finalized_by_user_id);
+
+        $olderFinal->refresh();
+        $this->assertSame('final', $olderFinal->status);
+        $this->assertTrue($olderFinalizedAt->equalTo($olderFinal->finalized_at));
+        $this->assertNull($olderFinal->finalized_by_user_id);
+        $this->assertSame(['notes' => 'Original advice'], $olderFinal->data);
+    }
+
     public function test_clinic_finalize_requires_prescribe_permission(): void
     {
         $this->rx();
