@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::get('appointments/{id}/report.pdf', [SuperAdminAppointmentController::class, 'reportPdf']);
     Route::get('appointments/{id}/prescription.pdf', [SuperAdminAppointmentController::class, 'prescriptionPdf']);
     Route::post('appointments/{id}/prescription/voice', [SuperAdminAppointmentController::class, 'generatePrescriptionFromVoice']);
+    Route::post('appointments/{id}/prescription/send', [SuperAdminAppointmentController::class, 'sendPrescription']);
     Route::get('appointments/{id}/summary', [SuperAdminAppointmentController::class, 'summary']);
     Route::post('appointments/{id}/summary/voice', [SuperAdminAppointmentController::class, 'generateSummaryFromVoice']);
 
@@ -225,6 +226,7 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::get('appointments/{id}/report.pdf', [ClinicAppointmentController::class, 'reportPdf'])->middleware('perm:appointments.view');
     Route::get('appointments/{id}/prescription.pdf', [ClinicAppointmentController::class, 'prescriptionPdf'])->middleware('perm:appointments.view');
     Route::post('appointments/{id}/prescription/voice', [ClinicAppointmentController::class, 'generatePrescriptionFromVoice'])->middleware('perm:appointments.prescribe');
+    Route::post('appointments/{id}/prescription/send', [ClinicAppointmentController::class, 'sendPrescription'])->middleware('perm:appointments.prescribe');
     Route::get('appointments/{id}/summary', [ClinicAppointmentController::class, 'summary'])->middleware('perm:appointments.view');
     Route::post('appointments/{id}/summary/voice', [ClinicAppointmentController::class, 'generateSummaryFromVoice'])->middleware('perm:appointments.prescribe');
 

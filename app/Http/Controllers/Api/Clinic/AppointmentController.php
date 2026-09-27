@@ -16,6 +16,8 @@ use App\Services\AppointmentService;
 use App\Services\AppointmentPrescriptionAiService;
 use App\Services\AppointmentSummaryAiService;
 use App\Services\PrescriptionPdfRenderer;
+use App\Services\WhatsApp\PatientNotifier;
+use App\Services\WhatsApp\PhoneNumber;
 use App\Support\PermissionCatalogue;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
@@ -282,6 +284,30 @@ class AppointmentController extends BaseClinicCrudController
             'appointment_id' => $appointment->id,
             'prescription' => $latest,
         ]);
+    }
+
+    public function sendPrescription(Request $request, int $id)
+    {
+        $appointment = $this->scopedAppointment($id, $request);
+        $clinicId = (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
+
+        $prescription = AppointmentPrescription::query()
+            ->where('clinic_id', $clinicId)
+            ->where('appointment_id', $appointment->id)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $prescription) {
+            abort(404, 'No prescription found for this appointment.');
+        }
+
+        if (PhoneNumber::normalise($appointment->patient?->phone) === null) {
+            return $this->error('Patient has no phone number.', null, 422);
+        }
+
+        $message = app(PatientNotifier::class)->prescriptionReady($prescription);
+
+        return $this->success('Prescription sent', $message);
     }
 
     public function reportPdf(Request $request, int $id)

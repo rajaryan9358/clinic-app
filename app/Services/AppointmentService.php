@@ -11,13 +11,31 @@ use App\Models\DoctorSchedule;
 use App\Models\DoctorScheduleException;
 use App\Models\Patient;
 use App\Services\Billing\PlanLimits;
+use App\Services\WhatsApp\PatientNotifier;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AppointmentService
 {
+    /**
+     * Runs a notifier call once the enclosing transaction actually commits,
+     * so rolled-back work never sends anything. A notifier failure must
+     * never break the booking/reschedule/cancel request itself.
+     */
+    private function notifyAfterCommit(\Closure $callback): void
+    {
+        DB::afterCommit(function () use ($callback) {
+            try {
+                $callback();
+            } catch (\Throwable $e) {
+                Log::warning('WhatsApp notifier failed: '.$e->getMessage(), ['exception' => $e]);
+            }
+        });
+    }
+
     private function toYmd(mixed $value): ?string
     {
         if ($value === null || $value === '') {
@@ -316,6 +334,8 @@ class AppointmentService
                 'created_at' => now(),
             ]);
 
+            $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->bookingConfirmed($appointment));
+
             return $appointment;
         });
     }
@@ -376,6 +396,10 @@ class AppointmentService
                 'reason' => $reason,
                 'created_at' => now(),
             ]);
+
+            if ($status === AppointmentStatus::CANCELLED) {
+                $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->appointmentUpdated($appointment, 'cancelled'));
+            }
 
             return $appointment->refresh();
         });
@@ -443,6 +467,8 @@ class AppointmentService
                 'reason' => $reason,
                 'created_at' => now(),
             ]);
+
+            $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->appointmentUpdated($appointment, 'rescheduled'));
 
             return $appointment->refresh();
         });
