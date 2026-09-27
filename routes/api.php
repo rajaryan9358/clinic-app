@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Clinic\FollowupTaskController as ClinicFollowupTask
 use App\Http\Controllers\Api\Clinic\InvoiceController as ClinicInvoiceController;
 use App\Http\Controllers\Api\Clinic\MeController as ClinicMeController;
 use App\Http\Controllers\Api\Clinic\PatientController as ClinicPatientController;
+use App\Http\Controllers\Api\Clinic\PatientPortalLinkController as ClinicPatientPortalLinkController;
 use App\Http\Controllers\Api\Clinic\PatientProfileController as ClinicPatientProfileController;
 use App\Http\Controllers\Api\Clinic\PaymentController as ClinicPaymentController;
 use App\Http\Controllers\Api\Clinic\ReminderLogController as ClinicReminderLogController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Api\Clinic\WhatsappConversationController as ClinicWhat
 use App\Http\Controllers\Api\Clinic\WhatsappFlowSessionController as ClinicWhatsappFlowSessionController;
 use App\Http\Controllers\Api\Clinic\WhatsappMessageController as ClinicWhatsappMessageController;
 use App\Http\Controllers\Api\Portal\AuthController as PortalAuthController;
+use App\Http\Controllers\Api\Portal\LinkController as PortalLinkController;
 use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
 use App\Http\Controllers\Api\PublicPrescriptionPdfController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
@@ -41,6 +43,7 @@ use App\Http\Controllers\Api\SuperAdmin\DomainController as SuperAdminDomainCont
 use App\Http\Controllers\Api\SuperAdmin\FollowupTaskController as SuperAdminFollowupTaskController;
 use App\Http\Controllers\Api\SuperAdmin\InvoiceController as SuperAdminInvoiceController;
 use App\Http\Controllers\Api\SuperAdmin\PatientController as SuperAdminPatientController;
+use App\Http\Controllers\Api\SuperAdmin\PatientPortalLinkController as SuperAdminPatientPortalLinkController;
 use App\Http\Controllers\Api\SuperAdmin\PatientProfileController as SuperAdminPatientProfileController;
 use App\Http\Controllers\Api\SuperAdmin\PaymentController as SuperAdminPaymentController;
 use App\Http\Controllers\Api\SuperAdmin\PlanController as SuperAdminPlanController;
@@ -97,7 +100,7 @@ Route::prefix('auth')->group(function () {
 Route::prefix('portal')->group(function () {
     Route::post('auth/request-code', [PortalOtpController::class, 'requestCode'])->middleware('throttle:portal-otp');
     Route::post('auth/verify', [PortalOtpController::class, 'verify'])->middleware('throttle:portal-verify');
-    // Task 3 adds the magic-link endpoints here.
+    Route::post('auth/link', [PortalLinkController::class, 'exchange'])->middleware('throttle:portal-link');
 
     Route::middleware('portal.auth')->group(function () {
         Route::get('auth/me', [PortalAuthController::class, 'me']);
@@ -172,6 +175,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::get('patients/{id}/global-summary', [SuperAdminPatientProfileController::class, 'globalSummary']);
     Route::post('patients/{id}/global-summary', [SuperAdminPatientProfileController::class, 'generateGlobalSummary']);
     Route::get('patients/{id}/report.pdf', [SuperAdminPatientProfileController::class, 'reportPdf']);
+    Route::post('patients/{id}/portal-link', [SuperAdminPatientPortalLinkController::class, 'store']);
 
     Route::get('doctors/{id}/profile', [SuperAdminDoctorProfileController::class, 'profile']);
     Route::put('doctors/{id}/profile', [SuperAdminDoctorProfileController::class, 'updateProfile']);
@@ -257,6 +261,7 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::get('patients/{id}/global-summary', [ClinicPatientProfileController::class, 'globalSummary'])->middleware('perm:patients.view');
     Route::post('patients/{id}/global-summary', [ClinicPatientProfileController::class, 'generateGlobalSummary'])->middleware('perm:patients.edit');
     Route::get('patients/{id}/report.pdf', [ClinicPatientProfileController::class, 'reportPdf'])->middleware('perm:patients.view');
+    Route::post('patients/{id}/portal-link', [ClinicPatientPortalLinkController::class, 'store'])->middleware('perm:patients.portal_link');
 
     Route::get('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'profile'])->middleware('perm:doctors.view');
     Route::put('doctors/{id}/profile', [ClinicDoctorProfileController::class, 'updateProfile'])->middleware('perm:doctors.edit');

@@ -18,6 +18,7 @@ final class TemplateSettings
         'appointment_updated',
         'prescription_ready',
         'login_otp',
+        'portal_link',
     ];
 
     private const DEFAULTS = [
@@ -26,6 +27,7 @@ final class TemplateSettings
         'appointment_updated' => ['name' => 'appointment_updated', 'language' => 'en', 'enabled' => true],
         'prescription_ready' => ['name' => 'prescription_ready', 'language' => 'en', 'enabled' => true],
         'login_otp' => ['name' => 'login_otp', 'language' => 'en', 'enabled' => true],
+        'portal_link' => ['name' => 'portal_link', 'language' => 'en', 'enabled' => true],
     ];
 
     /** @return array{name: string, language: string, enabled: bool} */

@@ -90,7 +90,7 @@ class RoleBuilderTest extends TestCase
 
         $modules = collect($res->json('data.modules'));
         $patients = $modules->firstWhere('key', 'patients');
-        $this->assertEqualsCanonicalizing(['view', 'create', 'edit', 'delete'], $patients['actions']);
+        $this->assertEqualsCanonicalizing(['view', 'create', 'edit', 'delete', 'portal_link'], $patients['actions']);
 
         $reports = $modules->firstWhere('key', 'reports');
         $this->assertSame(['view'], $reports['actions']);

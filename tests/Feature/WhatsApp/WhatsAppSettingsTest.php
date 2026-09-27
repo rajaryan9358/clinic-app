@@ -72,7 +72,7 @@ class WhatsAppSettingsTest extends TestCase
         $this->assertSame('appt_confirm_v2', $templates['booking_confirmed']['name']);
         $this->assertSame('en_US', $templates['booking_confirmed']['language']);
         $this->assertFalse($templates['booking_confirmed']['enabled']);
-        foreach (['booking_confirmed', 'appointment_reminder', 'appointment_updated', 'prescription_ready', 'login_otp'] as $type) {
+        foreach (['booking_confirmed', 'appointment_reminder', 'appointment_updated', 'prescription_ready', 'login_otp', 'portal_link'] as $type) {
             $this->assertArrayHasKey($type, $templates);
         }
 

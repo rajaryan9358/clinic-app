@@ -49,11 +49,7 @@ class OtpController extends Controller
         }
 
         $patient = $result['patient'];
-        $token = $patient->createToken('portal', ['portal'], now()->addDays(30))->plainTextToken;
 
-        return $this->success('Logged in.', [
-            'token' => $token,
-            'account' => PortalAccount::payload($patient),
-        ]);
+        return $this->success('Logged in.', PortalAccount::issueToken($patient));
     }
 }

@@ -15,6 +15,21 @@ use App\Support\PortalConsent;
  */
 final class PortalAccount
 {
+    /**
+     * Issues a fresh 30-day portal token for $account and pairs it with
+     * its `me` payload — the `{token, account}` shape returned by every
+     * portal login path (OTP verify, magic-link exchange, clinic switch).
+     *
+     * @return array{token: string, account: array}
+     */
+    public static function issueToken(Patient $account): array
+    {
+        return [
+            'token' => $account->createToken('portal', ['portal'], now()->addDays(30))->plainTextToken,
+            'account' => self::payload($account),
+        ];
+    }
+
     public static function payload(Patient $account): array
     {
         $profiles = PortalProfiles::allowedFor($account);

@@ -42,5 +42,9 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perHour(30)->by($request->ip().'|'.$phone);
         });
+
+        RateLimiter::for('portal-link', function (Request $request) {
+            return Limit::perHour(30)->by($request->ip());
+        });
     }
 }

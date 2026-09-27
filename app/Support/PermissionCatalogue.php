@@ -11,7 +11,7 @@ class PermissionCatalogue
         $m = fn (string $label, array $actions = self::CRUD) => ['label' => $label, 'actions' => $actions];
 
         return [
-            'patients' => $m('patients'),
+            'patients' => $m('patients', array_merge(self::CRUD, ['portal_link'])),
             'appointments' => $m('appointments'),
             'doctors' => $m('doctors'),
             'doctor_schedules' => $m('doctor schedules'),
@@ -55,6 +55,9 @@ class PermissionCatalogue
 
     public static function label(string $permission): string
     {
+        if ($permission === 'patients.portal_link') {
+            return 'send patient portal links';
+        }
         if (isset(self::specials()[$permission])) {
             return self::specials()[$permission]['label'];
         }
@@ -79,7 +82,7 @@ class PermissionCatalogue
                 $crud('followups'),
             ),
             'receptionist' => array_merge(
-                $crud('patients'), $crud('appointments'), ['appointments.check_in', 'appointments.cancel'],
+                $crud('patients'), ['patients.portal_link'], $crud('appointments'), ['appointments.check_in', 'appointments.cancel'],
                 ['doctors.view', 'doctor_schedules.view', 'services.view', 'reminders.view'],
                 $crud('followups'), $crud('whatsapp', ['view', 'create']), $crud('billing'), ['reports.view'],
             ),

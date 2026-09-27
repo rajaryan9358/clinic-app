@@ -57,11 +57,6 @@ class AuthController extends Controller
 
         $account->currentAccessToken()?->delete();
 
-        $token = $target->createToken('portal', ['portal'], now()->addDays(30))->plainTextToken;
-
-        return $this->success('Switched clinic.', [
-            'token' => $token,
-            'account' => PortalAccount::payload($target),
-        ]);
+        return $this->success('Switched clinic.', PortalAccount::issueToken($target));
     }
 }

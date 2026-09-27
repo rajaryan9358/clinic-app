@@ -168,6 +168,36 @@ class NotifierTest extends TestCase
         $this->assertSame('482913', $button['parameters'][0]['text']);
     }
 
+    public function test_portal_link_includes_body_params_and_url_button_with_token(): void
+    {
+        $row = $this->notifier->portalLink($this->patient, 'abc123token');
+
+        $this->assertSame($this->clinic->id, $row->clinic_id);
+        $this->assertSame($this->patient->id, $row->patient_id);
+        $this->assertNull($row->appointment_id);
+        $this->assertSame('portal_link', $row->notification_type);
+        $this->assertSame('portal_link', $row->template_name);
+        $this->assertStringContainsString('Sunrise Clinic', (string) $row->content_text);
+        $this->assertStringContainsString('/portal/login/abc123token', (string) $row->content_text);
+
+        $row->refresh();
+        $this->assertSame('sent', $row->delivery_status);
+
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $this->assertSame('portal_link', $sent['template']);
+
+        $body = $this->bodyComponent($sent['components']);
+        $this->assertSame(
+            ['Ravi Kumar', 'Sunrise Clinic'],
+            array_map(fn ($p) => $p['text'], $body['parameters']),
+        );
+
+        $button = $this->componentOfType($sent['components'], 'button');
+        $this->assertSame('url', $button['sub_type']);
+        $this->assertSame('0', $button['index']);
+        $this->assertSame('abc123token', $button['parameters'][0]['text']);
+    }
+
     /**
      * Meta rejects template text parameters containing newlines/tabs or
      * runs of more than 4 consecutive spaces. buildComponents() must

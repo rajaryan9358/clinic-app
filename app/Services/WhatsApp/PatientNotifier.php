@@ -5,6 +5,7 @@ namespace App\Services\WhatsApp;
 use App\Jobs\SendWhatsAppTemplate;
 use App\Models\Appointment;
 use App\Models\AppointmentPrescription;
+use App\Models\Patient;
 use App\Models\ReminderLog;
 use App\Models\WhatsappMessage;
 use Carbon\Carbon;
@@ -138,6 +139,32 @@ class PatientNotifier
             preview: "Your login code is {$code}.",
             buttonCode: $code,
             sanitiseBody: false,
+        );
+    }
+
+    /**
+     * Sends a staff-issued single-use magic login link. $token is the raw
+     * (unhashed) `patient_login_links` token; the URL button parameter is
+     * the token itself, matching the Meta template's dynamic URL suffix.
+     */
+    public function portalLink(Patient $patient, string $token): WhatsappMessage
+    {
+        $patient->loadMissing('clinic:id,name');
+        $clinicName = (string) ($patient->clinic?->name ?? '');
+        $url = rtrim((string) config('app.url'), '/').'/portal/login/'.$token;
+
+        return $this->send(
+            type: 'portal_link',
+            clinicId: $patient->clinic_id,
+            patientId: $patient->id,
+            appointmentId: null,
+            phone: $patient->phone,
+            bodyParams: [
+                (string) ($patient->full_name ?? ''),
+                $clinicName,
+            ],
+            preview: "Sign in to {$clinicName}'s patient portal: {$url}",
+            buttonCode: $token,
         );
     }
 
