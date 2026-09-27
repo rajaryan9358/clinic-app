@@ -137,6 +137,7 @@ class PatientNotifier
             bodyParams: [$code],
             preview: "Your login code is {$code}.",
             buttonCode: $code,
+            sanitiseBody: false,
         );
     }
 
@@ -163,6 +164,7 @@ class PatientNotifier
         ?array $header = null,
         ?string $buttonCode = null,
         ?int $reminderLogId = null,
+        bool $sanitiseBody = true,
     ): WhatsappMessage {
         $settings = TemplateSettings::for($type);
 
@@ -199,7 +201,7 @@ class PatientNotifier
         $payload = [
             'template' => $settings['name'],
             'language' => $settings['language'],
-            'components' => $this->buildComponents($bodyParams, $header, $buttonCode),
+            'components' => $this->buildComponents($bodyParams, $header, $buttonCode, $sanitiseBody),
         ];
 
         if ($reminderLogId !== null) {
@@ -220,7 +222,7 @@ class PatientNotifier
      * @param  string[]  $bodyParams
      * @param  array{link: string, filename: string}|null  $header
      */
-    private function buildComponents(array $bodyParams, ?array $header, ?string $buttonCode): array
+    private function buildComponents(array $bodyParams, ?array $header, ?string $buttonCode, bool $sanitiseBody = true): array
     {
         $components = [];
 
@@ -240,7 +242,7 @@ class PatientNotifier
         $components[] = [
             'type' => 'body',
             'parameters' => array_map(
-                static fn (string $param) => ['type' => 'text', 'text' => $param],
+                fn (string $param) => ['type' => 'text', 'text' => $sanitiseBody ? $this->sanitiseTextParam($param) : $param],
                 $bodyParams,
             ),
         ];
@@ -258,5 +260,23 @@ class PatientNotifier
         }
 
         return $components;
+    }
+
+    /**
+     * Meta rejects template text parameters that contain newlines/tabs, runs
+     * of more than 4 consecutive spaces, or are empty. Collapse any run of
+     * whitespace (including \r \n \t) to a single space, trim, and fall back
+     * to '-' for an empty result (e.g. a missing doctor name); cap length so
+     * we never exceed Meta's limit.
+     */
+    private function sanitiseTextParam(string $value): string
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+
+        if ($value === '') {
+            return '-';
+        }
+
+        return mb_substr($value, 0, 1024);
     }
 }

@@ -168,6 +168,71 @@ class NotifierTest extends TestCase
         $this->assertSame('482913', $button['parameters'][0]['text']);
     }
 
+    /**
+     * Meta rejects template text parameters containing newlines/tabs or
+     * runs of more than 4 consecutive spaces. buildComponents() must
+     * collapse any run of whitespace to a single space and trim the ends
+     * before handing text params to the gateway.
+     */
+    public function test_body_params_with_irregular_whitespace_are_sanitised(): void
+    {
+        // Bypass the Patient model's full_name recompute-on-save so the
+        // messy value survives untouched until the notifier reads it.
+        Patient::where('id', $this->patient->id)->update(['full_name' => "Ravi\n  Kumar\t "]);
+        $this->appointment->unsetRelation('patient');
+
+        $this->notifier->bookingConfirmed($this->appointment);
+
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $body = $this->bodyComponent($sent['components']);
+        $params = array_map(fn ($p) => $p['text'], $body['parameters']);
+
+        $this->assertSame('Ravi Kumar', $params[0]);
+    }
+
+    /**
+     * A missing/blank doctor name must not reach Meta as an empty text
+     * parameter (Meta rejects empty params) — it falls back to '-'.
+     */
+    public function test_blank_doctor_name_falls_back_to_dash(): void
+    {
+        Doctor::where('id', $this->doctor->id)->update(['full_name' => '   ']);
+        $this->appointment->unsetRelation('doctor');
+
+        $this->notifier->bookingConfirmed($this->appointment);
+
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $body = $this->bodyComponent($sent['components']);
+        $params = array_map(fn ($p) => $p['text'], $body['parameters']);
+
+        $this->assertSame('-', $params[2]);
+    }
+
+    /**
+     * The document header's signed link and the OTP body/button code are
+     * not "names/status lines" and must pass through unaltered.
+     */
+    public function test_header_link_and_otp_code_are_not_sanitised(): void
+    {
+        $rx = AppointmentPrescription::create([
+            'clinic_id' => $this->clinic->id,
+            'appointment_id' => $this->appointment->id,
+            'data' => ['notes' => 'Take rest'],
+        ]);
+
+        $this->notifier->prescriptionReady($rx);
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $header = $this->componentOfType($sent['components'], 'header');
+        $this->assertStringContainsString('signature=', $header['parameters'][0]['document']['link']);
+
+        // Irregular whitespace would be collapsed by the body-param
+        // sanitiser; the OTP path opts out, so it must survive untouched.
+        $this->notifier->loginOtp('9876543210', "482913\t");
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $body = $this->bodyComponent($sent['components']);
+        $this->assertSame("482913\t", $body['parameters'][0]['text']);
+    }
+
     public function test_disabled_template_skips_without_sending(): void
     {
         PlatformSettings::set('whatsapp_templates', [
