@@ -11,6 +11,7 @@ use App\Models\FollowupTask;
 use App\Models\PatientGlobalSummary;
 use App\Models\Invoice;
 use App\Models\Patient;
+use App\Models\PatientFamilyLink;
 use App\Models\PatientMedicalProfile;
 use App\Models\PatientNote;
 use App\Models\Payment;
@@ -37,7 +38,11 @@ class PatientProfileController extends Controller
     {
         return Patient::query()
             ->withTrashed()
-            ->with(['medicalProfile'])
+            ->with([
+                'medicalProfile',
+                'managedBy:id,full_name,phone,managed_by_patient_id',
+                'dependents:id,full_name,phone,managed_by_patient_id',
+            ])
             ->findOrFail($id);
     }
 
@@ -54,9 +59,20 @@ class PatientProfileController extends Controller
             'notes' => PatientNote::query()->where('clinic_id', $clinicId)->where('patient_id', $patient->id)->count(),
         ];
 
+        $familyLinks = PatientFamilyLink::query()
+            ->where('clinic_id', $clinicId)
+            ->where('patient_id', $patient->id)
+            ->with(['relatedPatient:id,full_name,phone'])
+            ->get();
+
         return $this->success('Patient profile fetched', [
             'patient' => $patient,
             'counts' => $counts,
+            'family' => [
+                'managed_by' => $patient->managedBy,
+                'dependents' => $patient->dependents,
+                'links' => $familyLinks,
+            ],
         ]);
     }
 

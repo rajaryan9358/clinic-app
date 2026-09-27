@@ -4,6 +4,7 @@ import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
+import StatusBadge from '../../components/StatusBadge';
 
 function prettyDate(ymd) {
     try {
@@ -38,6 +39,7 @@ export default function PrescriptionPage() {
     });
 
     const [send, setSend] = useState({ confirming: false, sending: false, message: '', isError: false });
+    const [finalize, setFinalize] = useState({ confirming: false, saving: false, message: '', isError: false });
 
     useEffect(() => {
         let cancelled = false;
@@ -110,6 +112,19 @@ export default function PrescriptionPage() {
             setSend({ confirming: false, sending: false, message: res?.data?.message || 'Prescription sent to patient.', isError: false });
         } catch (e) {
             setSend((p) => ({ ...p, sending: false, message: e?.response?.data?.message || e?.message || 'Failed to send prescription.', isError: true }));
+        }
+    };
+
+    const finalizePrescription = async () => {
+        if (!id) return;
+        setFinalize((p) => ({ ...p, saving: true, message: '', isError: false }));
+        try {
+            const res = await client.post(`${base}/appointments/${id}/prescription/finalize`);
+            const rx = res?.data?.data || null;
+            if (rx) setPrescription(rx);
+            setFinalize({ confirming: false, saving: false, message: res?.data?.message || 'Prescription finalized.', isError: false });
+        } catch (e) {
+            setFinalize((p) => ({ ...p, saving: false, message: e?.response?.data?.message || e?.message || 'Failed to finalize prescription.', isError: true }));
         }
     };
 
@@ -218,6 +233,7 @@ export default function PrescriptionPage() {
                 <div className="flex items-center gap-2">
                     <AppIcon name="section" className="h-5 w-5 text-slate-700" />
                     <h1 className="text-lg font-semibold text-slate-900">Prescription</h1>
+                    {prescription ? <StatusBadge status={prescription.status || 'draft'} /> : null}
                 </div>
                 <div className="flex items-center gap-2">
                     <Link
@@ -249,22 +265,22 @@ export default function PrescriptionPage() {
                             Start Recording
                         </button>
                     ) : null}
-                    {prescription && canPrescribe ? (
-                        send.confirming ? (
-                            <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2">
-                                <span className="text-sm font-medium text-emerald-800">Send via WhatsApp?</span>
+                    {prescription && canPrescribe && prescription.status !== 'final' ? (
+                        finalize.confirming ? (
+                            <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2">
+                                <span className="text-sm font-medium text-indigo-800">Finalize this prescription?</span>
                                 <button
                                     type="button"
-                                    disabled={send.sending}
-                                    onClick={sendToPatient}
-                                    className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                    disabled={finalize.saving}
+                                    onClick={finalizePrescription}
+                                    className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
                                 >
-                                    {send.sending ? 'Sending…' : 'Yes, send'}
+                                    {finalize.saving ? 'Finalizing…' : 'Yes, finalize'}
                                 </button>
                                 <button
                                     type="button"
-                                    disabled={send.sending}
-                                    onClick={() => setSend((p) => ({ ...p, confirming: false }))}
+                                    disabled={finalize.saving}
+                                    onClick={() => setFinalize((p) => ({ ...p, confirming: false }))}
                                     className="rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
                                 >
                                     Cancel
@@ -273,15 +289,68 @@ export default function PrescriptionPage() {
                         ) : (
                             <button
                                 type="button"
-                                onClick={() => setSend({ confirming: true, sending: false, message: '', isError: false })}
-                                className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                onClick={() => setFinalize({ confirming: true, saving: false, message: '', isError: false })}
+                                className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
                             >
-                                Send to Patient (WhatsApp)
+                                Finalize
                             </button>
+                        )
+                    ) : null}
+                    {prescription && canPrescribe ? (
+                        prescription.status === 'final' ? (
+                            send.confirming ? (
+                                <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2">
+                                    <span className="text-sm font-medium text-emerald-800">Send via WhatsApp?</span>
+                                    <button
+                                        type="button"
+                                        disabled={send.sending}
+                                        onClick={sendToPatient}
+                                        className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                    >
+                                        {send.sending ? 'Sending…' : 'Yes, send'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={send.sending}
+                                        onClick={() => setSend((p) => ({ ...p, confirming: false }))}
+                                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setSend({ confirming: true, sending: false, message: '', isError: false })}
+                                    className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                >
+                                    Send to Patient (WhatsApp)
+                                </button>
+                            )
+                        ) : (
+                            <span title="Finalize the prescription first." className="inline-flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400"
+                                >
+                                    Send to Patient (WhatsApp)
+                                </button>
+                            </span>
                         )
                     ) : null}
                 </div>
             </div>
+
+            {prescription && canPrescribe && prescription.status !== 'final' ? (
+                <p className="no-print -mt-2 mb-4 text-right text-xs text-slate-500">Finalize the prescription before sending it to the patient.</p>
+            ) : null}
+
+            {finalize.message ? (
+                <div className={`no-print mb-4 rounded-xl border px-4 py-2.5 text-sm ${finalize.isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                    {finalize.message}
+                </div>
+            ) : null}
 
             {send.message ? (
                 <div className={`no-print mb-4 rounded-xl border px-4 py-2.5 text-sm ${send.isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>

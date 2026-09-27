@@ -134,6 +134,7 @@ export default function PatientProfilePage() {
     const { user } = useAuth();
     const scope = useScope();
     const canEditPatient = Boolean(scope?.can?.('patients.edit'));
+    const canPortalLink = Boolean(scope?.can?.('patients.portal_link'));
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
     const [tab, setTab] = useState('notes');
@@ -165,6 +166,12 @@ export default function PatientProfilePage() {
     const [globalSummary, setGlobalSummary] = useState(null);
     const [globalSummaryLoading, setGlobalSummaryLoading] = useState(false);
     const [globalSummaryError, setGlobalSummaryError] = useState('');
+
+    // Portal link state
+    const [portalLink, setPortalLink] = useState({ sending: false, error: '', url: '', expiresAt: '', whatsappStatus: '', copied: false });
+
+    // "Managed by" picker state
+    const [managedBy, setManagedBy] = useState({ open: false, query: '', options: [], searching: false, saving: false, error: '' });
 
     const loadProfile = async () => {
         setLoadingProfile(true);
@@ -307,6 +314,66 @@ export default function PatientProfilePage() {
         }
     };
 
+    const sendPortalLink = async () => {
+        setPortalLink({ sending: true, error: '', url: '', expiresAt: '', whatsappStatus: '', copied: false });
+        try {
+            const { data } = await client.post(`${base}/patients/${id}/portal-link`);
+            const d = data?.data || {};
+            setPortalLink({
+                sending: false,
+                error: '',
+                url: d.url || '',
+                expiresAt: d.expires_at || '',
+                whatsappStatus: d.whatsapp?.delivery_status || '',
+                copied: false,
+            });
+        } catch (e) {
+            setPortalLink((p) => ({ ...p, sending: false, error: e?.response?.data?.message || e?.message || 'Failed to send link.' }));
+        }
+    };
+
+    const copyPortalLink = async () => {
+        if (!portalLink.url) return;
+        try {
+            await navigator.clipboard.writeText(portalLink.url);
+            setPortalLink((p) => ({ ...p, copied: true }));
+            setTimeout(() => setPortalLink((p) => ({ ...p, copied: false })), 2000);
+        } catch {
+            // clipboard access denied — no-op
+        }
+    };
+
+    const searchManagedByOptions = async (q) => {
+        setManagedBy((p) => ({ ...p, searching: true }));
+        try {
+            const { data } = await client.get(`${base}/patients`, { params: { search: q, per_page: 20 } });
+            const rows = (data?.data || []).filter((p) => !p.managed_by_patient_id && String(p.id) !== String(id));
+            setManagedBy((p) => ({ ...p, options: rows, searching: false }));
+        } catch {
+            setManagedBy((p) => ({ ...p, options: [], searching: false }));
+        }
+    };
+
+    const saveManagedBy = async (managerId) => {
+        setManagedBy((p) => ({ ...p, saving: true, error: '' }));
+        try {
+            await client.put(`${base}/patients/${id}/managed-by`, { managed_by_patient_id: managerId });
+            setManagedBy({ open: false, query: '', options: [], searching: false, saving: false, error: '' });
+            await loadProfile();
+        } catch (e) {
+            setManagedBy((p) => ({ ...p, saving: false, error: e?.response?.data?.message || e?.message || 'Failed to update.' }));
+        }
+    };
+
+    useEffect(() => {
+        if (!managedBy.open) return;
+        const t = setTimeout(() => {
+            searchManagedByOptions(managedBy.query);
+        }, 250);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [managedBy.open, managedBy.query]);
+
     useEffect(() => {
         loadProfile();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -322,6 +389,8 @@ export default function PatientProfilePage() {
 
     const patient = profile?.patient;
     const counts = profile?.counts || {};
+    const family = profile?.family || {};
+    const isAccountHolder = !patient?.managed_by_patient_id;
 
     const downloadBlob = (data, filename) => {
         try {
@@ -408,6 +477,176 @@ export default function PatientProfilePage() {
                     <div className="text-sm text-slate-600">Patient not found.</div>
                 )}
             </div>
+
+            {patient ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 className="text-base font-semibold text-slate-900">Patient Portal &amp; Family</h3>
+                            <p className="mt-0.5 text-sm text-slate-500">Consent status, portal login link and family access.</p>
+                        </div>
+                        {canPortalLink && isAccountHolder ? (
+                            <button
+                                type="button"
+                                onClick={sendPortalLink}
+                                disabled={portalLink.sending}
+                                className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            >
+                                {portalLink.sending ? 'Sending…' : 'Send portal link'}
+                            </button>
+                        ) : null}
+                    </div>
+
+                    {canPortalLink && !isAccountHolder ? (
+                        <p className="mt-2 text-sm text-slate-500">
+                            Portal links can only be sent to the account holder
+                            {family?.managed_by?.full_name ? ` (${family.managed_by.full_name})` : ''}, not this dependent.
+                        </p>
+                    ) : null}
+
+                    {portalLink.error ? (
+                        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{portalLink.error}</div>
+                    ) : null}
+
+                    {portalLink.url ? (
+                        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <code className="min-w-0 flex-1 truncate text-xs text-emerald-800">{portalLink.url}</code>
+                                <button
+                                    type="button"
+                                    onClick={copyPortalLink}
+                                    className="shrink-0 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                >
+                                    {portalLink.copied ? 'Copied!' : 'Copy'}
+                                </button>
+                            </div>
+                            <p className="mt-1.5 text-xs text-emerald-700">
+                                Expires {fmtDateTime(portalLink.expiresAt)} · WhatsApp: {portalLink.whatsappStatus || '—'}
+                            </p>
+                        </div>
+                    ) : null}
+
+                    <div className="mt-4 text-sm text-slate-600">
+                        Consent:{' '}
+                        {patient.consent_given_at ? (
+                            <span className="font-medium text-slate-800">
+                                Accepted {fmtDateTime(patient.consent_given_at)} (v{patient.consent_version || '—'})
+                            </span>
+                        ) : (
+                            <span className="font-medium text-slate-500">Not yet accepted</span>
+                        )}
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Managed by</div>
+                            {isAccountHolder ? (
+                                <p className="mt-1 text-sm text-slate-500">Account holder — not managed by anyone.</p>
+                            ) : (
+                                <p className="mt-1 text-sm text-slate-800">{family?.managed_by?.full_name || `Patient #${patient.managed_by_patient_id}`}</p>
+                            )}
+
+                            {canEditPatient ? (
+                                <div className="mt-2">
+                                    {managedBy.open ? (
+                                        <div className="relative">
+                                            <input
+                                                autoFocus
+                                                type="text"
+                                                placeholder="Search account holders…"
+                                                value={managedBy.query}
+                                                onChange={(e) => setManagedBy((p) => ({ ...p, query: e.target.value }))}
+                                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                                            />
+                                            <div className="mt-1 max-h-48 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                                                {managedBy.searching ? (
+                                                    <div className="px-3 py-2 text-sm text-slate-500">Searching…</div>
+                                                ) : managedBy.options.length ? (
+                                                    managedBy.options.map((opt) => (
+                                                        <button
+                                                            key={opt.id}
+                                                            type="button"
+                                                            disabled={managedBy.saving}
+                                                            onClick={() => saveManagedBy(opt.id)}
+                                                            className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                                                        >
+                                                            {opt.full_name}{opt.phone ? ` · ${opt.phone}` : ''}
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <div className="px-3 py-2 text-sm text-slate-500">No account holders found.</div>
+                                                )}
+                                            </div>
+                                            {managedBy.error ? (
+                                                <div className="mt-1 text-xs text-rose-600">{managedBy.error}</div>
+                                            ) : null}
+                                            <div className="mt-2 flex items-center gap-2">
+                                                {!isAccountHolder ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled={managedBy.saving}
+                                                        onClick={() => saveManagedBy(null)}
+                                                        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                ) : null}
+                                                <button
+                                                    type="button"
+                                                    disabled={managedBy.saving}
+                                                    onClick={() => setManagedBy({ open: false, query: '', options: [], searching: false, saving: false, error: '' })}
+                                                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setManagedBy((p) => ({ ...p, open: true }))}
+                                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                        >
+                                            Change…
+                                        </button>
+                                    )}
+                                </div>
+                            ) : null}
+                        </div>
+
+                        <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dependents</div>
+                            {(family.dependents || []).length ? (
+                                <ul className="mt-1 space-y-1 text-sm text-slate-800">
+                                    {family.dependents.map((d) => (
+                                        <li key={d.id}>{d.full_name}{d.phone ? ` · ${d.phone}` : ''}</li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="mt-1 text-sm text-slate-500">None</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-4">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Family Links</div>
+                        {(family.links || []).length ? (
+                            <ul className="mt-1 space-y-1 text-sm text-slate-800">
+                                {family.links.map((l) => (
+                                    <li key={l.id}>
+                                        {l.related_patient?.full_name || `Patient #${l.related_patient_id}`}
+                                        {l.relation ? ` · ${l.relation}` : ''}
+                                        {' — '}
+                                        <span className="text-xs text-slate-500">Can use this patient's portal</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="mt-1 text-sm text-slate-500">None</p>
+                        )}
+                    </div>
+                </div>
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                 <button type="button" onClick={() => setTab('notes')} className={tabButton(tab === 'notes')}>Notes</button>

@@ -31,7 +31,7 @@ class AppointmentController extends BaseCrudController
 
     protected array $searchable = ['uuid', 'status', 'visit_type'];
 
-    protected array $filterable = ['clinic_id', 'doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type'];
+    protected array $filterable = ['clinic_id', 'doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type', 'booking_channel'];
 
     public function __construct(
         private readonly AppointmentService $appointmentService,

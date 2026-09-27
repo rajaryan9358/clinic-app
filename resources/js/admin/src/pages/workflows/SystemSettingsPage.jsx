@@ -40,6 +40,11 @@ const TEMPLATE_INFO = {
         category: 'Authentication',
         params: 'Body: OTP code. Button (Copy Code, sub_type "url", index 0): OTP code.',
     },
+    portal_link: {
+        label: 'Portal Login Link',
+        category: 'Utility',
+        params: 'Body: 1 patient name, 2 clinic name. URL button: {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}.',
+    },
 };
 
 function Card({ children, className = '' }) {

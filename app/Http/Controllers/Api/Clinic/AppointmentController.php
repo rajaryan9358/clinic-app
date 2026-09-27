@@ -29,7 +29,7 @@ class AppointmentController extends BaseClinicCrudController
 {
     protected string $modelClass = Appointment::class;
     protected array $searchable = ['uuid', 'status', 'visit_type'];
-    protected array $filterable = ['doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type'];
+    protected array $filterable = ['doctor_id', 'patient_id', 'status', 'appointment_date', 'visit_type', 'booking_channel'];
 
     public function __construct(
         private readonly AppointmentService $appointmentService,

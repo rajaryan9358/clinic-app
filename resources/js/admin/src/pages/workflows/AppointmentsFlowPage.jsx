@@ -80,6 +80,7 @@ export default function AppointmentsFlowPage() {
         return typeof saved === 'string' ? saved : '';
     });
     const [visitType, setVisitType] = useState('');
+    const [channel, setChannel] = useState('');
 
     const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -255,6 +256,7 @@ export default function AppointmentsFlowPage() {
             const nextSearch = overrides.search ?? search;
             const nextStatus = overrides.status ?? status;
             const nextVisitType = overrides.visitType ?? visitType;
+            const nextChannel = overrides.channel ?? channel;
 
             const nextEffectiveDate = nextMode === 'today' ? todayYMD : nextDate;
             const params = { page: 1, per_page: 50, sort_by: 'start_time', sort_dir: 'asc' };
@@ -274,6 +276,7 @@ export default function AppointmentsFlowPage() {
             if (String(nextSearch || '').trim()) params.search = String(nextSearch).trim();
             if (nextStatus) params.status = nextStatus;
             if (nextVisitType) params.visit_type = nextVisitType;
+            if (nextChannel) params.booking_channel = nextChannel;
             const res = await client.get(`${base}/appointments`, { params });
             let nextRows = res.data.data || [];
             if (nextMode === 'upcoming') {
@@ -1004,6 +1007,28 @@ export default function AppointmentsFlowPage() {
                                 </button>
                             ))}
                         </div>
+                        <div className="h-5 w-px bg-slate-200" />
+                        <div className="flex gap-2 overflow-x-auto py-1">
+                            {[
+                                { value: '', label: 'All Channels' },
+                                { value: 'portal', label: 'Portal' },
+                            ].map((t) => (
+                                <button
+                                    key={t.value || 'all-channels'}
+                                    type="button"
+                                    onClick={() => {
+                                        setChannel(t.value);
+                                        fetchList({ channel: t.value });
+                                    }}
+                                    className={channel === t.value
+                                        ? 'whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white'
+                                        : 'whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50'
+                                    }
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
@@ -1107,6 +1132,11 @@ export default function AppointmentsFlowPage() {
                                                             ? String(r.visit_type).replace('_', ' ')
                                                             : '—'}
                                             </span>
+                                            {r.booking_channel === 'portal' ? (
+                                                <span className="ml-1 inline-flex rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                                                    Portal
+                                                </span>
+                                            ) : null}
                                         </td>
                                         <td className="px-4 py-3 text-slate-700">
                                             <button

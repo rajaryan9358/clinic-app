@@ -1099,6 +1099,7 @@ function SettingsTab({ clinicId }) {
                             { key: 'auto_confirm_appointments', label: 'Auto-confirm appointments' },
                             { key: 'allow_reschedule', label: 'Allow patient rescheduling' },
                             { key: 'allow_cancel', label: 'Allow patient cancellation' },
+                            { key: 'portal_enabled', label: 'Patient portal enabled' },
                         ].map(({ key, label }) => (
                             <Toggle key={key} checked={Boolean(form[key])} onChange={() => toggle(key)} label={label} />
                         ))}
