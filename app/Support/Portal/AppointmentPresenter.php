@@ -15,9 +15,9 @@ use App\Services\Portal\PortalBookingPolicy;
  * this is a static serialiser, not a controller.
  * `detail()` extends `item()` for the single-appointment view with the
  * clinic's address/maps link, the cancellation reason, and whether a
- * final prescription exists — the latter is a plain direct query the
- * *controller* runs (see AppointmentController::show) and passes in, per
- * the Task 5 ruling; Task 6 will add a shared resolver.
+ * final prescription exists — the *controller* resolves that via
+ * `PrescriptionResolver::latestFinal()` (see AppointmentController::show)
+ * and passes it in, so this presenter stays a pure serialiser.
  */
 final class AppointmentPresenter
 {

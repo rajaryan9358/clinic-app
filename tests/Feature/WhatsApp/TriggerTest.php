@@ -17,8 +17,8 @@ use App\Services\WhatsApp\FakeWhatsAppGateway;
 use App\Services\WhatsApp\WhatsAppGateway;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use RuntimeException;
@@ -332,6 +332,7 @@ class TriggerTest extends TestCase
             'clinic_id' => $this->clinic->id,
             'appointment_id' => $appointment->id,
             'data' => ['notes' => 'Take rest'],
+            'status' => 'final',
         ]);
 
         $this->assertSame(0, WhatsappMessage::where('appointment_id', $appointment->id)
@@ -422,6 +423,7 @@ class TriggerTest extends TestCase
             'clinic_id' => $this->clinic->id,
             'appointment_id' => $appointment->id,
             'data' => ['notes' => 'Take rest'],
+            'status' => 'final',
         ]);
 
         $superAdmin = User::create([

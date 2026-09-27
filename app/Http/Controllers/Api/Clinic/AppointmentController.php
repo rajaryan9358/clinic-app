@@ -19,6 +19,7 @@ use App\Services\PrescriptionPdfRenderer;
 use App\Services\WhatsApp\PatientNotifier;
 use App\Services\WhatsApp\PhoneNumber;
 use App\Support\PermissionCatalogue;
+use App\Support\Prescriptions\PrescriptionResolver;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -289,7 +290,32 @@ class AppointmentController extends BaseClinicCrudController
         return $this->success('Prescription fetched successfully', [
             'appointment_id' => $appointment->id,
             'prescription' => $latest,
+            'status' => $latest?->status,
+            'finalized_at' => $latest?->finalized_at,
+            'latest_final_id' => PrescriptionResolver::latestFinal($appointment->id)?->id,
         ]);
+    }
+
+    public function finalizePrescription(Request $request, int $id)
+    {
+        $appointment = $this->scopedAppointment($id, $request);
+
+        $latest = PrescriptionResolver::latest($appointment->id);
+
+        if (! $latest) {
+            abort(404, 'No prescription found for this appointment.');
+        }
+
+        if ($latest->status === 'final') {
+            return $this->error('This prescription is already final.', null, 422);
+        }
+
+        $latest->status = 'final';
+        $latest->finalized_at = now();
+        $latest->finalized_by_user_id = $request->user()?->id;
+        $latest->save();
+
+        return $this->success('Prescription finalized successfully', $latest);
     }
 
     public function sendPrescription(Request $request, int $id)
@@ -297,19 +323,25 @@ class AppointmentController extends BaseClinicCrudController
         $appointment = $this->scopedAppointment($id, $request);
         $clinicId = (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
 
-        $prescription = AppointmentPrescription::query()
+        $latest = AppointmentPrescription::query()
             ->where('clinic_id', $clinicId)
             ->where('appointment_id', $appointment->id)
             ->orderByDesc('id')
             ->first();
 
-        if (! $prescription) {
+        if (! $latest) {
             abort(404, 'No prescription found for this appointment.');
         }
 
         if (PhoneNumber::normalise($appointment->patient?->phone) === null) {
             return $this->error('Patient has no phone number.', null, 422);
         }
+
+        if ($latest->status !== 'final') {
+            return $this->error('Finalize the prescription first.', null, 422);
+        }
+
+        $prescription = PrescriptionResolver::latestFinal($appointment->id);
 
         $message = app(PatientNotifier::class)->prescriptionReady($prescription);
 

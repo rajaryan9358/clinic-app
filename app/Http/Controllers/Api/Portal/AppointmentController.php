@@ -6,11 +6,11 @@ use App\Enums\AppointmentStatus;
 use App\Http\Controllers\Concerns\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
-use App\Models\AppointmentPrescription;
 use App\Models\Patient;
 use App\Services\AppointmentService;
 use App\Services\Portal\PortalBookingPolicy;
 use App\Support\Portal\AppointmentPresenter;
+use App\Support\Prescriptions\PrescriptionResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -71,9 +71,7 @@ class AppointmentController extends Controller
             abort(404);
         }
 
-        $hasFinalPrescription = AppointmentPrescription::where('appointment_id', $appointment->id)
-            ->where('status', 'final')
-            ->exists();
+        $hasFinalPrescription = PrescriptionResolver::latestFinal($appointment->id) !== null;
 
         return $this->success('OK', AppointmentPresenter::detail($appointment, $hasFinalPrescription));
     }

@@ -132,6 +132,7 @@ class NotifierTest extends TestCase
             'clinic_id' => $this->clinic->id,
             'appointment_id' => $this->appointment->id,
             'data' => ['notes' => 'Take rest'],
+            'status' => 'final',
         ]);
 
         $row = $this->notifier->prescriptionReady($rx);
@@ -248,6 +249,7 @@ class NotifierTest extends TestCase
             'clinic_id' => $this->clinic->id,
             'appointment_id' => $this->appointment->id,
             'data' => ['notes' => 'Take rest'],
+            'status' => 'final',
         ]);
 
         $this->notifier->prescriptionReady($rx);
@@ -380,6 +382,7 @@ class NotifierTest extends TestCase
             'clinic_id' => $this->clinic->id,
             'appointment_id' => $this->appointment->id,
             'data' => ['notes' => 'Take rest'],
+            'status' => 'final',
         ]);
 
         $this->notifier->prescriptionReady($rx);

@@ -6,9 +6,9 @@ use App\Enums\AppointmentStatus;
 use App\Http\Controllers\Concerns\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
-use App\Models\AppointmentPrescription;
 use App\Models\Patient;
 use App\Support\Portal\AppointmentPresenter;
+use App\Support\Prescriptions\PrescriptionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -61,7 +61,9 @@ class DashboardController extends Controller
         // Counts distinct appointments with at least one final
         // prescription (a patient may have several final rows per
         // appointment if it was amended) rather than every final row.
-        $finalizedCount = AppointmentPrescription::where('status', 'final')
+        // Shares PrescriptionResolver::finalQuery() with the portal
+        // prescriptions list rather than re-stating `status = final` here.
+        $finalizedCount = PrescriptionResolver::finalQuery()
             ->whereHas('appointment', fn ($query) => $query->where('patient_id', $patient->id))
             ->distinct('appointment_id')
             ->count('appointment_id');

@@ -14,8 +14,6 @@ class PublicPrescriptionPdfController
 {
     public function __invoke(Request $request, AppointmentPrescription $prescription, PrescriptionPdfRenderer $renderer)
     {
-        $appointment = $prescription->appointment()->firstOrFail();
-
-        return $renderer->render($appointment)->stream('prescription-'.$appointment->id.'.pdf');
+        return $renderer->renderPrescription($prescription)->stream('prescription-'.$prescription->appointment_id.'.pdf');
     }
 }
