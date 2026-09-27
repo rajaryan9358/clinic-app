@@ -2,11 +2,17 @@ import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Shell from './components/Shell';
 import { Spinner } from './components/ui';
+import Book from './pages/Book';
 import Consent from './pages/Consent';
+import Family from './pages/Family';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import MagicLink from './pages/MagicLink';
-import Placeholder from './pages/Placeholder';
+import PrescriptionDetail from './pages/PrescriptionDetail';
+import Prescriptions from './pages/Prescriptions';
+import Reschedule from './pages/Reschedule';
+import VisitDetail from './pages/VisitDetail';
+import Visits from './pages/Visits';
 import { useSession } from './session';
 
 function FullPageLoader() {
@@ -51,10 +57,13 @@ export default function App() {
 
             <Route element={<ProtectedLayout />}>
                 <Route path="/" element={<Home />} />
-                <Route path="/visits" element={<Placeholder title="Visits" />} />
-                <Route path="/prescriptions" element={<Placeholder title="Prescriptions" />} />
-                <Route path="/book" element={<Placeholder title="Booking" />} />
-                <Route path="/family" element={<Placeholder title="Family" />} />
+                <Route path="/visits" element={<Visits />} />
+                <Route path="/visits/:id" element={<VisitDetail />} />
+                <Route path="/visits/:id/reschedule" element={<Reschedule />} />
+                <Route path="/prescriptions" element={<Prescriptions />} />
+                <Route path="/prescriptions/:id" element={<PrescriptionDetail />} />
+                <Route path="/book" element={<Book />} />
+                <Route path="/family" element={<Family />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

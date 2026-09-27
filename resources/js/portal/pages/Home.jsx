@@ -2,24 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { useSession } from '../session';
+import AppointmentCard from '../components/AppointmentCard';
 import { Card, ErrorText, Spinner } from '../components/ui';
-
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const date = new Date(`${dateStr}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-function formatTime(timeStr) {
-    if (!timeStr) return '';
-    const [hoursStr, minutesStr] = timeStr.split(':');
-    const hours = Number(hoursStr);
-    if (Number.isNaN(hours)) return timeStr;
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = ((hours + 11) % 12) + 1;
-    return `${displayHours}:${minutesStr} ${period}`;
-}
 
 function QuickAction({ to, label, badge }) {
     return (
@@ -91,18 +75,9 @@ export default function Home() {
                     <Card>
                         <h2 className="mb-2 text-sm font-medium text-slate-500">Next appointment</h2>
                         {next ? (
-                            <div>
-                                <p className="text-base font-semibold text-slate-900">
-                                    {formatDate(next.date)} &middot; {formatTime(next.start_time)}
-                                </p>
-                                <p className="text-sm text-slate-600">
-                                    {next.doctor?.name || 'Doctor'}
-                                    {next.doctor?.specialization ? ` · ${next.doctor.specialization}` : ''}
-                                </p>
-                                <span className="mt-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium capitalize text-slate-600">
-                                    {next.status}
-                                </span>
-                            </div>
+                            <Link to={`/visits/${next.id}`} className="block">
+                                <AppointmentCard appointment={next} />
+                            </Link>
                         ) : (
                             <p className="text-sm text-slate-500">No upcoming appointments. Book a visit to get started.</p>
                         )}
