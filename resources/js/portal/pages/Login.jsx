@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSession } from '../session';
 import { Button, Card, ErrorText } from '../components/ui';
@@ -19,7 +19,7 @@ function errorMessage(err, fallback) {
  */
 export default function Login() {
     const navigate = useNavigate();
-    const { refresh, setProfile } = useSession();
+    const { me, loading: sessionLoading, completeLogin } = useSession();
     const [step, setStep] = useState('phone');
     const [phone, setPhone] = useState('');
     const [code, setCode] = useState('');
@@ -35,13 +35,7 @@ export default function Login() {
     }, [secondsLeft]);
 
     function afterLogin(payload) {
-        localStorage.setItem('portal_token', payload.token);
-        // Clears via session state (not just localStorage) so a stale
-        // acting-profile id from a previous sign-in in this same tab
-        // can't leak into the new session — this navigates with the
-        // router, not a full reload, so React state must be reset too.
-        setProfile(null);
-        refresh().then(() => navigate('/', { replace: true }));
+        completeLogin(payload).then(() => navigate('/', { replace: true }));
     }
 
     async function submitPhone(e) {
@@ -102,6 +96,15 @@ export default function Login() {
         } finally {
             setLoading(false);
         }
+    }
+
+    // Already signed in (e.g. a bookmarked/typed /login while a session
+    // is still valid) — bounce home instead of showing the form again.
+    // /login/:token (MagicLink.jsx) deliberately has no such guard: a
+    // fresh magic link must still be consumed even when signed in, since
+    // it replaces the current session with whichever account it targets.
+    if (!sessionLoading && me) {
+        return <Navigate to="/" replace />;
     }
 
     return (

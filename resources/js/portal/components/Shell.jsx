@@ -8,8 +8,8 @@ import { CalendarIcon, ChevronRightIcon, HomeIcon, LogoutIcon, PillIcon, PlusIco
 const NAV_ITEMS = [
     { to: '/', label: 'Home', icon: HomeIcon, end: true },
     { to: '/visits', label: 'Visits', icon: CalendarIcon },
-    { to: '/book', label: 'Book', icon: PlusIcon },
     { to: '/prescriptions', label: 'Rx', icon: PillIcon },
+    { to: '/book', label: 'Book', icon: PlusIcon },
     { to: '/family', label: 'Family', icon: UsersIcon },
 ];
 

@@ -11,30 +11,27 @@ import { Card, ErrorText, Spinner } from '../components/ui';
 export default function MagicLink() {
     const { token } = useParams();
     const navigate = useNavigate();
-    const { refresh, setProfile } = useSession();
+    const { completeLogin } = useSession();
     const [status, setStatus] = useState('loading');
     const [error, setError] = useState('');
     const attempted = useRef(false);
 
+    // Deliberately no "already signed in" guard here (unlike Login.jsx):
+    // a fresh magic link must still be consumed even when a session is
+    // already active — it replaces that session with whichever account
+    // the link targets, which may not be the one currently signed in.
     useEffect(() => {
         if (attempted.current) return;
         attempted.current = true;
 
         api.post('/auth/link', { token })
-            .then(({ data }) => {
-                const payload = data.data;
-                localStorage.setItem('portal_token', payload.token);
-                // See Login.jsx's afterLogin: clear via session state, not
-                // just localStorage, since this navigates without a reload.
-                setProfile(null);
-                return refresh();
-            })
+            .then(({ data }) => completeLogin(data.data))
             .then(() => navigate('/', { replace: true }))
             .catch((err) => {
                 setStatus('error');
                 setError(err?.response?.data?.message || 'This link has expired.');
             });
-    }, [token, navigate, refresh]);
+    }, [token, navigate, completeLogin]);
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">

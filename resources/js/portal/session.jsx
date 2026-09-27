@@ -57,6 +57,20 @@ export function SessionProvider({ children }) {
         setProfileId(Number(id));
     }, []);
 
+    // Shared by every login path (OTP verify, magic-link exchange): stores
+    // the fresh token, clears any acting-profile left over from a prior
+    // session in this tab (via setProfile, not just localStorage, since
+    // callers navigate with the router rather than a full reload), and
+    // refetches `me` so the caller can navigate once it resolves.
+    const completeLogin = useCallback(
+        (payload) => {
+            localStorage.setItem('portal_token', payload.token);
+            setProfile(null);
+            return refresh();
+        },
+        [setProfile, refresh],
+    );
+
     const logout = useCallback(async () => {
         try {
             await api.post('/auth/logout');
@@ -76,8 +90,8 @@ export function SessionProvider({ children }) {
     );
 
     const value = useMemo(
-        () => ({ me, loading, refresh, activeProfileId, activeProfile, setProfile, logout }),
-        [me, loading, refresh, activeProfileId, activeProfile, setProfile, logout],
+        () => ({ me, loading, refresh, activeProfileId, activeProfile, setProfile, completeLogin, logout }),
+        [me, loading, refresh, activeProfileId, activeProfile, setProfile, completeLogin, logout],
     );
 
     return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
