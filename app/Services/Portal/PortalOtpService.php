@@ -7,6 +7,7 @@ use App\Models\Patient;
 use App\Services\WhatsApp\PatientNotifier;
 use App\Services\WhatsApp\PhoneNumber;
 use App\Support\Portal\PortalProfiles;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -23,6 +24,10 @@ use Illuminate\Validation\ValidationException;
 final class PortalOtpService
 {
     private const TOO_MANY_REQUESTS = 'Too many code requests. Try again later.';
+
+    private const TOO_MANY_ATTEMPTS = 'Too many attempts. Request a new code.';
+
+    private const CODE_EXPIRED = 'Code expired. Request a new code.';
 
     public function __construct(private PatientNotifier $notifier) {}
 
@@ -80,18 +85,23 @@ final class PortalOtpService
             ->first();
 
         if ($otp === null || $otp->expires_at->isPast()) {
-            throw ValidationException::withMessages(['code' => 'Code expired. Request a new code.']);
+            throw ValidationException::withMessages(['code' => self::CODE_EXPIRED]);
         }
 
-        if ($otp->attempts >= 5) {
-            throw ValidationException::withMessages(['code' => 'Too many attempts. Request a new code.']);
+        // Atomically reserve an attempt slot before evaluating the code: a
+        // single conditional UPDATE (only succeeds while attempts < 5) is
+        // what actually enforces the cap under concurrent guesses, since a
+        // separate read-then-write (SELECT attempts, then save()) could let
+        // several concurrent requests all observe a stale count and each
+        // slip past the check.
+        if (! $this->reserveAttempt($otp)) {
+            throw ValidationException::withMessages(['code' => self::TOO_MANY_ATTEMPTS]);
         }
+
+        $otp->refresh();
 
         if (! hash_equals($otp->otp_code, hash('sha256', $code))) {
-            $otp->attempts++;
-            $otp->save();
-
-            $message = $otp->attempts >= 5 ? 'Too many attempts. Request a new code.' : 'Incorrect code.';
+            $message = $otp->attempts >= 5 ? self::TOO_MANY_ATTEMPTS : 'Incorrect code.';
 
             throw ValidationException::withMessages(['code' => $message]);
         }
@@ -99,6 +109,8 @@ final class PortalOtpService
         $holders = PortalProfiles::accountHoldersForPhone((string) $normalised);
 
         if ($holders->count() > 1 && $patientId === null) {
+            $holders->load('clinic');
+
             return [
                 'status' => 'choose',
                 'choices' => $holders->map(fn (Patient $p) => [
@@ -122,5 +134,22 @@ final class PortalOtpService
         $otp->save();
 
         return ['status' => 'ok', 'patient' => $patient];
+    }
+
+    /**
+     * Consumes one of the OTP's 5 allowed attempts via a single
+     * conditional UPDATE, so the cap holds even when guesses race each
+     * other: only one such statement can win when attempts is already 4,
+     * and any request that finds attempts already at 5 gets 0 affected
+     * rows instead of a stale, already-exceeded count.
+     */
+    private function reserveAttempt(LoginOtp $otp): bool
+    {
+        $affected = DB::table('login_otps')
+            ->where('id', $otp->id)
+            ->where('attempts', '<', 5)
+            ->update(['attempts' => DB::raw('attempts + 1')]);
+
+        return $affected > 0;
     }
 }

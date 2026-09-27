@@ -1,13 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\Portal\AuthController as PortalAuthController;
-use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
-use App\Http\Controllers\Api\PublicPrescriptionPdfController;
-use App\Http\Controllers\Api\RazorpayWebhookController;
-use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Api\Clinic\AppointmentController as ClinicAppointmentController;
 use App\Http\Controllers\Api\Clinic\AuditLogController as ClinicAuditLogController;
+use App\Http\Controllers\Api\Clinic\ClinicProfileController as ClinicClinicProfileController;
 use App\Http\Controllers\Api\Clinic\ClinicSettingController as ClinicClinicSettingController;
 use App\Http\Controllers\Api\Clinic\DashboardController as ClinicDashboardController;
 use App\Http\Controllers\Api\Clinic\DoctorController as ClinicDoctorController;
@@ -29,14 +25,15 @@ use App\Http\Controllers\Api\Clinic\UserController as ClinicUserController;
 use App\Http\Controllers\Api\Clinic\WhatsappConversationController as ClinicWhatsappConversationController;
 use App\Http\Controllers\Api\Clinic\WhatsappFlowSessionController as ClinicWhatsappFlowSessionController;
 use App\Http\Controllers\Api\Clinic\WhatsappMessageController as ClinicWhatsappMessageController;
-use App\Http\Controllers\Api\Clinic\ClinicProfileController as ClinicClinicProfileController;
+use App\Http\Controllers\Api\Portal\AuthController as PortalAuthController;
+use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
+use App\Http\Controllers\Api\PublicPrescriptionPdfController;
+use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\SuperAdmin\AppointmentController as SuperAdminAppointmentController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController as SuperAdminAuditLogController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicController as SuperAdminClinicController;
-use App\Http\Controllers\Api\SuperAdmin\ClinicSubscriptionController as SuperAdminClinicSubscriptionController;
-use App\Http\Controllers\Api\SuperAdmin\SubscriptionTransactionController as SuperAdminSubscriptionTransactionController;
-use App\Http\Controllers\Api\SuperAdmin\PlanController as SuperAdminPlanController;
 use App\Http\Controllers\Api\SuperAdmin\ClinicSettingController as SuperAdminClinicSettingController;
+use App\Http\Controllers\Api\SuperAdmin\ClinicSubscriptionController as SuperAdminClinicSubscriptionController;
 use App\Http\Controllers\Api\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\Api\SuperAdmin\DoctorController as SuperAdminDoctorController;
 use App\Http\Controllers\Api\SuperAdmin\DoctorProfileController as SuperAdminDoctorProfileController;
@@ -46,21 +43,25 @@ use App\Http\Controllers\Api\SuperAdmin\InvoiceController as SuperAdminInvoiceCo
 use App\Http\Controllers\Api\SuperAdmin\PatientController as SuperAdminPatientController;
 use App\Http\Controllers\Api\SuperAdmin\PatientProfileController as SuperAdminPatientProfileController;
 use App\Http\Controllers\Api\SuperAdmin\PaymentController as SuperAdminPaymentController;
+use App\Http\Controllers\Api\SuperAdmin\PlanController as SuperAdminPlanController;
 use App\Http\Controllers\Api\SuperAdmin\ReminderLogController as SuperAdminReminderLogController;
 use App\Http\Controllers\Api\SuperAdmin\ReportController as SuperAdminReportController;
 use App\Http\Controllers\Api\SuperAdmin\ReviewController as SuperAdminReviewController;
 use App\Http\Controllers\Api\SuperAdmin\RoleController as SuperAdminRoleController;
 use App\Http\Controllers\Api\SuperAdmin\ServiceController as SuperAdminServiceController;
+use App\Http\Controllers\Api\SuperAdmin\SubscriptionTransactionController as SuperAdminSubscriptionTransactionController;
 use App\Http\Controllers\Api\SuperAdmin\SystemSettingController as SuperAdminSystemSettingController;
 use App\Http\Controllers\Api\SuperAdmin\UserController as SuperAdminUserController;
 use App\Http\Controllers\Api\SuperAdmin\WhatsappConversationController as SuperAdminWhatsappConversationController;
 use App\Http\Controllers\Api\SuperAdmin\WhatsappFlowSessionController as SuperAdminWhatsappFlowSessionController;
 use App\Http\Controllers\Api\SuperAdmin\WhatsappMessageController as SuperAdminWhatsappMessageController;
 use App\Http\Controllers\Api\UploadController;
+use App\Http\Controllers\Api\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
 if (! function_exists('registerCrudRoutes')) {
-    function registerCrudRoutes(string $prefix, string $controller, ?string $module = null): void {
+    function registerCrudRoutes(string $prefix, string $controller, ?string $module = null): void
+    {
         $p = fn (string $action) => $module ? ["perm:{$module}.{$action}"] : [];
         Route::prefix($prefix)->group(function () use ($controller, $p) {
             Route::get('/', [$controller, 'index'])->middleware($p('view'));
@@ -95,7 +96,7 @@ Route::prefix('auth')->group(function () {
 
 Route::prefix('portal')->group(function () {
     Route::post('auth/request-code', [PortalOtpController::class, 'requestCode'])->middleware('throttle:portal-otp');
-    Route::post('auth/verify', [PortalOtpController::class, 'verify']);
+    Route::post('auth/verify', [PortalOtpController::class, 'verify'])->middleware('throttle:portal-verify');
     // Task 3 adds the magic-link endpoints here.
 
     Route::middleware('portal.auth')->group(function () {

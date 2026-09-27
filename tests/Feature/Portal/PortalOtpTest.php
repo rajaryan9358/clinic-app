@@ -218,6 +218,16 @@ class PortalOtpTest extends TestCase
         $response->assertStatus(422);
         $this->assertSame('Too many attempts. Request a new code.', $response->json('message'));
 
+        // The cap holds: further guesses (right or wrong) are rejected
+        // without being evaluated, and the stored attempts count never
+        // grows past 5.
+        $row = $this->otpFor('919876543210');
+        $this->assertSame(5, $row->attempts);
+
+        $this->postJson('/api/portal/auth/verify', ['phone' => '9876543210', 'code' => $wrong])->assertStatus(422);
+        $row->refresh();
+        $this->assertSame(5, $row->attempts);
+
         $this->assertNotNull($account);
     }
 
@@ -237,6 +247,30 @@ class PortalOtpTest extends TestCase
         $this->assertSame('Code expired. Request a new code.', $response->json('message'));
 
         Carbon::setTestNow();
+    }
+
+    public function test_verify_throttles_per_ip_and_phone(): void
+    {
+        $clinic = $this->makeClinic();
+        $this->makePatient($clinic, ['phone' => '9876543210']);
+
+        $this->postJson('/api/portal/auth/request-code', ['phone' => '9876543210'])->assertOk();
+
+        // 30 requests/hour are allowed regardless of outcome (here, each
+        // guess is wrong, but that is irrelevant to the route throttle).
+        for ($i = 0; $i < 30; $i++) {
+            $response = $this->postJson('/api/portal/auth/verify', ['phone' => '9876543210', 'code' => '000000']);
+            $this->assertNotSame(429, $response->status());
+        }
+
+        $response = $this->postJson('/api/portal/auth/verify', ['phone' => '9876543210', 'code' => '000000']);
+        $response->assertStatus(429);
+
+        // A different phone number is a different throttle bucket.
+        $this->makePatient($clinic, ['phone' => '9111111111']);
+        $this->postJson('/api/portal/auth/request-code', ['phone' => '9111111111'])->assertOk();
+        $other = $this->postJson('/api/portal/auth/verify', ['phone' => '9111111111', 'code' => '000000']);
+        $this->assertNotSame(429, $other->status());
     }
 
     public function test_verify_multiple_holders_requires_selection_without_consuming(): void
