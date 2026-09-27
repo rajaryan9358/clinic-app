@@ -238,17 +238,23 @@ class AppointmentController extends BaseClinicCrudController
             ->map(fn ($row) => ['delivery_status' => $row->delivery_status ?: 'unknown', 'count' => (int) $row->count])
             ->values();
 
-        $whatsapps = WhatsappMessage::query()
-            ->where('clinic_id', $appointment->clinic_id)
-            ->where('appointment_id', $appointment->id)
-            ->orderByDesc('id')
-            ->limit(5)
-            ->get();
+        $canViewWhatsapp = (bool) request()->user()?->can('whatsapp.view');
 
-        $whatsappCount = WhatsappMessage::query()
-            ->where('clinic_id', $appointment->clinic_id)
-            ->where('appointment_id', $appointment->id)
-            ->count();
+        $whatsapps = $canViewWhatsapp
+            ? WhatsappMessage::query()
+                ->where('clinic_id', $appointment->clinic_id)
+                ->where('appointment_id', $appointment->id)
+                ->orderByDesc('id')
+                ->limit(5)
+                ->get()
+            : collect();
+
+        $whatsappCount = $canViewWhatsapp
+            ? WhatsappMessage::query()
+                ->where('clinic_id', $appointment->clinic_id)
+                ->where('appointment_id', $appointment->id)
+                ->count()
+            : 0;
 
         return $this->success('Appointment detail fetched successfully', [
             'appointment' => $appointment,
