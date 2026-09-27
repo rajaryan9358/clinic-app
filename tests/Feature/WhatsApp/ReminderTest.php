@@ -9,6 +9,7 @@ use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\ReminderLog;
 use App\Models\WhatsappMessage;
+use App\Services\AppointmentService;
 use App\Services\WhatsApp\FakeWhatsAppGateway;
 use App\Services\WhatsApp\PatientNotifier;
 use App\Services\WhatsApp\WhatsAppGateway;
@@ -289,5 +290,67 @@ class ReminderTest extends TestCase
         $this->artisan('whatsapp:send-reminders')->assertSuccessful();
         $this->assertCount(1, $this->fake->sent);
         $this->assertSame(2, ReminderLog::count());
+    }
+
+    /**
+     * reminder_logs has unique(appointment_id, reminder_type) and this
+     * command skips any appointment that already has an
+     * 'appointment_reminder' log. AppointmentService::reschedule() updates
+     * the same appointment row in place, so without clearing the stale log
+     * the new slot would never be reminded. AppointmentService::reschedule()
+     * deletes the appointment's 'appointment_reminder' log(s) inside its
+     * transaction so the next run reminds for the new time.
+     */
+    public function test_reschedule_clears_stale_reminder_log_so_the_new_slot_is_reminded(): void
+    {
+        ClinicSetting::create(['clinic_id' => $this->clinic->id, 'reminder_hours_before' => 24]);
+
+        $this->travelTo(Carbon::parse('2026-09-28 10:00', 'Asia/Kolkata'));
+
+        $patient = $this->patient('Ravi Kumar');
+        $appointment = $this->appointment($patient, '2026-09-29', '09:00:00');
+
+        // Original slot (23h away) is due -> reminded once.
+        $this->artisan('whatsapp:send-reminders')->assertSuccessful();
+        $this->assertCount(1, $this->fake->sent);
+        $this->assertSame(1, ReminderLog::count());
+
+        $oldLog = ReminderLog::where('appointment_id', $appointment->id)->first();
+        $this->assertNotNull($oldLog);
+        $this->assertSame('sent', $oldLog->delivery_status);
+
+        // Reschedule to a later date/time; the reschedule must clear the
+        // stale log for this appointment right away. (The reschedule itself
+        // also fires an "appointment updated" WhatsApp notice, which is why
+        // $this->fake->sent grows by one here independent of the reminder.)
+        app(AppointmentService::class)->reschedule($appointment->fresh(), [
+            'appointment_date' => '2026-10-01',
+            'start_time' => '09:00:00',
+        ]);
+
+        $this->assertCount(2, $this->fake->sent);
+        $this->assertSame(0, ReminderLog::where('appointment_id', $appointment->id)->count());
+
+        // Running again immediately (new slot not yet due) sends no reminder.
+        $this->artisan('whatsapp:send-reminders')->assertSuccessful();
+        $this->assertCount(2, $this->fake->sent);
+        $this->assertSame(0, ReminderLog::count());
+
+        // Travel to when the new slot (2026-10-01 09:00 IST) is due (23h away).
+        $this->travelTo(Carbon::parse('2026-09-30 10:00', 'Asia/Kolkata'));
+
+        $this->artisan('whatsapp:send-reminders')->assertSuccessful();
+        $this->assertCount(3, $this->fake->sent);
+        $this->assertSame(1, ReminderLog::count());
+
+        $newLog = ReminderLog::where('appointment_id', $appointment->id)->first();
+        $this->assertNotNull($newLog);
+        $this->assertSame('sent', $newLog->delivery_status);
+        $this->assertNotSame($oldLog->id, $newLog->id);
+
+        // Idempotent: running again sends nothing further.
+        $this->artisan('whatsapp:send-reminders')->assertSuccessful();
+        $this->assertCount(3, $this->fake->sent);
+        $this->assertSame(1, ReminderLog::count());
     }
 }

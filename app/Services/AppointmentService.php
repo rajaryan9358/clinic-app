@@ -10,6 +10,7 @@ use App\Models\Doctor;
 use App\Models\DoctorSchedule;
 use App\Models\DoctorScheduleException;
 use App\Models\Patient;
+use App\Models\ReminderLog;
 use App\Services\Billing\PlanLimits;
 use App\Services\WhatsApp\PatientNotifier;
 use Carbon\Carbon;
@@ -467,6 +468,16 @@ class AppointmentService
                 'reason' => $reason,
                 'created_at' => now(),
             ]);
+
+            // The reminder command skips any appointment that already has an
+            // 'appointment_reminder' log, so once the slot moves, drop the
+            // stale log(s) for it — otherwise the new date/time is never
+            // reminded.
+            ReminderLog::query()
+                ->where('clinic_id', $appointment->clinic_id)
+                ->where('appointment_id', $appointment->id)
+                ->where('reminder_type', 'appointment_reminder')
+                ->delete();
 
             $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->appointmentUpdated($appointment, 'rescheduled'));
 
