@@ -43,12 +43,30 @@ class WhatsAppWebhookController
             return response()->json(['ok' => false], 401);
         }
 
-        $payload = json_decode($rawBody, true) ?: [];
+        $payload = json_decode($rawBody, true);
+        $payload = is_array($payload) ? $payload : [];
 
-        foreach ((array) ($payload['entry'] ?? []) as $entry) {
-            foreach ((array) ($entry['changes'] ?? []) as $change) {
-                foreach ((array) ($change['value']['statuses'] ?? []) as $status) {
-                    $this->applyStatus($status);
+        $entries = is_array($payload['entry'] ?? null) ? $payload['entry'] : [];
+
+        foreach ($entries as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $changes = is_array($entry['changes'] ?? null) ? $entry['changes'] : [];
+
+            foreach ($changes as $change) {
+                if (! is_array($change)) {
+                    continue;
+                }
+
+                $value = is_array($change['value'] ?? null) ? $change['value'] : [];
+                $statuses = is_array($value['statuses'] ?? null) ? $value['statuses'] : [];
+
+                foreach ($statuses as $status) {
+                    if (is_array($status)) {
+                        $this->applyStatus($status);
+                    }
                 }
             }
         }
@@ -71,6 +89,10 @@ class WhatsAppWebhookController
             return;
         }
 
+        // Rows in an unranked status (failed, skipped, received, or anything
+        // outside queued/sent/delivered/read) are terminal for this webhook:
+        // neither a later "failed" nor a later delivered/read/sent event may
+        // move them.
         $currentRank = self::RANK[$message->delivery_status] ?? null;
 
         if ($newStatus === 'failed') {
@@ -79,7 +101,7 @@ class WhatsAppWebhookController
             }
 
             $message->delivery_status = 'failed';
-            $message->error_message = $status['errors'][0]['title'] ?? null;
+            $message->error_message = $this->extractErrorTitle($status);
             $message->save();
 
             $this->mirrorReminderLog($message, 'failed', $message->error_message);
@@ -89,14 +111,26 @@ class WhatsAppWebhookController
 
         $newRank = self::RANK[$newStatus] ?? null;
 
-        if ($newRank === null || ($currentRank !== null && $newRank <= $currentRank)) {
-            return; // unknown status, or moving backward/staying put.
+        if ($newRank === null || $currentRank === null || $newRank <= $currentRank) {
+            return; // unknown status, current row is unranked/terminal, or moving backward/staying put.
         }
 
         $message->delivery_status = $newStatus;
         $message->save();
 
         $this->mirrorReminderLog($message, $newStatus, null);
+    }
+
+    private function extractErrorTitle(array $status): ?string
+    {
+        $errors = $status['errors'] ?? null;
+        if (! is_array($errors) || ! is_array($errors[0] ?? null)) {
+            return null;
+        }
+
+        $title = $errors[0]['title'] ?? null;
+
+        return is_string($title) ? $title : null;
     }
 
     private function mirrorReminderLog(WhatsappMessage $message, string $status, ?string $failureReason): void

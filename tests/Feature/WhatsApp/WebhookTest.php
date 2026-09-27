@@ -229,6 +229,53 @@ class WebhookTest extends TestCase
         $this->assertSame('read', $log->refresh()->delivery_status);
     }
 
+    public function test_failed_row_is_terminal_and_does_not_revert_on_delivered(): void
+    {
+        $log = ReminderLog::create([
+            'clinic_id' => $this->clinic->id,
+            'appointment_id' => $this->appointment->id,
+            'patient_id' => $this->appointment->patient_id,
+            'channel' => 'whatsapp',
+            'reminder_type' => 'appointment_reminder',
+            'delivery_status' => 'failed',
+            'provider_message_id' => 'wamid.1',
+            'failure_reason' => 'Recipient opted out',
+        ]);
+
+        $message = $this->makeMessage([
+            'delivery_status' => 'failed',
+            'error_message' => 'Recipient opted out',
+            'payload_json' => ['reminder_log_id' => $log->id],
+        ]);
+
+        $this->postWebhook($this->statusPayload(['id' => 'wamid.1', 'status' => 'delivered']))->assertOk();
+
+        $this->assertSame('failed', $message->refresh()->delivery_status);
+        $this->assertSame('Recipient opted out', $message->error_message);
+        $this->assertSame('failed', $log->refresh()->delivery_status);
+    }
+
+    public function test_malformed_statuses_payloads_are_ignored_with_200(): void
+    {
+        $message = $this->makeMessage();
+
+        $malformedPayloads = [
+            ['entry' => [['changes' => [['value' => ['statuses' => 'bad']]]]]],
+            ['entry' => [['changes' => [['value' => ['statuses' => ['bad']]]]]]],
+            ['entry' => [['changes' => [['value' => 'bad']]]]],
+            ['entry' => [['changes' => 'bad']]],
+            ['entry' => 'bad'],
+            ['entry' => [['changes' => [['value' => ['statuses' => [['id' => 'wamid.1']]]]]]]],
+            ['entry' => [['changes' => [['value' => ['statuses' => [['status' => 'delivered']]]]]]]],
+        ];
+
+        foreach ($malformedPayloads as $payload) {
+            $this->postWebhook($payload)->assertOk();
+        }
+
+        $this->assertSame('sent', $message->refresh()->delivery_status);
+    }
+
     public function test_unknown_provider_id_is_ignored_with_200(): void
     {
         $this->makeMessage();
