@@ -231,10 +231,20 @@ class TriggerTest extends TestCase
         $this->assertCount(0, $this->fake->sent);
     }
 
-    public function test_appointment_prescription_created_sends_prescription_ready(): void
+    public function test_appointment_prescription_created_sends_nothing(): void
     {
+        // Ruling: the only prescription-creation path today is
+        // generatePrescriptionFromVoice, which saves an unreviewed AI draft
+        // and creates a new row on every re-record. An automatic
+        // created-hook would WhatsApp unreviewed/duplicate prescriptions to
+        // patients, so prescriptions are sent ONLY via the manual
+        // POST .../prescription/send endpoints — creating a row by itself
+        // must never trigger a send.
         $date = Carbon::now()->addDays(3)->startOfDay();
         $appointment = $this->bookAppointment($date);
+
+        // Reset the fake so only prescription-related sends are counted below.
+        $this->fake->sent = [];
 
         $rx = AppointmentPrescription::create([
             'clinic_id' => $this->clinic->id,
@@ -242,18 +252,14 @@ class TriggerTest extends TestCase
             'data' => ['notes' => 'Take rest'],
         ]);
 
-        $this->assertSame(1, WhatsappMessage::where('appointment_id', $appointment->id)
+        $this->assertSame(0, WhatsappMessage::where('appointment_id', $appointment->id)
             ->where('notification_type', 'prescription_ready')
             ->count());
-
-        $row = WhatsappMessage::where('appointment_id', $appointment->id)
-            ->where('notification_type', 'prescription_ready')
-            ->first();
-        $this->assertSame('sent', $row->delivery_status);
+        $this->assertCount(0, $this->fake->sent);
         $this->assertNotNull($rx->id);
     }
 
-    public function test_manual_send_prescription_endpoint_returns_200_and_creates_second_row(): void
+    public function test_manual_send_prescription_endpoint_returns_200_and_creates_one_row(): void
     {
         $date = Carbon::now()->addDays(3)->startOfDay();
         $appointment = $this->bookAppointment($date);
@@ -264,7 +270,7 @@ class TriggerTest extends TestCase
             'data' => ['notes' => 'Take rest'],
         ]);
 
-        $this->assertSame(1, WhatsappMessage::where('appointment_id', $appointment->id)
+        $this->assertSame(0, WhatsappMessage::where('appointment_id', $appointment->id)
             ->where('notification_type', 'prescription_ready')
             ->count());
 
@@ -275,7 +281,7 @@ class TriggerTest extends TestCase
         $this->assertTrue($response->json('success'));
         $this->assertNotNull($response->json('data.id'));
 
-        $this->assertSame(2, WhatsappMessage::where('appointment_id', $appointment->id)
+        $this->assertSame(1, WhatsappMessage::where('appointment_id', $appointment->id)
             ->where('notification_type', 'prescription_ready')
             ->count());
     }
@@ -370,7 +376,69 @@ class TriggerTest extends TestCase
 
         $response->assertOk();
         $this->assertTrue($response->json('success'));
-        $this->assertSame(2, WhatsappMessage::where('appointment_id', $appointment->id)
+        $this->assertSame(1, WhatsappMessage::where('appointment_id', $appointment->id)
+            ->where('notification_type', 'prescription_ready')
+            ->count());
+    }
+
+    public function test_manual_send_for_another_clinics_appointment_returns_404_and_sends_nothing(): void
+    {
+        $otherClinic = Clinic::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Other Clinic',
+            'slug' => 'other-clinic-'.Str::random(6),
+            'status' => 'active',
+        ]);
+        $otherDoctor = Doctor::create([
+            'clinic_id' => $otherClinic->id,
+            'full_name' => 'Dr Other',
+            'slot_duration_minutes' => 30,
+        ]);
+        $otherPatient = Patient::create([
+            'clinic_id' => $otherClinic->id,
+            'uuid' => (string) Str::uuid(),
+            'first_name' => 'Someone',
+            'full_name' => 'Someone Else',
+            'phone' => '9000000002',
+        ]);
+        $date = Carbon::now()->addDays(3)->startOfDay();
+        DoctorSchedule::create([
+            'clinic_id' => $otherClinic->id,
+            'doctor_id' => $otherDoctor->id,
+            'day_of_week' => $date->dayOfWeek,
+            'start_time' => '09:00:00',
+            'end_time' => '13:00:00',
+            'consultation_mode' => 'in_person',
+            'is_active' => true,
+        ]);
+        $otherAppointment = Appointment::create([
+            'clinic_id' => $otherClinic->id,
+            'uuid' => (string) Str::uuid(),
+            'patient_id' => $otherPatient->id,
+            'doctor_id' => $otherDoctor->id,
+            'appointment_date' => $date->toDateString(),
+            'start_time' => '10:00:00',
+            'end_time' => '10:30:00',
+            'visit_type' => 'new',
+            'booking_channel' => 'walk_in',
+            'status' => 'confirmed',
+        ]);
+        AppointmentPrescription::create([
+            'clinic_id' => $otherClinic->id,
+            'appointment_id' => $otherAppointment->id,
+            'data' => ['notes' => 'Take rest'],
+        ]);
+
+        $this->fake->sent = [];
+
+        // A user scoped to $this->clinic must not be able to send a
+        // prescription belonging to a different clinic's appointment.
+        Sanctum::actingAs($this->clinicAdmin());
+        $response = $this->postJson("/api/clinic/appointments/{$otherAppointment->id}/prescription/send");
+
+        $response->assertNotFound();
+        $this->assertCount(0, $this->fake->sent);
+        $this->assertSame(0, WhatsappMessage::where('appointment_id', $otherAppointment->id)
             ->where('notification_type', 'prescription_ready')
             ->count());
     }
