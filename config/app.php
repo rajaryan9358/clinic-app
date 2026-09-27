@@ -69,6 +69,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Clinic Timezone
+    |--------------------------------------------------------------------------
+    |
+    | appointment_date/start_time are stored as clinic wall-clock values with
+    | no timezone column. This is the timezone used to interpret them (e.g.
+    | for reminder scheduling) before comparing against instants like now().
+    |
+    */
+
+    'clinic_timezone' => env('CLINIC_TIMEZONE', 'Asia/Kolkata'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

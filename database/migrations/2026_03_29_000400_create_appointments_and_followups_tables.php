@@ -111,10 +111,10 @@ return new class extends Migration
             $table->foreignId('appointment_id')->constrained('appointments')->cascadeOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->enum('channel', ['whatsapp', 'sms', 'email', 'call']);
-            $table->enum('reminder_type', ['booking_confirmation', '24h_before', '2h_before', 'missed_visit', 'followup_due', 'review_request']);
+            $table->enum('reminder_type', ['booking_confirmation', 'appointment_reminder', '24h_before', '2h_before', 'missed_visit', 'followup_due', 'review_request']);
             $table->timestamp('scheduled_for')->nullable();
             $table->timestamp('sent_at')->nullable();
-            $table->enum('delivery_status', ['pending', 'sent', 'failed', 'read', 'delivered'])->default('pending');
+            $table->enum('delivery_status', ['pending', 'sent', 'failed', 'read', 'delivered', 'skipped'])->default('pending');
             $table->string('provider_message_id')->nullable();
             $table->text('failure_reason')->nullable();
             $table->timestamps();

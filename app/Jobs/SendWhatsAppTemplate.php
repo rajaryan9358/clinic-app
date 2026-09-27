@@ -44,6 +44,11 @@ class SendWhatsAppTemplate implements ShouldQueue
             $row->error_message = 'WhatsApp not configured';
             $row->save();
 
+            $this->mirrorReminderLog($row, function (ReminderLog $log) {
+                $log->delivery_status = 'skipped';
+                $log->failure_reason = 'WhatsApp not configured';
+            });
+
             return;
         }
 
