@@ -37,6 +37,8 @@ export default function PrescriptionPage() {
         error: '',
     });
 
+    const [send, setSend] = useState({ confirming: false, sending: false, message: '', isError: false });
+
     useEffect(() => {
         let cancelled = false;
         const run = async () => {
@@ -97,6 +99,17 @@ export default function PrescriptionPage() {
             downloadBlob(res.data, `prescription-${id}.pdf`);
         } catch (e) {
             setError(e?.response?.data?.message || e?.message || 'Failed to download PDF');
+        }
+    };
+
+    const sendToPatient = async () => {
+        if (!id) return;
+        setSend((p) => ({ ...p, sending: true, message: '', isError: false }));
+        try {
+            const res = await client.post(`${base}/appointments/${id}/prescription/send`);
+            setSend({ confirming: false, sending: false, message: res?.data?.message || 'Prescription sent to patient.', isError: false });
+        } catch (e) {
+            setSend((p) => ({ ...p, sending: false, message: e?.response?.data?.message || e?.message || 'Failed to send prescription.', isError: true }));
         }
     };
 
@@ -236,8 +249,45 @@ export default function PrescriptionPage() {
                             Start Recording
                         </button>
                     ) : null}
+                    {prescription && canPrescribe ? (
+                        send.confirming ? (
+                            <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2">
+                                <span className="text-sm font-medium text-emerald-800">Send via WhatsApp?</span>
+                                <button
+                                    type="button"
+                                    disabled={send.sending}
+                                    onClick={sendToPatient}
+                                    className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                >
+                                    {send.sending ? 'Sending…' : 'Yes, send'}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={send.sending}
+                                    onClick={() => setSend((p) => ({ ...p, confirming: false }))}
+                                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setSend({ confirming: true, sending: false, message: '', isError: false })}
+                                className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                            >
+                                Send to Patient (WhatsApp)
+                            </button>
+                        )
+                    ) : null}
                 </div>
             </div>
+
+            {send.message ? (
+                <div className={`no-print mb-4 rounded-xl border px-4 py-2.5 text-sm ${send.isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                    {send.message}
+                </div>
+            ) : null}
 
             {loading ? (
                 <div className="rx-surface rounded-2xl bg-white p-5 text-sm text-slate-600">Loading…</div>

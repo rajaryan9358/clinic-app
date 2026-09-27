@@ -4,9 +4,43 @@ import AppIcon from '../../components/AppIcon';
 
 const TABS = [
     { key: 'openai',    label: 'AI / OpenAI',         icon: 'activity' },
+    { key: 'whatsapp',  label: 'WhatsApp',            icon: 'settings' },
     { key: 'payments',  label: 'Payments',            icon: 'settings' },
     { key: 'trial',     label: 'Trial Settings',      icon: 'settings' },
 ];
+
+// Meta template category + body/button parameter order for each notification
+// type (see .superpowers/sdd/2026-09-27-whatsapp-notifications/global-constraints.md).
+// Categories aren't stored anywhere — booking/reminder/update/prescription
+// notifications are transactional (Utility); the OTP template is the only
+// one that carries a one-time code, which Meta requires as Authentication.
+const TEMPLATE_INFO = {
+    booking_confirmed: {
+        label: 'Booking Confirmed',
+        category: 'Utility',
+        params: 'Body: patient name, clinic name, doctor name, date (D, d M Y), time (g:i A).',
+    },
+    appointment_reminder: {
+        label: 'Appointment Reminder',
+        category: 'Utility',
+        params: 'Body: patient name, clinic name, doctor name, date (D, d M Y), time (g:i A).',
+    },
+    appointment_updated: {
+        label: 'Appointment Updated',
+        category: 'Utility',
+        params: 'Body: patient name, clinic name, status line ("has been rescheduled to" / "has been cancelled"), date, time.',
+    },
+    prescription_ready: {
+        label: 'Prescription Ready',
+        category: 'Utility',
+        params: 'Header: PDF document (prescription-<appointment id>.pdf). Body: patient name, clinic name, doctor name.',
+    },
+    login_otp: {
+        label: 'Login OTP',
+        category: 'Authentication',
+        params: 'Body: OTP code. Button (Copy Code, sub_type "url", index 0): OTP code.',
+    },
+};
 
 function Card({ children, className = '' }) {
     return <div className={`rounded-xl border border-gray-200 bg-white p-5 shadow-sm ${className}`}>{children}</div>;
@@ -97,6 +131,271 @@ function OpenAITab() {
                 </div>
             </form>
         </Card>
+    );
+}
+
+// ── WhatsApp Tab ────────────────────────────────────────────────────────────────
+function WhatsAppTab() {
+    const [form, setForm] = useState({
+        whatsapp_phone_number_id: '',
+        whatsapp_waba_id: '',
+        whatsapp_graph_version: 'v21.0',
+        whatsapp_access_token: '',
+        whatsapp_app_secret: '',
+        whatsapp_webhook_verify_token: '',
+    });
+    const [accessTokenSet, setAccessTokenSet] = useState(false);
+    const [appSecretSet, setAppSecretSet] = useState(false);
+    const [verifyTokenSet, setVerifyTokenSet] = useState(false);
+    const [webhookUrl, setWebhookUrl] = useState('');
+    const [templates, setTemplates] = useState({});
+    const [copyMsg, setCopyMsg] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState(null);
+
+    const load = () => {
+        setLoading(true);
+        client.get('/super-admin/settings/system')
+            .then((res) => {
+                const d = res.data?.data || {};
+                setForm({
+                    whatsapp_phone_number_id: d.whatsapp_phone_number_id || '',
+                    whatsapp_waba_id: d.whatsapp_waba_id || '',
+                    whatsapp_graph_version: d.whatsapp_graph_version || 'v21.0',
+                    whatsapp_access_token: '',
+                    whatsapp_app_secret: '',
+                    whatsapp_webhook_verify_token: '',
+                });
+                setAccessTokenSet(Boolean(d.whatsapp_access_token_set));
+                setAppSecretSet(Boolean(d.whatsapp_app_secret_set));
+                setVerifyTokenSet(Boolean(d.whatsapp_webhook_verify_token_set));
+                setWebhookUrl(d.whatsapp_webhook_url || `${window.location.origin}/api/webhooks/whatsapp`);
+                setTemplates(d.whatsapp_templates || {});
+            })
+            .catch(() => { /* endpoint may not exist yet */ })
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const save = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        setError('');
+        setSuccess('');
+        try {
+            const payload = {
+                whatsapp_phone_number_id: form.whatsapp_phone_number_id,
+                whatsapp_waba_id: form.whatsapp_waba_id,
+                whatsapp_graph_version: form.whatsapp_graph_version,
+                whatsapp_templates: templates,
+            };
+            if (String(form.whatsapp_access_token || '').trim()) {
+                payload.whatsapp_access_token = form.whatsapp_access_token.trim();
+            }
+            if (String(form.whatsapp_app_secret || '').trim()) {
+                payload.whatsapp_app_secret = form.whatsapp_app_secret.trim();
+            }
+            if (String(form.whatsapp_webhook_verify_token || '').trim()) {
+                payload.whatsapp_webhook_verify_token = form.whatsapp_webhook_verify_token.trim();
+            }
+            await client.post('/super-admin/settings/system', payload);
+            setSuccess('WhatsApp settings saved.');
+            load();
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Failed to save — endpoint may not be available yet.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const testConnection = async () => {
+        setTesting(true);
+        setTestResult(null);
+        try {
+            const res = await client.post('/super-admin/settings/whatsapp/test');
+            setTestResult({ ok: Boolean(res.data?.data?.ok), message: res.data?.data?.message || '' });
+        } catch (e) {
+            setTestResult({ ok: false, message: e?.response?.data?.message || e?.message || 'Test failed.' });
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    const copyWebhookUrl = async () => {
+        try {
+            await navigator.clipboard.writeText(webhookUrl);
+            setCopyMsg('Copied!');
+            setTimeout(() => setCopyMsg(''), 2000);
+        } catch {
+            setCopyMsg('Could not copy — copy it manually.');
+            setTimeout(() => setCopyMsg(''), 3000);
+        }
+    };
+
+    const updateTemplate = (type, key, value) => {
+        setTemplates((p) => ({
+            ...p,
+            [type]: { ...(p[type] || {}), [key]: value },
+        }));
+    };
+
+    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+
+    return (
+        <div className="space-y-5">
+            <Card>
+                <SectionTitle title="WhatsApp Business API" subtitle="Meta Cloud API credentials used to send template messages and receive delivery webhooks." />
+                {error && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+                {success && <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
+                <form onSubmit={save} className="space-y-4 max-w-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                        <Field label="Phone Number ID">
+                            <input
+                                className={inputCls}
+                                type="text"
+                                value={form.whatsapp_phone_number_id}
+                                onChange={(e) => setForm((p) => ({ ...p, whatsapp_phone_number_id: e.target.value }))}
+                            />
+                        </Field>
+                        <Field label="WABA ID">
+                            <input
+                                className={inputCls}
+                                type="text"
+                                value={form.whatsapp_waba_id}
+                                onChange={(e) => setForm((p) => ({ ...p, whatsapp_waba_id: e.target.value }))}
+                            />
+                        </Field>
+                    </div>
+                    <Field label="Graph API Version">
+                        <input
+                            className={inputCls}
+                            type="text"
+                            placeholder="v21.0"
+                            value={form.whatsapp_graph_version}
+                            onChange={(e) => setForm((p) => ({ ...p, whatsapp_graph_version: e.target.value }))}
+                        />
+                    </Field>
+                    <Field label="Access Token" hint={accessTokenSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                        <input
+                            className={inputCls}
+                            type="password"
+                            placeholder={accessTokenSet ? 'Saved — leave blank to keep' : 'Access token'}
+                            value={form.whatsapp_access_token}
+                            onChange={(e) => setForm((p) => ({ ...p, whatsapp_access_token: e.target.value }))}
+                        />
+                    </Field>
+                    <Field label="App Secret" hint={appSecretSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                        <input
+                            className={inputCls}
+                            type="password"
+                            placeholder={appSecretSet ? 'Saved — leave blank to keep' : 'App secret'}
+                            value={form.whatsapp_app_secret}
+                            onChange={(e) => setForm((p) => ({ ...p, whatsapp_app_secret: e.target.value }))}
+                        />
+                    </Field>
+                    <Field label="Webhook Verify Token" hint={verifyTokenSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                        <input
+                            className={inputCls}
+                            type="password"
+                            placeholder={verifyTokenSet ? 'Saved — leave blank to keep' : 'Verify token'}
+                            value={form.whatsapp_webhook_verify_token}
+                            onChange={(e) => setForm((p) => ({ ...p, whatsapp_webhook_verify_token: e.target.value }))}
+                        />
+                    </Field>
+                    <Field label="Webhook URL">
+                        <div className="flex items-center gap-2">
+                            <input className={`${inputCls} bg-gray-50 text-gray-600`} type="text" value={webhookUrl} readOnly />
+                            <button
+                                type="button"
+                                onClick={copyWebhookUrl}
+                                className="whitespace-nowrap rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            >
+                                Copy
+                            </button>
+                        </div>
+                        {copyMsg && <p className="mt-1 text-xs text-gray-500">{copyMsg}</p>}
+                        <p className="mt-2 text-xs text-gray-400">
+                            Add this URL as the Webhook callback URL for your WhatsApp Business App in Meta's App Dashboard, with the verify token above, and subscribe to the "messages" field.
+                        </p>
+                    </Field>
+
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={testConnection}
+                                disabled={testing}
+                                className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                            >
+                                {testing ? 'Testing…' : 'Test connection'}
+                            </button>
+                            {testResult && (
+                                <span className={`text-sm font-medium ${testResult.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+                                    {testResult.ok ? '✓ ' : '✗ '}{testResult.message}
+                                </span>
+                            )}
+                        </div>
+                        <button type="submit" disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                            {saving ? 'Saving…' : 'Save WhatsApp Settings'}
+                        </button>
+                    </div>
+                </form>
+            </Card>
+
+            <Card>
+                <SectionTitle title="Notification Templates" subtitle="Map each notification type to an approved Meta template. Names must match exactly (lowercase, digits, underscores)." />
+                <div className="overflow-hidden rounded-xl border border-gray-200">
+                    <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <div className="col-span-3">Type</div>
+                        <div className="col-span-3">Template Name</div>
+                        <div className="col-span-2">Language</div>
+                        <div className="col-span-1">Enabled</div>
+                        <div className="col-span-3">Reference</div>
+                    </div>
+                    {Object.keys(TEMPLATE_INFO).map((type) => {
+                        const t = templates[type] || {};
+                        const info = TEMPLATE_INFO[type];
+                        return (
+                            <div key={type} className="grid grid-cols-12 gap-2 border-t border-gray-100 px-4 py-3 text-sm">
+                                <div className="col-span-3 font-medium text-gray-900">{info.label}</div>
+                                <div className="col-span-3">
+                                    <input
+                                        className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        type="text"
+                                        value={t.name || ''}
+                                        onChange={(e) => updateTemplate(type, 'name', e.target.value)}
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <input
+                                        className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        type="text"
+                                        value={t.language || ''}
+                                        onChange={(e) => updateTemplate(type, 'language', e.target.value)}
+                                    />
+                                </div>
+                                <div className="col-span-1 flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        checked={Boolean(t.enabled)}
+                                        onChange={(e) => updateTemplate(type, 'enabled', e.target.checked)}
+                                    />
+                                </div>
+                                <div className="col-span-3 text-xs text-gray-500">
+                                    <span className="font-semibold text-gray-700">{info.category}</span> — {info.params}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </Card>
+        </div>
     );
 }
 
@@ -356,6 +655,7 @@ export default function SystemSettingsPage() {
 
             <div>
                 {activeTab === 'openai' && <OpenAITab />}
+                {activeTab === 'whatsapp' && <WhatsAppTab />}
                 {activeTab === 'payments' && <PaymentsTab />}
                 {activeTab === 'trial' && <TrialTab />}
             </div>

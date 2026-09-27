@@ -2,7 +2,7 @@
 export const SUPER_ADMIN_HIDDEN_MODULE_KEYS = [
     'doctors', 'domains',
     'appointments', 'patients', 'followups', 'services', 'invoices', 'payments',
-    'reviews', 'whatsappAccounts', 'whatsappTemplates', 'whatsappConversations',
+    'reviews', 'whatsappConversations',
     'reminders', 'whatsappMessages', 'whatsappSessions',
 ];
 
@@ -24,8 +24,6 @@ export const MODULE_PERMISSION = {
     followups: 'followups',
     reminders: 'reminders',
     whatsappConversations: 'whatsapp',
-    whatsappAccounts: 'whatsapp',
-    whatsappTemplates: 'whatsapp',
     whatsappMessages: 'whatsapp',
     whatsappSessions: 'whatsapp',
     invoices: 'billing',

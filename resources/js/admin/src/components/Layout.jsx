@@ -31,8 +31,6 @@ const MODULE_ICONS = {
     followups: 'clipboard-check',
     reviews: 'star',
     whatsappConversations: 'message-circle',
-    whatsappAccounts: 'message-square',
-    whatsappTemplates: 'layout-template',
     whatsappMessages: 'message-circle',
     whatsappFlowSessions: 'git-branch',
     reminders: 'bell',

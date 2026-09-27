@@ -65,10 +65,17 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
     const canCancel = Boolean(scope?.can?.('appointments.cancel'));
     const canCheckIn = Boolean(scope?.can?.('appointments.check_in'));
     const canPrescribe = Boolean(scope?.can?.('appointments.prescribe'));
+    // Super admin has no clinic permission list to check against, so the
+    // WhatsApp panel is always fetched for them; everyone else needs the
+    // explicit permission.
+    const canViewWhatsapp = user?.role === 'super_admin' || Boolean(scope?.can?.('whatsapp.view'));
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [payload, setPayload] = useState(null);
+
+    // WhatsApp messages linked to this appointment (Task 6)
+    const [waMessages, setWaMessages] = useState([]);
 
     // Status actions
     const [actionLoading, setActionLoading] = useState(false);
@@ -214,11 +221,28 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
         return () => { cancelled = true; };
     }, [open, appointmentId, base]);
 
+    useEffect(() => {
+        if (!open || !appointmentId || !canViewWhatsapp) {
+            setWaMessages([]);
+            return;
+        }
+        let cancelled = false;
+        client.get(`${base}/whatsapp/messages`, { params: { appointment_id: appointmentId, per_page: 20, sort_by: 'created_at', sort_dir: 'desc' } })
+            .then((res) => {
+                if (cancelled) return;
+                setWaMessages(Array.isArray(res.data?.data) ? res.data.data : []);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setWaMessages([]);
+            });
+        return () => { cancelled = true; };
+    }, [open, appointmentId, base, canViewWhatsapp]);
+
     const appt = payload?.appointment;
     const statusLogs = payload?.timeline?.status_changes || [];
     const reschedules = payload?.timeline?.reschedules || [];
     const reminders = payload?.communication?.reminders;
-    const whatsapp = payload?.communication?.whatsapp;
 
     // Compute status actions outside JSX to avoid IIFE issues
     const apptStatus = String(appt?.status || '').toLowerCase();
@@ -431,7 +455,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                         <h4 className="text-sm font-semibold text-slate-900">Communication / Reminders</h4>
                         <p className="mt-1 text-sm text-slate-600">Reminders and WhatsApp message summary for this appointment.</p>
 
-                        <div className="mt-3 grid gap-4 md:grid-cols-2">
+                        <div className={`mt-3 grid gap-4 ${canViewWhatsapp && waMessages.length ? 'md:grid-cols-2' : ''}`}>
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reminder status counts</p>
                                 <div className="mt-2 space-y-1">
@@ -447,24 +471,27 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                 </div>
                             </div>
 
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</p>
-                                <p className="mt-2 text-sm text-slate-700">Messages linked: <span className="font-semibold text-slate-900">{whatsapp?.count ?? 0}</span></p>
-                                <div className="mt-2 space-y-2">
-                                    {(whatsapp?.recent || []).map((m) => (
-                                        <div key={m.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{m.direction} · {m.delivery_status}</p>
-                                                <p className="text-xs text-slate-500">#{m.id}</p>
+                            {canViewWhatsapp && waMessages.length ? (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp Messages</p>
+                                    <div className="mt-2 space-y-2">
+                                        {waMessages.map((m) => (
+                                            <div key={m.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                                        {String(m.notification_type || m.message_type || 'message').replaceAll('_', ' ')}
+                                                    </span>
+                                                    <StatusBadge status={m.delivery_status} />
+                                                </div>
+                                                <p className="mt-1 text-xs text-slate-500">{formatDateTime(m.created_at)}</p>
+                                                {m.delivery_status === 'failed' && m.error_message ? (
+                                                    <p className="mt-1 text-xs text-rose-600">{m.error_message}</p>
+                                                ) : null}
                                             </div>
-                                            <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap break-words">{m.content_text || m.message_type || '—'}</p>
-                                        </div>
-                                    ))}
-                                    {!(whatsapp?.recent || []).length ? (
-                                        <p className="text-sm text-slate-600">No WhatsApp messages linked.</p>
-                                    ) : null}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            ) : null}
                         </div>
 
                         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">

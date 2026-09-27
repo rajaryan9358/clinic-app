@@ -338,13 +338,14 @@ function Sheet({ open, title, subtitle, onClose, children, footer }) {
 
 // ── Small form helpers ────────────────────────────────────────────────────────
 
-function Field({ label, required, error, children }) {
+function Field({ label, required, error, hint, children }) {
     return (
         <div>
             <label className="mb-1 block text-xs font-semibold text-gray-700">
                 {label}{required && <span className="ml-0.5 text-red-500">*</span>}
             </label>
             {children}
+            {hint && !error && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
             {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
     );
@@ -1045,21 +1046,6 @@ function SettingsTab({ clinicId }) {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
-    const [waAccount, setWaAccount] = useState(null);
-    const [waForm, setWaForm] = useState({
-        business_name: '',
-        phone_number: '',
-        phone_number_id: '',
-        waba_id: '',
-        webhook_verify_token: '',
-        access_token: '',
-        status: 'pending',
-    });
-    const [waLoading, setWaLoading] = useState(true);
-    const [waSaving, setWaSaving] = useState(false);
-    const [waError, setWaError] = useState('');
-    const [waSuccess, setWaSuccess] = useState('');
-
     useEffect(() => {
         let cancelled = false;
         client.get('/super-admin/settings/clinic', { params: { clinic_id: clinicId, per_page: 1 } })
@@ -1069,38 +1055,6 @@ function SettingsTab({ clinicId }) {
             })
             .catch((e) => { if (!cancelled) setError(e?.response?.data?.message || 'Failed to load'); })
             .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
-    }, [clinicId]);
-
-    useEffect(() => {
-        let cancelled = false;
-        setWaLoading(true);
-        setWaError('');
-        client.get('/super-admin/whatsapp/accounts', { params: { clinic_id: clinicId, per_page: 100 } })
-            .then((res) => {
-                const items = Array.isArray(res.data?.data) ? res.data.data : [];
-                const preferred = items.find((x) => String(x?.status || '') === 'active') || items[0] || null;
-                if (cancelled) return;
-                setWaAccount(preferred);
-                setWaForm({
-                    business_name: preferred?.business_name || '',
-                    phone_number: preferred?.phone_number || '',
-                    phone_number_id: preferred?.phone_number_id || '',
-                    waba_id: preferred?.waba_id || '',
-                    webhook_verify_token: preferred?.webhook_verify_token || '',
-                    access_token: '',
-                    status: preferred?.status || 'pending',
-                });
-            })
-            .catch((e) => {
-                if (cancelled) return;
-                setWaError(e?.response?.data?.message || 'Failed to load WhatsApp settings');
-            })
-            .finally(() => {
-                if (cancelled) return;
-                setWaLoading(false);
-            });
-
         return () => { cancelled = true; };
     }, [clinicId]);
 
@@ -1121,51 +1075,6 @@ function SettingsTab({ clinicId }) {
             setError(e?.response?.data?.message || 'Failed to save');
         } finally {
             setSaving(false);
-        }
-    };
-
-    const saveWhatsapp = async (e) => {
-        e.preventDefault();
-        setWaSaving(true);
-        setWaError('');
-        setWaSuccess('');
-
-        try {
-            const payload = {
-                clinic_id: clinicId,
-                business_name: waForm.business_name || null,
-                phone_number: waForm.phone_number,
-                provider: 'meta',
-                phone_number_id: waForm.phone_number_id || null,
-                waba_id: waForm.waba_id || null,
-                status: waForm.status || 'pending',
-            };
-
-            if (String(waForm.access_token || '').trim()) {
-                payload.access_token = String(waForm.access_token).trim();
-            }
-
-            if (String(waForm.webhook_verify_token || '').trim()) {
-                payload.webhook_verify_token = String(waForm.webhook_verify_token).trim();
-            }
-
-            if (waAccount?.id) {
-                await client.put(`/super-admin/whatsapp/accounts/${waAccount.id}`, payload);
-            } else {
-                await client.post('/super-admin/whatsapp/accounts', payload);
-            }
-
-            const res = await client.get('/super-admin/whatsapp/accounts', { params: { clinic_id: clinicId, per_page: 100 } });
-            const items = Array.isArray(res.data?.data) ? res.data.data : [];
-            const preferred = items.find((x) => String(x?.status || '') === 'active') || items[0] || null;
-            setWaAccount(preferred);
-            setWaForm((p) => ({ ...p, access_token: '' }));
-            setWaSuccess('WhatsApp credentials saved successfully.');
-            setTimeout(() => setWaSuccess(''), 3000);
-        } catch (e) {
-            setWaError(e?.response?.data?.message || 'Failed to save WhatsApp credentials');
-        } finally {
-            setWaSaving(false);
         }
     };
 
@@ -1246,6 +1155,18 @@ function SettingsTab({ clinicId }) {
                     </div>
                 </Card>
 
+                <Card className="p-5">
+                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Reminders</h3>
+                    <Field label="Reminder hours before (0 = off)" hint="How many hours before the appointment a WhatsApp reminder is sent. 0 disables reminders.">
+                        <TextInput
+                            type="number"
+                            value={form.reminder_hours_before ?? ''}
+                            onChange={(v) => setForm((p) => ({ ...p, reminder_hours_before: v }))}
+                            placeholder="24"
+                        />
+                    </Field>
+                </Card>
+
                 <div className="flex justify-end">
                     <button
                         type="submit"
@@ -1255,83 +1176,6 @@ function SettingsTab({ clinicId }) {
                         {saving ? 'Saving…' : 'Save Clinic Settings'}
                     </button>
                 </div>
-            </form>
-
-            <form onSubmit={saveWhatsapp} className="space-y-4">
-                <Card className="p-5">
-                    <div className="mb-4">
-                        <h3 className="text-sm font-semibold text-gray-900">WhatsApp Business Credentials</h3>
-                        <p className="mt-0.5 text-xs text-gray-500">Configure WhatsApp Business API credentials for this clinic.</p>
-                    </div>
-
-                    {waLoading ? (
-                        <div className="flex items-center justify-center py-6">
-                            <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {waError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{waError}</p>}
-                            {waSuccess && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{waSuccess}</p>}
-
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <Field label="Provider">
-                                    <TextInput value="meta" placeholder="meta" disabled readOnly />
-                                </Field>
-                                <Field label="Status">
-                                    <SelectInput
-                                        value={waForm.status}
-                                        onChange={(v) => setWaForm((p) => ({ ...p, status: v }))}
-                                        options={[
-                                            { value: 'pending', label: 'pending' },
-                                            { value: 'active', label: 'active' },
-                                            { value: 'inactive', label: 'inactive' },
-                                        ]}
-                                    />
-                                </Field>
-                            </div>
-
-                            <Field label="Business Name">
-                                <TextInput value={waForm.business_name} onChange={(v) => setWaForm((p) => ({ ...p, business_name: v }))} placeholder="Business Name" />
-                            </Field>
-
-                            <Field label="Phone Number" required>
-                                <TextInput value={waForm.phone_number} onChange={(v) => setWaForm((p) => ({ ...p, phone_number: v }))} placeholder="+91XXXXXXXXXX" />
-                            </Field>
-
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <Field label="Phone Number ID">
-                                    <TextInput value={waForm.phone_number_id} onChange={(v) => setWaForm((p) => ({ ...p, phone_number_id: v }))} placeholder="Meta phone_number_id" />
-                                </Field>
-                                <Field label="WABA ID">
-                                    <TextInput value={waForm.waba_id} onChange={(v) => setWaForm((p) => ({ ...p, waba_id: v }))} placeholder="WhatsApp Business Account ID" />
-                                </Field>
-                            </div>
-
-                            <Field label="Webhook Verify Token">
-                                <TextInput value={waForm.webhook_verify_token} onChange={(v) => setWaForm((p) => ({ ...p, webhook_verify_token: v }))} placeholder="Verify token" />
-                            </Field>
-
-                            <Field label="Access Token" required={false}>
-                                <TextInput
-                                    type="password"
-                                    value={waForm.access_token}
-                                    onChange={(v) => setWaForm((p) => ({ ...p, access_token: v }))}
-                                    placeholder={waAccount?.id ? 'Leave blank to keep existing' : 'Access token'}
-                                />
-                            </Field>
-
-                            <div className="flex justify-end pt-1">
-                                <button
-                                    type="submit"
-                                    disabled={waSaving}
-                                    className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                                >
-                                    {waSaving ? 'Saving…' : 'Save WhatsApp Credentials'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </Card>
             </form>
         </div>
     );
