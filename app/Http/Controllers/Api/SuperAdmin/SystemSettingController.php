@@ -94,12 +94,17 @@ class SystemSettingController extends Controller
                 PlatformSettings::set('trial_days', $validated['trial_days']);
             }
 
-            if (array_key_exists('whatsapp_phone_number_id', $validated) && $validated['whatsapp_phone_number_id'] !== null) {
-                PlatformSettings::set('whatsapp_phone_number_id', $validated['whatsapp_phone_number_id']);
+            // Unlike the secrets below, these are plain connection fields (not
+            // "leave blank to keep"): the global ConvertEmptyStringsToNull
+            // middleware turns a blanked field into null before it reaches here,
+            // so array_key_exists (not a !== null check) is what lets a super
+            // admin actually clear phone_number_id/waba_id to disable WhatsApp.
+            if (array_key_exists('whatsapp_phone_number_id', $validated)) {
+                PlatformSettings::set('whatsapp_phone_number_id', (string) ($validated['whatsapp_phone_number_id'] ?? ''));
             }
 
-            if (array_key_exists('whatsapp_waba_id', $validated) && $validated['whatsapp_waba_id'] !== null) {
-                PlatformSettings::set('whatsapp_waba_id', $validated['whatsapp_waba_id']);
+            if (array_key_exists('whatsapp_waba_id', $validated)) {
+                PlatformSettings::set('whatsapp_waba_id', (string) ($validated['whatsapp_waba_id'] ?? ''));
             }
 
             if (array_key_exists('whatsapp_graph_version', $validated) && $validated['whatsapp_graph_version'] !== null) {

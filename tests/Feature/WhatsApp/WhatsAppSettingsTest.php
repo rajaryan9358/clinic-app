@@ -101,6 +101,27 @@ class WhatsAppSettingsTest extends TestCase
         $res->assertJsonPath('data.whatsapp_webhook_verify_token_set', true);
     }
 
+    public function test_blanking_phone_number_id_and_waba_id_clears_them_and_disables_the_gateway(): void
+    {
+        Sanctum::actingAs($this->superAdmin());
+
+        $this->postJson('/api/super-admin/settings/system', $this->basePayload())->assertOk();
+
+        $this->postJson('/api/super-admin/settings/system', [
+            'whatsapp_phone_number_id' => '',
+            'whatsapp_waba_id' => '',
+        ])->assertOk();
+
+        $res = $this->getJson('/api/super-admin/settings/system')->assertOk();
+        $res->assertJsonPath('data.whatsapp_phone_number_id', '');
+        $res->assertJsonPath('data.whatsapp_waba_id', '');
+
+        // Secrets are untouched by this request (still "leave blank to keep").
+        $res->assertJsonPath('data.whatsapp_access_token_set', true);
+
+        $this->assertFalse((new \App\Services\WhatsApp\MetaWhatsAppGateway())->isConfigured());
+    }
+
     public function test_unknown_template_type_returns_422(): void
     {
         Sanctum::actingAs($this->superAdmin());
