@@ -56,11 +56,9 @@
         <table>
             <thead>
                 <tr>
-                    <th style="width: 40%">Medicine</th>
-                    <th style="width: 20%">Dosage</th>
-                    <th style="width: 20%">Frequency</th>
-                    <th style="width: 10%">Days</th>
-                    <th style="width: 10%">Notes</th>
+                    <th style="width: 45%">Medicine</th>
+                    <th style="width: 30%">Dosage</th>
+                    <th style="width: 25%">Duration</th>
                 </tr>
             </thead>
             <tbody>
@@ -68,19 +66,24 @@
                     @php
                         $name = (string)($m['name'] ?? $m['medicine'] ?? '');
                         $dosage = (string)($m['dosage'] ?? '');
+                        // Older/legacy rows may carry timing as a separate
+                        // `frequency`/`timing` field instead of folded into
+                        // dosage (the AI service's current schema); fold it
+                        // in here rather than adding a column, so this view
+                        // and the portal's table stay in sync with the
+                        // staff admin viewer's Medicine/Dosage/Duration
+                        // layout (see resources/js/admin/src/pages/workflows/PrescriptionPage.jsx).
                         $frequency = (string)($m['frequency'] ?? $m['timing'] ?? '');
-                        $days = (string)($m['days'] ?? $m['duration_days'] ?? '');
-                        $notes = (string)($m['notes'] ?? $m['instructions'] ?? '');
+                        $dosageDisplay = trim($dosage.($frequency !== '' ? ($dosage !== '' ? ' • ' : '').$frequency : ''));
+                        $duration = (string)($m['duration'] ?? $m['days'] ?? $m['duration_days'] ?? '');
                     @endphp
                     <tr>
                         <td>{{ $name !== '' ? $name : '-' }}</td>
-                        <td>{{ $dosage !== '' ? $dosage : '-' }}</td>
-                        <td>{{ $frequency !== '' ? $frequency : '-' }}</td>
-                        <td>{{ $days !== '' ? $days : '-' }}</td>
-                        <td>{{ $notes !== '' ? $notes : '-' }}</td>
+                        <td>{{ $dosageDisplay !== '' ? $dosageDisplay : '-' }}</td>
+                        <td>{{ $duration !== '' ? $duration : '-' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="muted">No medicines.</td></tr>
+                    <tr><td colspan="3" class="muted">No medicines.</td></tr>
                 @endforelse
             </tbody>
         </table>

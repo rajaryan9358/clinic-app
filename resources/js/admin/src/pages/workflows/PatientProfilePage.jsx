@@ -471,6 +471,11 @@ export default function PatientProfilePage() {
     const counts = profile?.counts || {};
     const family = profile?.family || {};
     const isAccountHolder = !patient?.managed_by_patient_id;
+    // A family link (patient_id -> related_patient_id) lets THIS patient's
+    // portal account act for the related patient's profile — not the other
+    // way around (see App\Support\Portal\PortalProfiles::allowedFor). Any
+    // copy shown near the links list must say that direction explicitly.
+    const patientFirstName = (patient?.full_name || '').trim().split(/\s+/)[0] || 'This patient';
 
     const downloadBlob = (data, filename) => {
         try {
@@ -734,7 +739,9 @@ export default function PatientProfilePage() {
                                             {l.related_patient?.full_name || `Patient #${l.related_patient_id}`}
                                             {l.relation ? ` · ${l.relation}` : ''}
                                             {' — '}
-                                            <span className="text-xs text-slate-500">Can use this patient's portal</span>
+                                            <span className="text-xs text-slate-500">
+                                                {patientFirstName} can open {l.related_patient?.full_name || `Patient #${l.related_patient_id}`}&rsquo;s portal profile
+                                            </span>
                                         </span>
                                         {canEditPatient ? (
                                             <button
@@ -755,6 +762,9 @@ export default function PatientProfilePage() {
 
                         {familyLinkForm.open ? (
                             <div className="relative mt-3">
+                                <p className="mb-2 text-xs text-slate-500">
+                                    {patientFirstName} will be able to open the portal profile of whoever you pick here — not the other way around.
+                                </p>
                                 <input
                                     autoFocus
                                     type="text"

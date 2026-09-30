@@ -68,7 +68,7 @@ final class PortalOtpService
             'created_at' => now(),
         ]);
 
-        $this->notifier->loginOtp($normalised, $code);
+        $this->notifier->loginOtp($normalised, $code, $holders->first()->clinic_id);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Portal;
 
 use App\Models\LoginOtp;
+use App\Models\WhatsappMessage;
 use App\Services\WhatsApp\FakeWhatsAppGateway;
 use App\Services\WhatsApp\WhatsAppGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -54,6 +55,13 @@ class PortalOtpTest extends TestCase
         $this->assertMatchesRegularExpression('/^\d{6}$/', $this->lastSentCode());
         $this->assertSame(hash('sha256', $this->lastSentCode()), $row->otp_code);
         $this->assertTrue($row->expires_at->equalTo(Carbon::parse('2026-01-01 10:10:00')));
+
+        // The `whatsapp_messages` row carries the matching holder's
+        // clinic_id, so the send shows up in that clinic's WhatsApp log
+        // instead of a global/no-clinic bucket.
+        $message = WhatsappMessage::where('notification_type', 'login_otp')->latest('id')->first();
+        $this->assertNotNull($message);
+        $this->assertSame($clinic->id, $message->clinic_id);
 
         Carbon::setTestNow();
     }

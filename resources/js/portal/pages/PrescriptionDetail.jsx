@@ -146,21 +146,29 @@ export default function PrescriptionDetail() {
                                 <tr className="text-xs text-slate-500">
                                     <th className="px-4 py-1">Medicine</th>
                                     <th className="px-4 py-1">Dosage</th>
-                                    <th className="px-4 py-1">Frequency</th>
-                                    <th className="px-4 py-1">Days</th>
-                                    <th className="px-4 py-1">Notes</th>
+                                    <th className="px-4 py-1">Duration</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {medicines.map((m, i) => (
-                                    <tr key={i} className="border-t border-slate-100">
-                                        <td className="px-4 py-2 font-medium text-slate-900">{m.name || m.medicine || '-'}</td>
-                                        <td className="px-4 py-2 text-slate-600">{m.dosage || '-'}</td>
-                                        <td className="px-4 py-2 text-slate-600">{m.frequency || m.timing || '-'}</td>
-                                        <td className="px-4 py-2 text-slate-600">{m.days || m.duration_days || '-'}</td>
-                                        <td className="px-4 py-2 text-slate-600">{m.notes || m.instructions || '-'}</td>
-                                    </tr>
-                                ))}
+                                {medicines.map((m, i) => {
+                                    // Older/legacy rows may carry timing as a
+                                    // separate `frequency`/`timing` field
+                                    // instead of folded into dosage (the AI
+                                    // service's current schema); fold it in
+                                    // here so this table matches the PDF
+                                    // (resources/views/reports/prescription.blade.php)
+                                    // and the staff admin viewer's
+                                    // Medicine/Dosage/Duration layout.
+                                    const dosage = [m.dosage, m.frequency || m.timing].filter(Boolean).join(' • ');
+                                    const duration = m.duration || m.days || m.duration_days || '-';
+                                    return (
+                                        <tr key={i} className="border-t border-slate-100">
+                                            <td className="px-4 py-2 font-medium text-slate-900">{m.name || m.medicine || '-'}</td>
+                                            <td className="px-4 py-2 text-slate-600">{dosage || '-'}</td>
+                                            <td className="px-4 py-2 text-slate-600">{duration}</td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
