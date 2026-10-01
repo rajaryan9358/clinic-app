@@ -107,6 +107,11 @@ final class WaitlistService
                 throw ValidationException::withMessages(['start_time' => 'This slot is free — book it directly.']);
             }
 
+            // The cap is per patient but the lock above is per doctor: also
+            // lock the patient row (always doctor first, then patient) so
+            // concurrent joins on different doctors can't both pass the count.
+            Patient::query()->whereKey($patient->id)->lockForUpdate()->first();
+
             $activeCount = WaitlistEntry::query()->active()->where('patient_id', $patient->id)->count();
             if ($activeCount >= self::MAX_ACTIVE_PER_PATIENT) {
                 throw ValidationException::withMessages(['waitlist' => 'You can be on up to 3 waitlists at a time.']);
@@ -183,11 +188,24 @@ final class WaitlistService
                 ->where('hold_expires_at', '<=', now())
                 ->update(['status' => 'expired', 'updated_at' => now()]);
 
-            $entry = $this->entriesAt($clinicId, $doctorId, $date, $startTime)
+            // Oldest waiting entry whose patient and account holder still
+            // exist; an entry left without a (non-deleted) holder can't be
+            // messaged, so it is skipped rather than blocking the slot.
+            $entry = null;
+            $holder = null;
+            $candidates = $this->entriesAt($clinicId, $doctorId, $date, $startTime)
                 ->where('status', 'waiting')
                 ->whereHas('patient')
+                ->with('patient')
                 ->orderBy('id')
-                ->first();
+                ->get();
+            foreach ($candidates as $candidate) {
+                $holder = $this->accountHolder($candidate->patient);
+                if ($holder !== null) {
+                    $entry = $candidate;
+                    break;
+                }
+            }
 
             if ($entry === null) {
                 return null;
@@ -202,9 +220,6 @@ final class WaitlistService
             $holdExpiresAt = $offeredAt->copy()->addMinutes($settings['hold_minutes'])->min($slotStart);
 
             $patient = $entry->patient;
-            $holder = $patient->managed_by_patient_id !== null
-                ? Patient::findOrFail($patient->managed_by_patient_id)
-                : $patient;
 
             $issued = $this->links->issueForRedirect(
                 $holder,
@@ -307,6 +322,16 @@ final class WaitlistService
         }
 
         throw ValidationException::withMessages(['start_time' => 'Please choose one of the available times.']);
+    }
+
+    /** The entry patient's account holder (themselves, or their non-deleted managing patient). */
+    private function accountHolder(Patient $patient): ?Patient
+    {
+        if ($patient->managed_by_patient_id === null) {
+            return $patient;
+        }
+
+        return Patient::query()->find($patient->managed_by_patient_id);
     }
 
     private function lockDoctor(int $doctorId): void

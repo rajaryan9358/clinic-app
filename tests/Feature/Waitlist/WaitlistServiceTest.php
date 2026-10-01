@@ -526,6 +526,60 @@ class WaitlistServiceTest extends TestCase
         $this->assertSame(1, $this->waitlistMessages()->count());
     }
 
+    public function test_slot_freed_skips_entry_whose_account_holder_is_deleted(): void
+    {
+        $holder = $this->consentedPatient();
+        $dependent = $this->consentedPatient(['managed_by_patient_id' => $holder->id]);
+        $appointment = $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $orphaned = $this->join($dependent, $this->tomorrow, '09:00');
+        $next = $this->join($this->consentedPatient(), $this->tomorrow, '09:00');
+        $holder->delete();
+
+        app(AppointmentService::class)->changeStatus($appointment, AppointmentStatus::CANCELLED);
+
+        $this->assertSame('waiting', $orphaned->fresh()->status);
+        $this->assertSame('offered', $next->fresh()->status);
+        $this->assertSame(1, $this->waitlistMessages()->count());
+    }
+
+    public function test_slot_freed_expires_a_lapsed_offer_and_offers_the_next(): void
+    {
+        $lapsed = $this->offeredEntry($this->consentedPatient(), $this->tomorrow, '09:00');
+        $lapsed->update(['hold_expires_at' => now()]);
+        // Joined while the hold was live (the slot reads free once it lapses).
+        $next = $this->offeredEntry($this->consentedPatient(), $this->tomorrow, '09:00');
+        $next->update(['status' => 'waiting', 'offered_at' => null, 'hold_expires_at' => null]);
+
+        $offered = $this->service()->slotFreed($this->clinic->id, $this->doctor->id, $this->tomorrow, '09:00');
+
+        $this->assertSame($next->id, $offered?->id);
+        $this->assertSame('expired', $lapsed->fresh()->status);
+        $this->assertSame('offered', $next->fresh()->status);
+        $this->assertSame(1, WaitlistEntry::where('status', 'offered')->count());
+    }
+
+    public function test_slot_freed_inside_a_rolled_back_transaction_sends_nothing(): void
+    {
+        $appointment = $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $entry = $this->join($this->consentedPatient(), $this->tomorrow, '09:00');
+        $appointment->update(['status' => 'cancelled']);
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () {
+                $this->assertNotNull($this->service()->slotFreed($this->clinic->id, $this->doctor->id, $this->tomorrow, '09:00'));
+                throw new \RuntimeException('boom');
+            });
+            $this->fail('Expected the transaction to throw.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('boom', $e->getMessage());
+        }
+
+        $this->assertSame('waiting', $entry->fresh()->status);
+        $this->assertSame([], $this->fake->sent);
+        $this->assertSame(0, $this->waitlistMessages()->count());
+        $this->assertSame(0, PatientLoginLink::count());
+    }
+
     // --- Holds block others ----------------------------------------------
 
     public function test_held_slot_is_hidden_from_free_slots_for_others_only(): void
