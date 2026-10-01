@@ -20,6 +20,7 @@ use App\Services\PrescriptionPdfRenderer;
 use App\Services\WhatsApp\PatientNotifier;
 use App\Services\WhatsApp\PhoneNumber;
 use App\Support\Prescriptions\PrescriptionResolver;
+use App\Support\Waitlist\StaffWaitlistPresenter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -232,6 +233,7 @@ class AppointmentController extends BaseCrudController
                     'recent' => $whatsapps,
                 ],
             ],
+            'waitlist' => StaffWaitlistPresenter::forAppointment($appointment),
         ]);
     }
 
