@@ -309,6 +309,24 @@ class AppointmentService
     }
 
     /**
+     * Runs WaitlistService::slotTaken() in a savepoint so a waitlist failure
+     * is logged rather than aborting the booking itself (a bare catch would
+     * leave the outer transaction unusable on some drivers). process()
+     * tidies any hold left behind on the now-occupied slot.
+     */
+    private function slotTakenSafely(Appointment $appointment): void
+    {
+        try {
+            DB::transaction(fn () => app(WaitlistService::class)->slotTaken($appointment));
+        } catch (\Throwable $e) {
+            Log::warning('Waitlist slotTaken failed', [
+                'appointment_id' => $appointment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Throws when the doctor already has a non-cancelled/rescheduled
      * appointment overlapping [start, end) (or exactly at $start when no
      * $end is given) on $date. Extracted from reschedule()'s conflict
@@ -384,6 +402,16 @@ class AppointmentService
         app(PlanLimits::class)->assertCanAdd((int) $data['clinic_id'], 'appointments');
 
         return DB::transaction(function () use ($data, $source) {
+            // Lock the doctor row before the insert for every source. The
+            // insert's FK check takes a shared lock on the doctor (and
+            // patient) row; locking for update only afterwards (slotTaken)
+            // would be an S->X upgrade that deadlocks two concurrent staff
+            // bookings on InnoDB, and would invert the doctor-then-patient
+            // order WaitlistService::join() relies on.
+            if (! empty($data['doctor_id'])) {
+                Doctor::query()->whereKey((int) $data['doctor_id'])->lockForUpdate()->first();
+            }
+
             if ($source === 'patient') {
                 $this->assertSlotFree(
                     (int) $data['clinic_id'],
@@ -440,7 +468,7 @@ class AppointmentService
             // The booking patient's own waitlist entry for this slot is now
             // booked; another patient's hold on it (staff can book over a
             // hold) is expired.
-            app(WaitlistService::class)->slotTaken($appointment);
+            $this->slotTakenSafely($appointment);
 
             if (($data['booking_channel'] ?? null) !== 'portal') {
                 $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->bookingConfirmed($appointment));
@@ -573,7 +601,7 @@ class AppointmentService
             $appointment->save();
 
             // Same as create(): the new slot is taken now.
-            app(WaitlistService::class)->slotTaken($appointment);
+            $this->slotTakenSafely($appointment);
 
             AppointmentRescheduleLog::create([
                 'clinic_id' => $appointment->clinic_id,

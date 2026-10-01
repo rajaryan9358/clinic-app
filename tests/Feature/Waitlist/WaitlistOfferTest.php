@@ -244,6 +244,32 @@ class WaitlistOfferTest extends TestCase
         $this->assertSame('waiting', $second->fresh()->status);
     }
 
+    public function test_a_waitlist_failure_does_not_abort_the_booking(): void
+    {
+        // WaitlistService is final, so stand in an object whose slotTaken()
+        // throws; the staff create path only calls slotTaken() on it.
+        $this->app->instance(\App\Services\Waitlist\WaitlistService::class, new class
+        {
+            public function slotTaken(Appointment $appointment): void
+            {
+                throw new \RuntimeException('waitlist down');
+            }
+        });
+
+        Sanctum::actingAs($this->receptionist());
+        $this->postJson('/api/clinic/appointments', [
+            'doctor_id' => $this->doctor->id,
+            'patient_id' => $this->consentedPatient()->id,
+            'appointment_date' => $this->tomorrow,
+            'start_time' => '09:00',
+            'end_time' => '09:30',
+            'visit_type' => 'new',
+            'booking_channel' => 'walk_in',
+        ])->assertCreated();
+
+        $this->assertSame(1, Appointment::query()->where('doctor_id', $this->doctor->id)->count());
+    }
+
     public function test_staff_booking_the_offered_patient_marks_the_entry_booked(): void
     {
         [$first, $second] = $this->offeredQueue();
