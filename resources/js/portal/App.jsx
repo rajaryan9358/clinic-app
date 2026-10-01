@@ -13,6 +13,7 @@ import Prescriptions from './pages/Prescriptions';
 import Reschedule from './pages/Reschedule';
 import VisitDetail from './pages/VisitDetail';
 import Visits from './pages/Visits';
+import WaitlistOffer from './pages/WaitlistOffer';
 import { useSession } from './session';
 
 function FullPageLoader() {
@@ -64,6 +65,7 @@ export default function App() {
                 <Route path="/prescriptions/:id" element={<PrescriptionDetail />} />
                 <Route path="/book" element={<Book />} />
                 <Route path="/family" element={<Family />} />
+                <Route path="/waitlist/:id" element={<WaitlistOffer />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

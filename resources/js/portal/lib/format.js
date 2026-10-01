@@ -50,3 +50,31 @@ export function addDays(date, days) {
     next.setDate(next.getDate() + days);
     return next;
 }
+
+// The clinic's timezone, mirroring the server's `config('app.clinic_timezone')`
+// default. The portal API doesn't expose it, and every clinic-local value it
+// returns is already a plain string (see above) — this is only needed for
+// the few ISO-8601 *instants* (e.g. a waitlist hold's `hold_expires_at`)
+// so "held until 10:45 AM" reads in the same clock as the slot times.
+export const CLINIC_TIME_ZONE = 'Asia/Kolkata';
+
+// Clock time (e.g. "10:45 AM") of an ISO-8601 instant, in clinic time.
+export function formatInstantTime(iso) {
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    try {
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: CLINIC_TIME_ZONE });
+    } catch {
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+}
+
+// "12:05" / "1:02:09" for a non-negative millisecond duration (countdowns).
+export function formatCountdown(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = String(total % 60).padStart(2, '0');
+    return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
