@@ -437,6 +437,11 @@ class AppointmentService
                 'created_at' => now(),
             ]);
 
+            // The booking patient's own waitlist entry for this slot is now
+            // booked; another patient's hold on it (staff can book over a
+            // hold) is expired.
+            app(WaitlistService::class)->slotTaken($appointment);
+
             if (($data['booking_channel'] ?? null) !== 'portal') {
                 $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->bookingConfirmed($appointment));
             }
@@ -566,6 +571,9 @@ class AppointmentService
                 $appointment->status = $newStatus;
             }
             $appointment->save();
+
+            // Same as create(): the new slot is taken now.
+            app(WaitlistService::class)->slotTaken($appointment);
 
             AppointmentRescheduleLog::create([
                 'clinic_id' => $appointment->clinic_id,

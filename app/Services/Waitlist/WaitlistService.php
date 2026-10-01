@@ -7,6 +7,7 @@ use App\Models\Appointment;
 use App\Models\ClinicSetting;
 use App\Models\Doctor;
 use App\Models\Patient;
+use App\Models\PatientLoginLink;
 use App\Models\WaitlistEntry;
 use App\Services\AppointmentService;
 use App\Services\Portal\PortalBookingPolicy;
@@ -247,6 +248,187 @@ final class WaitlistService
         });
     }
 
+    /**
+     * Books the held slot for the entry's patient as a pending portal
+     * appointment (staff-added entries too — the patient accepts in the
+     * portal). AppointmentService::create() runs the patient-source slot
+     * check (the entry's own hold doesn't block) and, via slotTaken(),
+     * marks this entry booked and consumes its login link.
+     *
+     * @param  array{visit_type?: string, consultation_mode?: string, reason?: ?string}  $data
+     */
+    public function book(WaitlistEntry $entry, array $data): Appointment
+    {
+        return DB::transaction(function () use ($entry, $data) {
+            $this->lockDoctor((int) $entry->doctor_id);
+
+            $entry->refresh();
+            if ($entry->status !== 'offered'
+                || $entry->hold_expires_at === null
+                || $entry->hold_expires_at->lessThanOrEqualTo(now())) {
+                throw ValidationException::withMessages(['waitlist' => 'This offer has expired.']);
+            }
+
+            $appointment = $this->appointments->create([
+                'clinic_id' => (int) $entry->clinic_id,
+                'doctor_id' => (int) $entry->doctor_id,
+                'patient_id' => (int) $entry->patient_id,
+                'appointment_date' => $entry->appointment_date->toDateString(),
+                'start_time' => (string) $entry->start_time,
+                'end_time' => $entry->end_time !== null ? (string) $entry->end_time : null,
+                'visit_type' => $data['visit_type'] ?? 'new',
+                'consultation_mode' => $data['consultation_mode'] ?? 'in_person',
+                'notes' => $data['reason'] ?? null,
+                'status' => 'pending',
+                'booking_channel' => 'portal',
+            ], 'patient');
+
+            $entry->refresh();
+
+            return $appointment;
+        });
+    }
+
+    /** Offered → declined, and the slot passes to the next in line. */
+    public function decline(WaitlistEntry $entry): void
+    {
+        DB::transaction(function () use ($entry) {
+            $this->lockDoctor((int) $entry->doctor_id);
+
+            $entry->refresh();
+            if ($entry->status !== 'offered') {
+                throw ValidationException::withMessages(['waitlist' => 'This offer has expired.']);
+            }
+
+            $entry->update(['status' => 'declined']);
+
+            $this->slotFreed((int) $entry->clinic_id, (int) $entry->doctor_id, $entry->appointment_date->toDateString(), (string) $entry->start_time);
+        });
+    }
+
+    /**
+     * The `waitlist:process` sweep. Idempotent:
+     *  1. active entries whose slot has started → expired (expired_past);
+     *  2. per future slot with active entries, under its doctor lock:
+     *     offers whose hold lapsed, or whose slot someone else now occupies
+     *     (e.g. staff booked over the hold) → expired (expired_holds); then
+     *     slotFreed() offers the next in line if the slot is free and
+     *     unheld (offered).
+     *
+     * @return array{expired_holds: int, expired_past: int, offered: int}
+     */
+    public function process(): array
+    {
+        $result = ['expired_holds' => 0, 'expired_past' => 0, 'offered' => 0];
+
+        $nowLocal = Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'));
+        $today = $nowLocal->toDateString();
+        $time = $nowLocal->format('H:i:s');
+
+        $result['expired_past'] = WaitlistEntry::query()
+            ->active()
+            ->where(function ($q) use ($today, $time) {
+                $q->whereDate('appointment_date', '<', $today)
+                    ->orWhere(fn ($q) => $q->whereDate('appointment_date', $today)->whereTime('start_time', '<=', $time));
+            })
+            ->update(['status' => 'expired', 'updated_at' => now()]);
+
+        $slots = WaitlistEntry::query()
+            ->active()
+            ->get(['clinic_id', 'doctor_id', 'appointment_date', 'start_time'])
+            ->unique(fn (WaitlistEntry $e) => implode('|', [$e->clinic_id, $e->doctor_id, $e->appointment_date->toDateString(), $e->start_time]));
+
+        foreach ($slots as $slot) {
+            $clinicId = (int) $slot->clinic_id;
+            $doctorId = (int) $slot->doctor_id;
+            $date = $slot->appointment_date->toDateString();
+            $startTime = (string) $slot->start_time;
+
+            try {
+                DB::transaction(function () use ($clinicId, $doctorId, $date, $startTime, &$result) {
+                    $this->lockDoctor($doctorId);
+
+                    $offers = $this->entriesAt($clinicId, $doctorId, $date, $startTime)
+                        ->where('status', 'offered')
+                        ->get();
+                    foreach ($offers as $offer) {
+                        $lapsed = $offer->hold_expires_at === null || $offer->hold_expires_at->lessThanOrEqualTo(now());
+                        $end = $offer->end_time !== null ? (string) $offer->end_time : null;
+                        if ($lapsed || $this->isSlotOccupied($clinicId, $doctorId, $date, $startTime, $end)) {
+                            $offer->update(['status' => 'expired']);
+                            $result['expired_holds']++;
+                        }
+                    }
+
+                    if ($this->slotFreed($clinicId, $doctorId, $date, $startTime) !== null) {
+                        $result['offered']++;
+                    }
+                });
+            } catch (\Throwable $e) {
+                Log::warning('Waitlist process failed for a slot: '.$e->getMessage(), [
+                    'clinic_id' => $clinicId, 'doctor_id' => $doctorId, 'date' => $date, 'start_time' => $startTime,
+                    'exception' => $e,
+                ]);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * The appointment's patient's own active entry for its slot (normally
+     * the live offer, e.g. when the held patient books through the normal
+     * Book page) → booked, linked to the appointment, its login link
+     * consumed.
+     */
+    public function markBookedIfOffered(Appointment $appointment): void
+    {
+        $date = $this->appointmentDate($appointment);
+        if ($date === null || $appointment->patient_id === null || $appointment->start_time === null) {
+            return;
+        }
+
+        $entries = $this->entriesAt((int) $appointment->clinic_id, (int) $appointment->doctor_id, $date, $this->normaliseTime((string) $appointment->start_time))
+            ->active()
+            ->where('patient_id', $appointment->patient_id)
+            ->get();
+
+        foreach ($entries as $entry) {
+            $entry->update(['status' => 'booked', 'booked_appointment_id' => $appointment->id]);
+
+            if ($entry->login_link_id !== null) {
+                PatientLoginLink::query()
+                    ->whereKey($entry->login_link_id)
+                    ->whereNull('consumed_at')
+                    ->update(['consumed_at' => now()]);
+            }
+        }
+    }
+
+    /**
+     * Called by AppointmentService inside its transaction whenever an
+     * appointment lands on a slot (create, reschedule-into). The booking
+     * patient's own entry is marked booked; any other patient's offer on
+     * that slot (staff can book over a hold) is expired — the slot is
+     * taken, so nobody else is offered it until it frees again.
+     */
+    public function slotTaken(Appointment $appointment): void
+    {
+        $date = $this->appointmentDate($appointment);
+        if ($date === null || $appointment->start_time === null || $appointment->doctor_id === null) {
+            return;
+        }
+
+        $this->lockDoctor((int) $appointment->doctor_id);
+
+        $this->markBookedIfOffered($appointment);
+
+        $this->entriesAt((int) $appointment->clinic_id, (int) $appointment->doctor_id, $date, $this->normaliseTime((string) $appointment->start_time))
+            ->where('status', 'offered')
+            ->when($appointment->patient_id !== null, fn ($q) => $q->where('patient_id', '!=', $appointment->patient_id))
+            ->update(['status' => 'expired', 'updated_at' => now()]);
+    }
+
     /** The slot's live hold (offered and not yet lapsed), if any. */
     public function heldFor(int $clinicId, int $doctorId, string $date, string $start): ?WaitlistEntry
     {
@@ -332,6 +514,16 @@ final class WaitlistService
         }
 
         return Patient::query()->find($patient->managed_by_patient_id);
+    }
+
+    private function appointmentDate(Appointment $appointment): ?string
+    {
+        $date = $appointment->appointment_date;
+        if ($date === null || $date === '') {
+            return null;
+        }
+
+        return $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : substr((string) $date, 0, 10);
     }
 
     private function lockDoctor(int $doctorId): void
