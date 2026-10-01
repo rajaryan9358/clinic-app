@@ -65,6 +65,16 @@ class PortalWaitlistTest extends TestCase
         $this->assertSame($patient->id, $entry->patient_id);
     }
 
+    public function test_join_for_an_inactive_doctor_is_404(): void
+    {
+        $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $patient = $this->consentedPatient();
+        $this->doctor->update(['status' => 'inactive']);
+
+        $this->portalPost('/api/portal/waitlist', $this->portalToken($patient), $patient->id, $this->joinPayload())
+            ->assertNotFound();
+    }
+
     public function test_join_duplicate_is_409(): void
     {
         $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');

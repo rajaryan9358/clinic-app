@@ -71,7 +71,8 @@ class WaitlistController extends Controller
             'start_time' => ['required', 'string'],
         ]);
 
-        $doctor = Doctor::query()->forClinic($clinicId)->find((int) $validated['doctor_id']);
+        // Only doctors the portal lists (active) can be waitlisted for.
+        $doctor = Doctor::query()->forClinic($clinicId)->where('status', 'active')->find((int) $validated['doctor_id']);
         if (! $doctor) {
             abort(404);
         }

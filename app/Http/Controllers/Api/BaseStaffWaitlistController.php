@@ -84,6 +84,12 @@ abstract class BaseStaffWaitlistController extends Controller
             abort(404);
         }
 
+        // Same guard as AppointmentController::store, not left to middleware alone.
+        $activeDoctorId = $request->attributes->get('active_doctor_id');
+        if ($activeDoctorId && (int) $doctor->id !== (int) $activeDoctorId) {
+            abort(403, 'Doctor not allowed.');
+        }
+
         try {
             $entry = $this->waitlist->join(
                 $patient,

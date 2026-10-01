@@ -187,6 +187,35 @@ class StaffWaitlistTest extends TestCase
         $this->assertSame($user->id, $entry->created_by_user_id);
     }
 
+    public function test_assistant_cannot_add_for_a_doctor_they_are_not_assigned_to(): void
+    {
+        $otherDoctor = $this->makeDoctorWithSchedule($this->clinic);
+        $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00', [], $otherDoctor);
+        $patient = $this->consentedPatient();
+
+        $assistant = User::create([
+            'clinic_id' => $this->clinic->id,
+            'uuid' => (string) Str::uuid(),
+            'full_name' => 'Amy Assistant',
+            'email' => 'amy-'.Str::random(6).'@x.test',
+            'password' => 'x',
+            'role' => 'assistant',
+            'status' => 'active',
+        ]);
+        $assistant->assignRole('assistant');
+        $assistant->assignedDoctors()->attach($this->doctor->id, ['clinic_id' => $this->clinic->id]);
+
+        Sanctum::actingAs($assistant);
+        $this->postJson('/api/clinic/waitlist', [
+            'patient_id' => $patient->id,
+            'doctor_id' => $otherDoctor->id,
+            'appointment_date' => $this->tomorrow,
+            'start_time' => '09:00',
+        ])->assertForbidden();
+
+        $this->assertSame(0, WaitlistEntry::query()->count());
+    }
+
     public function test_add_maps_service_errors(): void
     {
         $patient = $this->consentedPatient();
