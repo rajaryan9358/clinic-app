@@ -9,6 +9,7 @@ use App\Models\Clinic;
 use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\ReminderLog;
+use App\Models\WaitlistEntry;
 use App\Models\WhatsappMessage;
 use App\Services\WhatsApp\FakeWhatsAppGateway;
 use App\Services\WhatsApp\PatientNotifier;
@@ -197,6 +198,92 @@ class NotifierTest extends TestCase
         $this->assertSame('url', $button['sub_type']);
         $this->assertSame('0', $button['index']);
         $this->assertSame('abc123token', $button['parameters'][0]['text']);
+    }
+
+    public function test_waitlist_offer_sends_expected_template_and_url_button(): void
+    {
+        $entry = WaitlistEntry::create([
+            'clinic_id' => $this->clinic->id,
+            'patient_id' => $this->patient->id,
+            'doctor_id' => $this->doctor->id,
+            'appointment_date' => '2026-09-29',
+            'start_time' => '10:30:00',
+            'end_time' => '10:45:00',
+            'status' => 'offered',
+            'source' => 'portal',
+            'offered_at' => '2026-09-29 09:00:00',
+            'hold_expires_at' => '2026-09-29 09:30:00',
+        ]);
+
+        $row = $this->notifier->waitlistOffer($entry, 'waitlist-token-123');
+
+        $this->assertSame($this->clinic->id, $row->clinic_id);
+        $this->assertSame($this->patient->id, $row->patient_id);
+        $this->assertNull($row->appointment_id);
+        $this->assertSame('waitlist_slot_open', $row->notification_type);
+        $this->assertSame('waitlist_slot_open', $row->template_name);
+        $this->assertSame('919876543210', $row->to_phone);
+
+        $row->refresh();
+        $this->assertSame('sent', $row->delivery_status);
+
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $this->assertSame('waitlist_slot_open', $sent['template']);
+
+        $body = $this->bodyComponent($sent['components']);
+        $this->assertSame(
+            ['Ravi Kumar', 'Sunrise Clinic', 'Dr Asha Rao', 'Tue, 29 Sep 2026', '10:30 AM', '30'],
+            array_map(fn ($p) => $p['text'], $body['parameters']),
+        );
+
+        $button = $this->componentOfType($sent['components'], 'button');
+        $this->assertSame('url', $button['sub_type']);
+        $this->assertSame('0', $button['index']);
+        $this->assertSame('waitlist-token-123', $button['parameters'][0]['text']);
+    }
+
+    public function test_waitlist_offer_for_a_dependent_goes_to_the_holders_phone(): void
+    {
+        $holder = Patient::create([
+            'clinic_id' => $this->clinic->id,
+            'uuid' => (string) Str::uuid(),
+            'first_name' => 'Asha',
+            'last_name' => 'Kumar',
+            'phone' => '9123456789',
+        ]);
+
+        $dependent = Patient::create([
+            'clinic_id' => $this->clinic->id,
+            'uuid' => (string) Str::uuid(),
+            'first_name' => 'Baby',
+            'last_name' => 'Kumar',
+            'phone' => '9123456789',
+            'managed_by_patient_id' => $holder->id,
+        ]);
+
+        $entry = WaitlistEntry::create([
+            'clinic_id' => $this->clinic->id,
+            'patient_id' => $dependent->id,
+            'doctor_id' => $this->doctor->id,
+            'appointment_date' => '2026-09-29',
+            'start_time' => '10:30:00',
+            'end_time' => '10:45:00',
+            'status' => 'offered',
+            'source' => 'portal',
+            'offered_at' => '2026-09-29 09:00:00',
+            'hold_expires_at' => '2026-09-29 09:30:00',
+        ]);
+
+        $row = $this->notifier->waitlistOffer($entry, 'tok');
+
+        // The row is attributed to the waitlisted (dependent) patient...
+        $this->assertSame($dependent->id, $row->patient_id);
+        // ...but the WhatsApp itself is sent to the account holder's phone.
+        $this->assertSame('919123456789', $row->to_phone);
+
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $body = $this->bodyComponent($sent['components']);
+        $this->assertSame('Baby Kumar', $body['parameters'][0]['text']);
     }
 
     /**

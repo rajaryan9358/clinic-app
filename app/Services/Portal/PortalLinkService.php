@@ -71,7 +71,35 @@ final class PortalLinkService
         ];
     }
 
-    public function consume(string $rawToken): Patient
+    /**
+     * Creates a single-use login link without sending any WhatsApp — the
+     * caller (e.g. WaitlistService::slotFreed) sends its own notification
+     * and passes the raw token to it. Used for links that must redirect
+     * the portal somewhere other than the default post-login screen.
+     *
+     * @return array{token: string, link: PatientLoginLink}
+     */
+    public function issueForRedirect(Patient $accountHolder, Carbon $expiresAt, string $redirectPath, ?int $createdByUserId = null): array
+    {
+        $token = Str::random(40);
+
+        $link = PatientLoginLink::create([
+            'clinic_id' => $accountHolder->clinic_id,
+            'patient_id' => $accountHolder->id,
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => $expiresAt,
+            'redirect_path' => $redirectPath,
+            'created_by_user_id' => $createdByUserId,
+            'created_at' => now(),
+        ]);
+
+        return ['token' => $token, 'link' => $link];
+    }
+
+    /**
+     * @return array{patient: Patient, redirect_path: ?string}
+     */
+    public function consume(string $rawToken): array
     {
         $link = PatientLoginLink::where('token_hash', hash('sha256', $rawToken))->first();
 
@@ -96,6 +124,6 @@ final class PortalLinkService
             throw ValidationException::withMessages(['token' => self::EXPIRED]);
         }
 
-        return $patient;
+        return ['patient' => $patient, 'redirect_path' => $link->redirect_path];
     }
 }

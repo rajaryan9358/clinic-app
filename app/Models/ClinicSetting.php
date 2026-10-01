@@ -16,7 +16,7 @@ class ClinicSetting extends Model
         'allow_reschedule', 'allow_cancel', 'reschedule_cutoff_hours', 'cancel_cutoff_hours',
         'default_slot_duration_minutes', 'booking_notice_text', 'terms_text', 'privacy_policy_text',
         'walkin_enabled', 'token_system_enabled', 'max_advance_booking_days', 'min_booking_notice_minutes',
-        'reminder_hours_before', 'portal_enabled',
+        'reminder_hours_before', 'portal_enabled', 'waitlist_enabled', 'waitlist_hold_minutes',
     ];
 
     protected function casts(): array
@@ -30,9 +30,11 @@ class ClinicSetting extends Model
             'walkin_enabled' => 'boolean',
             'token_system_enabled' => 'boolean',
             'portal_enabled' => 'boolean',
+            'waitlist_enabled' => 'boolean',
             'max_advance_booking_days' => 'integer',
             'min_booking_notice_minutes' => 'integer',
             'reminder_hours_before' => 'integer',
+            'waitlist_hold_minutes' => 'integer',
         ];
     }
 
@@ -66,6 +68,8 @@ class ClinicSetting extends Model
             'min_booking_notice_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
             'reminder_hours_before' => ['sometimes', 'integer', 'min:0', 'max:168'],
             'portal_enabled' => ['sometimes', 'boolean'],
+            'waitlist_enabled' => ['sometimes', 'boolean'],
+            'waitlist_hold_minutes' => ['sometimes', 'integer', 'min:5', 'max:240'],
         ];
     }
 }

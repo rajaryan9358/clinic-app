@@ -13,7 +13,8 @@ class PatientLoginLink extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'clinic_id', 'patient_id', 'token_hash', 'expires_at', 'consumed_at', 'created_by_user_id', 'created_at',
+        'clinic_id', 'patient_id', 'token_hash', 'expires_at', 'consumed_at', 'redirect_path',
+        'created_by_user_id', 'created_at',
     ];
 
     protected function casts(): array

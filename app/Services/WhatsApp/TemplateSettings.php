@@ -19,6 +19,7 @@ final class TemplateSettings
         'prescription_ready',
         'login_otp',
         'portal_link',
+        'waitlist_slot_open',
     ];
 
     private const DEFAULTS = [
@@ -28,6 +29,7 @@ final class TemplateSettings
         'prescription_ready' => ['name' => 'prescription_ready', 'language' => 'en', 'enabled' => true],
         'login_otp' => ['name' => 'login_otp', 'language' => 'en', 'enabled' => true],
         'portal_link' => ['name' => 'portal_link', 'language' => 'en', 'enabled' => true],
+        'waitlist_slot_open' => ['name' => 'waitlist_slot_open', 'language' => 'en', 'enabled' => true],
     ];
 
     /** @return array{name: string, language: string, enabled: bool} */

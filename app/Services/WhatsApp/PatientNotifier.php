@@ -7,6 +7,7 @@ use App\Models\Appointment;
 use App\Models\AppointmentPrescription;
 use App\Models\Patient;
 use App\Models\ReminderLog;
+use App\Models\WaitlistEntry;
 use App\Models\WhatsappMessage;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\URL;
@@ -25,7 +26,7 @@ class PatientNotifier
     public function bookingConfirmed(Appointment $appointment): WhatsappMessage
     {
         $appointment->loadMissing(['clinic:id,name', 'doctor:id,full_name', 'patient:id,full_name,phone']);
-        [$date, $time] = $this->formatDateTime($appointment);
+        [$date, $time] = $this->formatDateTime($appointment->appointment_date, $appointment->start_time);
         $clinicName = (string) ($appointment->clinic?->name ?? '');
 
         return $this->send(
@@ -49,7 +50,7 @@ class PatientNotifier
     public function appointmentUpdated(Appointment $appointment, string $change): WhatsappMessage
     {
         $appointment->loadMissing(['clinic:id,name', 'doctor:id,full_name', 'patient:id,full_name,phone']);
-        [$date, $time] = $this->formatDateTime($appointment);
+        [$date, $time] = $this->formatDateTime($appointment->appointment_date, $appointment->start_time);
         $clinicName = (string) ($appointment->clinic?->name ?? '');
         $statusLine = $change === 'cancelled' ? 'has been cancelled' : 'has been rescheduled to';
 
@@ -73,7 +74,7 @@ class PatientNotifier
     public function appointmentReminder(Appointment $appointment, ?ReminderLog $log = null): WhatsappMessage
     {
         $appointment->loadMissing(['clinic:id,name', 'doctor:id,full_name', 'patient:id,full_name,phone']);
-        [$date, $time] = $this->formatDateTime($appointment);
+        [$date, $time] = $this->formatDateTime($appointment->appointment_date, $appointment->start_time);
         $clinicName = (string) ($appointment->clinic?->name ?? '');
 
         return $this->send(
@@ -168,10 +169,48 @@ class PatientNotifier
         );
     }
 
-    /** @return array{0: string, 1: string} [date, time] */
-    private function formatDateTime(Appointment $appointment): array
+    /**
+     * Sends the "a slot opened up" offer for a held waitlist entry. $token
+     * is the raw redirecting login-link token; the WhatsApp goes to the
+     * entry patient's account holder (itself, unless it's a dependent),
+     * while the message row is still attributed to the waitlisted patient.
+     */
+    public function waitlistOffer(WaitlistEntry $entry, string $token): WhatsappMessage
     {
-        $moment = Carbon::parse($appointment->appointment_date->toDateString().' '.$appointment->start_time);
+        $entry->loadMissing(['clinic:id,name', 'doctor:id,full_name', 'patient:id,full_name,phone,managed_by_patient_id']);
+        $holder = $entry->patient?->managed_by_patient_id !== null
+            ? Patient::find($entry->patient->managed_by_patient_id)
+            : $entry->patient;
+
+        $clinicName = (string) ($entry->clinic?->name ?? '');
+        [$date, $time] = $this->formatDateTime($entry->appointment_date, $entry->start_time);
+        $holdMinutes = ($entry->offered_at !== null && $entry->hold_expires_at !== null)
+            ? (string) (int) ceil($entry->offered_at->diffInSeconds($entry->hold_expires_at) / 60)
+            : '0';
+
+        return $this->send(
+            type: 'waitlist_slot_open',
+            clinicId: $entry->clinic_id,
+            patientId: $entry->patient_id,
+            appointmentId: null,
+            phone: $holder?->phone,
+            bodyParams: [
+                (string) ($entry->patient?->full_name ?? ''),
+                $clinicName,
+                (string) ($entry->doctor?->full_name ?? ''),
+                $date,
+                $time,
+                $holdMinutes,
+            ],
+            preview: "A slot opened up at {$clinicName} on {$date} {$time}.",
+            buttonCode: $token,
+        );
+    }
+
+    /** @return array{0: string, 1: string} [date, time] */
+    private function formatDateTime(Carbon $date, string $startTime): array
+    {
+        $moment = Carbon::parse($date->toDateString().' '.$startTime);
 
         return [$moment->format('D, d M Y'), $moment->format('g:i A')];
     }

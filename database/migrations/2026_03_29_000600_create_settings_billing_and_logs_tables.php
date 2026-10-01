@@ -25,6 +25,8 @@ return new class extends Migration
             $table->unsignedInteger('max_advance_booking_days')->default(30);
             $table->unsignedInteger('min_booking_notice_minutes')->default(30);
             $table->unsignedInteger('reminder_hours_before')->default(24);
+            $table->boolean('waitlist_enabled')->default(true);
+            $table->unsignedInteger('waitlist_hold_minutes')->default(30);
             $table->text('booking_notice_text')->nullable();
             $table->text('terms_text')->nullable();
             $table->text('privacy_policy_text')->nullable();
@@ -109,6 +111,7 @@ return new class extends Migration
             $table->string('token_hash', 64)->unique();
             $table->timestamp('expires_at');
             $table->timestamp('consumed_at')->nullable();
+            $table->string('redirect_path', 200)->nullable();
             $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('created_at')->nullable();
         });
