@@ -60,4 +60,26 @@ class Doctor extends Model
         return $this->belongsToMany(User::class, 'assistant_doctor_map', 'doctor_id', 'assistant_user_id')
             ->withPivot(['clinic_id']);
     }
+
+    /**
+     * Consultation modes offered across the doctor's active schedules
+     * ('both' ⇒ in_person + video), for the portal's mode pickers.
+     * Uses the `schedules` relation when it's already loaded (callers
+     * eager-load it constrained to is_active).
+     *
+     * @return array<int, string>
+     */
+    public function consultationModes(): array
+    {
+        $schedules = $this->relationLoaded('schedules')
+            ? $this->schedules
+            : $this->schedules()->where('is_active', true)->get();
+
+        return $schedules
+            ->flatMap(fn (DoctorSchedule $s) => $s->consultation_mode === 'both' ? ['in_person', 'video'] : [$s->consultation_mode])
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
 }

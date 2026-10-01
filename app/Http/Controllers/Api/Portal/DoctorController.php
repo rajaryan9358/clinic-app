@@ -11,7 +11,8 @@ use Illuminate\Http\Request;
 
 /**
  * Doctors bookable from the patient portal, and a given doctor's free
- * slots for a date — both scoped to the acting profile's clinic.
+ * slots for a date (plus the taken ones the acting profile could join
+ * the waitlist for) — both scoped to the acting profile's clinic.
  */
 class DoctorController extends Controller
 {
@@ -31,24 +32,13 @@ class DoctorController extends Controller
             ->orderBy('full_name')
             ->get();
 
-        $data = $doctors->map(function (Doctor $doctor) {
-            $modes = collect();
-            foreach ($doctor->schedules as $schedule) {
-                if ($schedule->consultation_mode === 'both') {
-                    $modes->push('in_person')->push('video');
-                } else {
-                    $modes->push($schedule->consultation_mode);
-                }
-            }
-
-            return [
-                'id' => $doctor->id,
-                'full_name' => $doctor->full_name,
-                'specialization' => $doctor->specialization,
-                'qualification' => $doctor->qualification,
-                'consultation_modes' => $modes->filter()->unique()->values()->all(),
-            ];
-        })->values();
+        $data = $doctors->map(fn (Doctor $doctor) => [
+            'id' => $doctor->id,
+            'full_name' => $doctor->full_name,
+            'specialization' => $doctor->specialization,
+            'qualification' => $doctor->qualification,
+            'consultation_modes' => $doctor->consultationModes(),
+        ])->values();
 
         return $this->success('OK', $data->all());
     }
@@ -62,15 +52,15 @@ class DoctorController extends Controller
             'date' => ['required', 'date'],
         ]);
 
-        $slots = $this->bookingPolicy->freeSlots(
-            (int) $patient->clinic_id,
-            $id,
-            (string) $validated['date'],
-        );
+        $clinicId = (int) $patient->clinic_id;
+        $date = (string) $validated['date'];
 
+        // A live waitlist hold for the acting profile stays bookable for
+        // them; `taken` lists the times they could join the waitlist for.
         return $this->success('OK', [
             'date' => $validated['date'],
-            'slots' => $slots,
+            'slots' => $this->bookingPolicy->freeSlots($clinicId, $id, $date, null, (int) $patient->id),
+            'taken' => $this->bookingPolicy->takenSlots($clinicId, $id, $date, (int) $patient->id),
         ]);
     }
 }

@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\Portal\FamilyController as PortalFamilyController;
 use App\Http\Controllers\Api\Portal\LinkController as PortalLinkController;
 use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
 use App\Http\Controllers\Api\Portal\PrescriptionController as PortalPrescriptionController;
+use App\Http\Controllers\Api\Portal\WaitlistController as PortalWaitlistController;
 use App\Http\Controllers\Api\PublicPrescriptionPdfController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\SuperAdmin\AppointmentController as SuperAdminAppointmentController;
@@ -134,6 +135,13 @@ Route::prefix('portal')->group(function () {
 
             Route::get('doctors', [PortalDoctorController::class, 'index']);
             Route::get('doctors/{id}/slots', [PortalDoctorController::class, 'slots']);
+
+            Route::get('waitlist', [PortalWaitlistController::class, 'index']);
+            Route::post('waitlist', [PortalWaitlistController::class, 'store']);
+            Route::get('waitlist/{id}', [PortalWaitlistController::class, 'show']);
+            Route::delete('waitlist/{id}', [PortalWaitlistController::class, 'destroy']);
+            Route::post('waitlist/{id}/book', [PortalWaitlistController::class, 'book']);
+            Route::post('waitlist/{id}/decline', [PortalWaitlistController::class, 'decline']);
 
             Route::get('prescriptions', [PortalPrescriptionController::class, 'index']);
             Route::get('prescriptions/{id}', [PortalPrescriptionController::class, 'show']);

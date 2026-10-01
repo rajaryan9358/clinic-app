@@ -459,6 +459,43 @@ final class WaitlistService
     }
 
     /**
+     * Each entry's 1-based place in line among the `waiting` entries for
+     * its slot (oldest first, the order slotFreed() offers in); null for
+     * any entry that isn't waiting. One query per distinct slot.
+     *
+     * @param  iterable<WaitlistEntry>  $entries
+     * @return array<int, ?int> keyed by entry id
+     */
+    public function positions(iterable $entries): array
+    {
+        $positions = [];
+        $slots = [];
+        foreach ($entries as $entry) {
+            $positions[$entry->id] = null;
+            if ($entry->status === 'waiting') {
+                $key = implode('|', [$entry->clinic_id, $entry->doctor_id, $entry->appointment_date->toDateString(), $entry->start_time]);
+                $slots[$key] = $entry;
+            }
+        }
+
+        foreach ($slots as $entry) {
+            $ids = $this->entriesAt((int) $entry->clinic_id, (int) $entry->doctor_id, $entry->appointment_date->toDateString(), (string) $entry->start_time)
+                ->where('status', 'waiting')
+                ->orderBy('id')
+                ->pluck('id')
+                ->all();
+
+            foreach ($ids as $index => $id) {
+                if (array_key_exists($id, $positions)) {
+                    $positions[$id] = $index + 1;
+                }
+            }
+        }
+
+        return $positions;
+    }
+
+    /**
      * Any appointment that isn't cancelled/rescheduled at $start — or, when
      * $end is given, overlapping [start, end) like assertSlotFree().
      */
