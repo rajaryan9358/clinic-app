@@ -6,6 +6,8 @@ import { MODE_LABELS, VISIT_TYPES, modeOptionsFor } from '../lib/booking';
 import { formatCountdown, formatDate, formatInstantTime, formatTime } from '../lib/format';
 import { Button, Card, ErrorText, Spinner } from '../components/ui';
 
+
+const OFFER_EXPIRED = 'This offer has expired.';
 /**
  * `/waitlist/:id` — where the WhatsApp "Book it" link lands (via the
  * magic-link redirect). `GET waitlist/{id}` returns the entry in any
@@ -38,6 +40,9 @@ export default function WaitlistOffer() {
     const [submitting, setSubmitting] = useState(null); // 'book' | 'decline' | null
     const [submitError, setSubmitError] = useState('');
     const [confirmDecline, setConfirmDecline] = useState(false);
+    // The server said the offer expired even though this device's clock
+    // still shows time left (clock skew): trust the server for that entry.
+    const [serverExpiredId, setServerExpiredId] = useState(null);
 
     const fetchEntry = useCallback(
         ({ quiet = false } = {}) => {
@@ -75,7 +80,7 @@ export default function WaitlistOffer() {
     }, [fetchEntry, activeProfileId]);
 
     const holdEndsAt = entry?.hold_expires_at ? Date.parse(entry.hold_expires_at) : null;
-    const isLiveOffer = entry?.status === 'offered' && holdEndsAt !== null && holdEndsAt > now;
+    const isLiveOffer = entry?.status === 'offered' && holdEndsAt !== null && holdEndsAt > now && serverExpiredId !== entry?.id;
 
     // Tick once a second only while an offer is live; the interval is torn
     // down as soon as the countdown reaches zero (isLiveOffer flips false),
@@ -111,6 +116,7 @@ export default function WaitlistOffer() {
             navigate(`/visits/${data.data.id}`, { state: { message: 'Request sent — the clinic will confirm.' } });
         } catch (err) {
             setSubmitError(err?.response?.data?.message || 'Could not book this time.');
+            if (err?.response?.data?.message === OFFER_EXPIRED) setServerExpiredId(entry?.id);
             // 422 expired / 409 slot taken: the entry has moved on (or will
             // be shown as expired) — refresh it so the page reflects that.
             if ([409, 422].includes(err?.response?.status)) fetchEntry({ quiet: true });
@@ -129,6 +135,7 @@ export default function WaitlistOffer() {
             setConfirmDecline(false);
         } catch (err) {
             setSubmitError(err?.response?.data?.message || 'Could not decline this offer.');
+            if (err?.response?.data?.message === OFFER_EXPIRED) setServerExpiredId(entry?.id);
             if (err?.response?.status === 422) fetchEntry({ quiet: true });
         } finally {
             setSubmitting(null);

@@ -17,12 +17,14 @@ export default function JoinWaitlist({ date, slot, onJoin, onClose }) {
     const [joined, setJoined] = useState(false);
     const mounted = useRef(true);
 
-    useEffect(
-        () => () => {
+    // Set on (re)mount too: StrictMode's simulated unmount runs the cleanup
+    // and then re-runs this effect, which would otherwise leave it false.
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
             mounted.current = false;
-        },
-        [],
-    );
+        };
+    }, []);
 
     async function join() {
         if (submitting) return;

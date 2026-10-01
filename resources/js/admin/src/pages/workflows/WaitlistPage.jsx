@@ -54,6 +54,7 @@ export default function WaitlistPage() {
     const canManage = Boolean(scope?.can?.('appointments.create'));
 
     const [doctors, setDoctors] = useState([]);
+    const activeDoctors = useMemo(() => doctors.filter((d) => (d.status ?? 'active') === 'active'), [doctors]);
 
     const [filters, setFilters] = useState({ doctorId: '', date: '', status: 'active' });
     const [page, setPage] = useState(1);
@@ -155,8 +156,10 @@ export default function WaitlistPage() {
 
     // A removal can empty the last page; step back to the new last page.
     useEffect(() => {
-        const last = Number(meta?.last_page || 1);
-        if (!loading && page > last) setPage(last);
+        // Only once a page has loaded; a failed fetch (meta null) keeps the page and its error.
+        if (!meta || loading) return;
+        const last = Number(meta.last_page || 1);
+        if (page > last) setPage(last);
     }, [meta, loading, page]);
 
     const searchPatients = async (q) => {
@@ -178,7 +181,12 @@ export default function WaitlistPage() {
 
     const openAdd = () => {
         patientQueryRef.current = '';
-        setAdd({ ...EMPTY_ADD, open: true, doctorId: filters.doctorId || '', date: filters.date || '' });
+        // Past dates have no joinable slots; don't prefill one from the filter.
+        const today = new Date().toLocaleDateString('en-CA');
+        const date = filters.date && filters.date >= today ? filters.date : '';
+        // Inactive doctors are listed for filtering old entries but can't be joined.
+        const doctorId = activeDoctors.some((d) => String(d.id) === String(filters.doctorId)) ? filters.doctorId : '';
+        setAdd({ ...EMPTY_ADD, open: true, doctorId, date });
     };
 
     const closeAdd = () => {
@@ -492,7 +500,7 @@ export default function WaitlistPage() {
                                         className={`mt-2 ${inputClass}`}
                                     >
                                         <option value="">Select doctor</option>
-                                        {doctors.map((d) => (
+                                        {activeDoctors.map((d) => (
                                             <option key={d.id} value={String(d.id)}>{doctorLabel(d)}</option>
                                         ))}
                                     </select>

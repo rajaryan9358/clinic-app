@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Shell from './components/Shell';
 import { Spinner } from './components/ui';
 import Book from './pages/Book';
@@ -36,9 +36,13 @@ function RequireAuth({ children }) {
 // /consent respectively before rendering the shell at all.
 function ProtectedLayout() {
     const { me, loading, activeProfile } = useSession();
+    const location = useLocation();
     if (loading) return <FullPageLoader />;
     if (!me) return <Navigate to="/login" replace />;
-    if (activeProfile && !activeProfile.consent_current) return <Navigate to="/consent" replace />;
+    if (activeProfile && !activeProfile.consent_current) {
+        // Carry the page they were heading to (e.g. a waitlist offer link) through consent.
+        return <Navigate to="/consent" replace state={{ from: location.pathname + location.search }} />;
+    }
     return <Shell />;
 }
 

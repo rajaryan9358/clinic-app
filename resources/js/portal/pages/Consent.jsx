@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSession } from '../session';
 import { Button, Card, ErrorText, Spinner } from '../components/ui';
@@ -9,8 +9,16 @@ import { Button, Card, ErrorText, Spinner } from '../components/ui';
  * current (e.g. reached via a stale link, or another tab just accepted
  * it) we bounce straight home instead of re-prompting.
  */
+// Only an in-app path (single leading slash, no backslash) is returned to.
+function returnPath(from) {
+    if (typeof from !== 'string' || !/^\/(?![\/\\])/.test(from) || from.includes('\\') || from.startsWith('/consent')) return '/';
+    return from;
+}
+
 export default function Consent() {
     const navigate = useNavigate();
+    const location = useLocation();
+    const next = returnPath(location.state?.from);
     const { refresh, logout } = useSession();
     const [consent, setConsent] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -24,7 +32,7 @@ export default function Consent() {
             .then(({ data }) => {
                 if (!active) return;
                 if (data.data.current) {
-                    navigate('/', { replace: true });
+                    navigate(next, { replace: true });
                     return;
                 }
                 setConsent(data.data);
@@ -39,7 +47,7 @@ export default function Consent() {
         return () => {
             active = false;
         };
-    }, [navigate]);
+    }, [navigate, next]);
 
     async function accept() {
         setSubmitting(true);
@@ -47,7 +55,7 @@ export default function Consent() {
         try {
             await api.post('/consent');
             await refresh();
-            navigate('/', { replace: true });
+            navigate(next, { replace: true });
         } catch (err) {
             setError(err?.response?.data?.message || 'Could not save your consent.');
         } finally {
