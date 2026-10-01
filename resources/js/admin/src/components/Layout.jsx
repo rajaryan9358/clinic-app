@@ -10,6 +10,7 @@ const ROUTE_ICONS = {
     '/dashboard': 'home',
     '/workflows/appointments': 'calendar',
     '/workflows/appointments/new': 'calendar-plus',
+    '/workflows/waitlist': 'users',
     '/workflows/onboard-clinic': 'hospital',
     '/workflows/create-staff': 'user-plus',
     '/workflows/setup-doctor': 'user-check',

@@ -243,6 +243,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
     const statusLogs = payload?.timeline?.status_changes || [];
     const reschedules = payload?.timeline?.reschedules || [];
     const reminders = payload?.communication?.reminders;
+    const waitlist = payload?.waitlist || null;
 
     // Compute status actions outside JSX to avoid IIFE issues
     const apptStatus = String(appt?.status || '').toLowerCase();
@@ -415,6 +416,16 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                 <div className="md:col-span-2"><span className="text-slate-500">Cancellation reason:</span> {appt.cancellation_reason || '—'}</div>
                                 <div className="md:col-span-2"><span className="text-slate-500">Notes:</span> {appt.notes || '—'}</div>
                             </div>
+                            {waitlist && (waitlist.waiting_count > 0 || waitlist.held_for) ? (
+                                <div className="mt-3 space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                                    {waitlist.waiting_count > 0 ? (
+                                        <div>{waitlist.waiting_count} waiting for this slot</div>
+                                    ) : null}
+                                    {waitlist.held_for ? (
+                                        <div>Held for {waitlist.held_for.patient_name || 'a patient'} until {formatDateTime(waitlist.held_for.until) || '—'}</div>
+                                    ) : null}
+                                </div>
+                            ) : null}
                         </div>
                     ) : null}
 

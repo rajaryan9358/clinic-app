@@ -79,6 +79,7 @@ const clinicNavigation = [
         section: 'Operations',
         items: [
             routeItem('/workflows/appointments', 'Appointments', { perm: 'appointments.view' }),
+            routeItem('/workflows/waitlist', 'Waitlist', { perm: 'appointments.view' }),
             moduleItem('patients', { perm: 'patients.view' }),
         ],
     },
