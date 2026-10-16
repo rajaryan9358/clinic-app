@@ -89,6 +89,30 @@ class PortalOtpTest extends TestCase
         $this->assertNull($this->otpFor('919000000000'));
     }
 
+    public function test_request_code_does_its_work_after_the_response(): void
+    {
+        $clinic = $this->makeClinic();
+        $this->makePatient($clinic, ['phone' => '9876500044']);
+
+        /** @var \App\Services\Portal\PortalOtpService $service */
+        $service = $this->app->make(\App\Services\Portal\PortalOtpService::class);
+
+        $service->request('9876500044');
+
+        // Nothing written yet: a registered number must not cost the request
+        // an INSERT and a send that an unregistered one avoids, or the
+        // response time tells an attacker which numbers are patients.
+        $this->assertSame(0, LoginOtp::where('phone_or_email', '919876500044')->count());
+        $this->assertSame(0, WhatsappMessage::count());
+
+        // What the InvokeDeferredCallbacks middleware does once the
+        // response has been sent.
+        $this->app->make(\Illuminate\Support\Defer\DeferredCallbackCollection::class)->invoke();
+
+        $this->assertSame(1, LoginOtp::where('phone_or_email', '919876500044')->count());
+        $this->assertSame(1, WhatsappMessage::count());
+    }
+
     public function test_request_code_for_dependent_only_phone_sends_nothing(): void
     {
         $clinic = $this->makeClinic();
