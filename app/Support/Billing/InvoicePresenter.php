@@ -62,6 +62,22 @@ final class InvoicePresenter
         ];
     }
 
+    /**
+     * The patient's view of an issued invoice: the staff detail minus payment rows that are not
+     * money the patient moved. A superseded online checkout (`failed`) and an unsettled `pending`
+     * order are internal bookkeeping; showing either would read as a failed or phantom payment.
+     */
+    public static function portalDetail(Invoice $invoice): array
+    {
+        $detail = self::detail($invoice);
+        $detail['payments'] = array_values(array_filter(
+            $detail['payments'],
+            fn (array $p) => ! $p['superseded'] && $p['status'] !== 'pending',
+        ));
+
+        return $detail;
+    }
+
     public static function payment(Payment $payment): array
     {
         // A failed online row is a checkout attempt that was abandoned or replaced by a newer

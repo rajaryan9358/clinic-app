@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\Portal\ConsentController as PortalConsentController
 use App\Http\Controllers\Api\Portal\DashboardController as PortalDashboardController;
 use App\Http\Controllers\Api\Portal\DoctorController as PortalDoctorController;
 use App\Http\Controllers\Api\Portal\FamilyController as PortalFamilyController;
+use App\Http\Controllers\Api\Portal\InvoiceController as PortalInvoiceController;
 use App\Http\Controllers\Api\Portal\LinkController as PortalLinkController;
 use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
 use App\Http\Controllers\Api\Portal\PrescriptionController as PortalPrescriptionController;
@@ -146,6 +147,12 @@ Route::prefix('portal')->group(function () {
             Route::get('prescriptions', [PortalPrescriptionController::class, 'index']);
             Route::get('prescriptions/{id}', [PortalPrescriptionController::class, 'show']);
             Route::get('prescriptions/{id}/pdf', [PortalPrescriptionController::class, 'pdf']);
+
+            Route::get('invoices', [PortalInvoiceController::class, 'index']);
+            Route::get('invoices/{id}', [PortalInvoiceController::class, 'show']);
+            Route::get('invoices/{id}/pdf', [PortalInvoiceController::class, 'pdf']);
+            Route::post('invoices/{id}/pay', [PortalInvoiceController::class, 'pay']);
+            Route::post('invoices/{id}/confirm', [PortalInvoiceController::class, 'confirm']);
         });
     });
 });
