@@ -56,19 +56,29 @@ final class PortalOtpService
             return;
         }
 
-        $code = (string) random_int(100000, 999999);
+        // Issue the code after the response has gone out. Writing the row
+        // and queueing the WhatsApp in-request made a registered number
+        // measurably slower to answer than an unregistered one, which
+        // turns this endpoint into a "is this person a patient here?"
+        // oracle despite the identical reply text. defer() (not
+        // app()->terminating()) because deferred callbacks are flushed
+        // per request — terminating callbacks accumulate and re-run in
+        // long-lived processes such as Octane.
+        defer(function () use ($normalised, $holders) {
+            $code = (string) random_int(100000, 999999);
 
-        LoginOtp::create([
-            'clinic_id' => null,
-            'phone_or_email' => $normalised,
-            'otp_code' => hash('sha256', $code),
-            'purpose' => 'login',
-            'attempts' => 0,
-            'expires_at' => now()->addMinutes(10),
-            'created_at' => now(),
-        ]);
+            LoginOtp::create([
+                'clinic_id' => null,
+                'phone_or_email' => $normalised,
+                'otp_code' => hash('sha256', $code),
+                'purpose' => 'login',
+                'attempts' => 0,
+                'expires_at' => now()->addMinutes(10),
+                'created_at' => now(),
+            ]);
 
-        $this->notifier->loginOtp($normalised, $code, $holders->first()->clinic_id);
+            $this->notifier->loginOtp($normalised, $code, $holders->first()->clinic_id);
+        });
     }
 
     /**
