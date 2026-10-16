@@ -24,8 +24,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  *   1. the invoice row is locked for the whole of a settle, so two settles of
  *      the same invoice cannot interleave their amountPaid() reads;
  *   2. a settle resolves by `razorpay_payment_id` first and stops if that id
- *      is already recorded (confirm says so with a 409, a webhook replay is
- *      silent);
+ *      is already recorded — both paths hand the banked row back untouched,
+ *      and only a capture banked against a *different* invoice is a 409;
  *   3. `payments.razorpay_payment_id` is UNIQUE, which is the last line of
  *      defence if 1 and 2 are ever bypassed.
  *
@@ -130,24 +130,29 @@ final class PatientPaymentService
 
             // Not clinic-scoped on purpose: razorpay_payment_id is unique across
             // the table, so an id recorded anywhere is already banked.
-            if (Payment::query()->where('razorpay_payment_id', $paymentId)->exists()) {
+            $existing = Payment::query()->where('razorpay_payment_id', $paymentId)->first();
+            if ($existing) {
+                // The webhook normally beats the browser back. When the banked row
+                // is this invoice's, hand it over: the patient has paid, and a 409
+                // here would turn the ordinary race into an error the UI must undo.
+                if ((int) $existing->invoice_id === (int) $fresh->id && (int) $existing->clinic_id === (int) $fresh->clinic_id) {
+                    return $existing;
+                }
+
+                // A genuine conflict: this capture belongs to a different invoice.
+                Log::warning('Razorpay payment confirmed against the wrong invoice', [
+                    'payment_id' => $paymentId, 'banked_invoice_id' => $existing->invoice_id, 'confirmed_invoice_id' => $fresh->id,
+                ]);
+
                 throw new ConflictHttpException(self::ALREADY_RECORDED);
             }
 
+            // The amount is the one we raised the order for; it is read off our own
+            // row, never off the caller, and the signature ties the caller to that
+            // order. It is banked even when it now exceeds the outstanding (see settle()).
             $pending = $this->pendingRows($fresh)->where('razorpay_order_id', $orderId)->lockForUpdate()->first();
             if (! $pending) {
                 throw ValidationException::withMessages(['payment' => 'That payment order is not open on this invoice.']);
-            }
-
-            $amount = round((float) $pending->amount, 2);
-            if ($amount > $this->outstanding($fresh)) {
-                // The invoice moved on (counter cash, a refund reversal) while the
-                // patient was at checkout. Leave the row pending for staff to settle by hand.
-                Log::warning('Online payment is larger than the invoice outstanding', [
-                    'invoice_id' => $fresh->id, 'payment_id' => $paymentId, 'amount' => $amount,
-                ]);
-
-                throw ValidationException::withMessages(['amount' => 'That is more than the amount outstanding.']);
             }
 
             return $this->settle($fresh, $pending, $paymentId);
@@ -155,8 +160,9 @@ final class PatientPaymentService
     }
 
     /**
-     * Settle from a `payment.captured` webhook. A replay, an order we do not
-     * know, or an amount we will not bank returns null without touching anything.
+     * Settle from a `payment.captured` webhook. An order we do not know, or a
+     * capture for an amount the order was not raised for, returns null without
+     * touching anything; a replay returns the already-banked row.
      *
      * @param  array<string, mixed>  $paymentEntity  the Razorpay payment entity (amount in paise)
      */
@@ -209,6 +215,8 @@ final class PatientPaymentService
                 return null;
             }
 
+            // Anti-tamper: the capture must be for exactly what the order was
+            // raised for, so a ₹1 order can never settle a ₹2,000 invoice.
             $amount = round((float) $pending->amount, 2);
             $capturedPaise = isset($paymentEntity['amount']) ? (int) $paymentEntity['amount'] : null;
             if ($capturedPaise !== null && $capturedPaise !== (int) round($amount * 100)) {
@@ -220,21 +228,31 @@ final class PatientPaymentService
                 return null;
             }
 
-            if ($amount > $this->outstanding($invoice)) {
-                Log::warning('Razorpay capture is larger than the invoice outstanding', [
-                    'invoice_id' => $invoice->id, 'payment_id' => $paymentId, 'amount' => $amount,
-                ]);
-
-                return null;
-            }
-
             return $this->settle($invoice, $pending, $paymentId);
         });
     }
 
-    /** Flip a locked pending row to success and recompute the invoice and its appointment. */
+    /**
+     * Flip a locked pending row to success and recompute the invoice and its appointment.
+     *
+     * A capture is banked even when it is now worth more than the invoice owes
+     * (staff took cash at the counter after the order was raised): the money has
+     * already moved at Razorpay, and not recording it would leave the books
+     * disagreeing with reality. The excess shows up as a negative balance for
+     * staff to refund. This is why `amountPaid() > total_amount` is reachable for
+     * online captures, and only for them — InvoiceService::recordPayment() keeps
+     * its over-outstanding guard, because staff can adjust before taking cash.
+     */
     private function settle(Invoice $invoice, Payment $pending, string $paymentId): Payment
     {
+        $amount = round((float) $pending->amount, 2);
+        if ($amount > $this->outstanding($invoice)) {
+            Log::warning('Online capture is larger than the invoice outstanding; banking it leaves a negative balance', [
+                'invoice_id' => $invoice->id, 'payment_id' => $paymentId,
+                'amount' => $amount, 'outstanding' => $this->outstanding($invoice),
+            ]);
+        }
+
         $pending->forceFill([
             'razorpay_payment_id' => $paymentId,
             'status' => 'success',

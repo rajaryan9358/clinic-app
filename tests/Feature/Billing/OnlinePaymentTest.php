@@ -50,6 +50,16 @@ class OnlinePaymentTest extends TestCase
         );
     }
 
+    /** A second issued 801.00 invoice at the same clinic. */
+    private function siblingOf(Invoice $invoice): Invoice
+    {
+        $clinic = Clinic::findOrFail($invoice->clinic_id);
+
+        return $this->invoiceService()->issue(
+            $this->invoiceService()->draft($clinic->id, $this->draftData($this->makeBillingPatient($clinic))),
+        );
+    }
+
     /** @return \Illuminate\Testing\TestResponse */
     private function sendWebhook(array $payload, ?string $eventId = null)
     {
@@ -165,22 +175,35 @@ class OnlinePaymentTest extends TestCase
         $this->assertSame('issued', $invoice->fresh()->status);
     }
 
-    public function test_confirm_rejects_an_amount_that_does_not_match(): void
+    public function test_confirm_rejects_an_order_that_is_not_open_on_this_invoice(): void
+    {
+        $invoice = $this->issued();
+        $elsewhere = $this->payments()->startOrder($this->siblingOf($invoice));
+
+        // A valid signature over somebody else's order settles nothing here.
+        $this->assertValidationMessage('That payment order is not open on this invoice.',
+            fn () => $this->payments()->confirm($invoice, $elsewhere['order_id'], 'pay_1', 'sig'));
+
+        $this->assertSame('pending', Payment::where('razorpay_order_id', $elsewhere['order_id'])->sole()->status);
+        $this->assertSame(0.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('issued', $invoice->fresh()->status);
+    }
+
+    public function test_confirm_banks_a_capture_beyond_the_outstanding_and_leaves_a_negative_balance(): void
     {
         $invoice = $this->issued();
         $order = $this->payments()->startOrder($invoice);
 
-        // Counter cash after the order was raised: the order is now worth more than is owed.
+        // Counter cash after the order was raised: the money still moved at Razorpay,
+        // so it is banked and the excess shows up as a negative balance.
         $this->invoiceService()->recordPayment($invoice, ['amount' => 300, 'payment_method' => 'cash']);
 
-        $this->assertValidationMessage('That is more than the amount outstanding.',
-            fn () => $this->payments()->confirm($invoice, $order['order_id'], 'pay_1', 'sig'));
+        $payment = $this->payments()->confirm($invoice, $order['order_id'], 'pay_1', 'sig');
 
-        $online = Payment::where('razorpay_order_id', $order['order_id'])->sole();
-        $this->assertSame('pending', $online->status);
-        $this->assertNull($online->razorpay_payment_id);
-        $this->assertSame(300.0, $this->invoiceService()->amountPaid($invoice));
-        $this->assertSame('issued', $invoice->fresh()->status);
+        $this->assertSame(['success', '801.00', 'pay_1'], [$payment->status, $payment->amount, $payment->razorpay_payment_id]);
+        $this->assertSame(1101.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame(-300.0, round(801 - $this->invoiceService()->amountPaid($invoice), 2));
     }
 
     public function test_confirm_settles_and_marks_the_invoice_paid(): void
@@ -210,16 +233,38 @@ class OnlinePaymentTest extends TestCase
         $this->assertSame(801.0, $this->invoiceService()->amountPaid($invoice));
         $this->assertSame('paid', $invoice->fresh()->status);
 
-        // The browser confirming a payment the webhook already banked is a conflict, not a second charge.
+        // The webhook usually beats the browser back. Confirming what it already
+        // banked hands the settled payment over - it is not a second charge, and
+        // it is not an error the patient should ever see.
+        $again = $this->payments()->confirm($invoice, $order['order_id'], 'pay_1', 'sig');
+
+        $this->assertSame(['success', 'pay_1'], [$again->status, $again->razorpay_payment_id]);
+        $this->assertSame(1, Payment::where('status', 'success')->count());
+        $this->assertSame(1, Payment::count());
+        $this->assertSame(801.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('paid', $invoice->fresh()->status);
+    }
+
+    public function test_confirming_a_payment_banked_against_another_invoice_is_409(): void
+    {
+        $invoice = $this->issued();
+        $other = $this->siblingOf($invoice);   // same clinic, different invoice
+        $mine = $this->payments()->startOrder($invoice);
+        $theirs = $this->payments()->startOrder($other);
+
+        $this->payments()->confirm($other, $theirs['order_id'], 'pay_1', 'sig');
+
         try {
-            $this->payments()->confirm($invoice, $order['order_id'], 'pay_1', 'sig');
+            $this->payments()->confirm($invoice, $mine['order_id'], 'pay_1', 'sig');
             $this->fail('Expected a 409 conflict.');
         } catch (ConflictHttpException $e) {
             $this->assertSame('This payment has already been recorded.', $e->getMessage());
+            $this->assertSame(409, $e->getStatusCode());
         }
 
-        $this->assertSame(1, Payment::count());
-        $this->assertSame(801.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame(1, Payment::where('status', 'success')->count());
+        $this->assertSame(0.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('issued', $invoice->fresh()->status);
     }
 
     public function test_replayed_capture_is_a_no_op(): void
@@ -252,7 +297,7 @@ class OnlinePaymentTest extends TestCase
         $this->assertSame('issued', $invoice->fresh()->status);
     }
 
-    public function test_a_capture_for_more_than_is_outstanding_is_not_banked(): void
+    public function test_a_capture_beyond_the_outstanding_is_still_banked(): void
     {
         $invoice = $this->issued();
         $order = $this->payments()->startOrder($invoice);
@@ -261,8 +306,25 @@ class OnlinePaymentTest extends TestCase
         $this->sendWebhook($this->captureEvent($invoice, $order['order_id'], 'pay_1'))->assertOk();
 
         $online = Payment::where('razorpay_order_id', $order['order_id'])->sole();
+        $this->assertSame(['success', 'pay_1'], [$online->status, $online->razorpay_payment_id]);
+        $this->assertSame(1101.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame(-300.0, round(801 - $this->invoiceService()->amountPaid($invoice), 2));
+    }
+
+    public function test_a_capture_for_an_amount_the_order_was_not_raised_for_is_not_banked(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+
+        // Anti-tamper: a 1-rupee capture must never settle an 801-rupee order.
+        $this->sendWebhook($this->captureEvent($invoice, $order['order_id'], 'pay_1', 100))->assertOk();
+
+        $online = Payment::where('razorpay_order_id', $order['order_id'])->sole();
         $this->assertSame('pending', $online->status);
-        $this->assertSame(300.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertNull($online->razorpay_payment_id);
+        $this->assertSame(0.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('issued', $invoice->fresh()->status);
     }
 
     public function test_subscription_webhooks_still_reach_the_subscription_handler(): void
