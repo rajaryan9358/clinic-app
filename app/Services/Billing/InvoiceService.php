@@ -37,6 +37,8 @@ final class InvoiceService
         $totals = $this->totals($clinicId, $items, (float) ($data['discount_amount'] ?? 0), $data['tax_amount'] ?? null);
 
         return DB::transaction(function () use ($clinicId, $data, $userId, $items, $totals) {
+            $this->assertAppointmentFree($clinicId, $data['appointment_id'] ?? null, null);
+
             $invoice = Invoice::create([
                 'clinic_id' => $clinicId,
                 'patient_id' => $data['patient_id'],
@@ -83,6 +85,10 @@ final class InvoiceService
             $tax = $explicitTax ? $data['tax_amount'] : ($manual ? (float) $fresh->tax_amount : null);
 
             $totals = $this->totals($clinicId, $items, $discount, $tax);
+
+            if (! empty($data['appointment_id'])) {
+                $this->assertAppointmentFree($clinicId, $data['appointment_id'], $fresh->id);
+            }
 
             $fresh->fill(array_intersect_key($data, array_flip(['appointment_id', 'invoice_date', 'notes'])) + $totals);
             $fresh->forceFill(['tax_is_manual' => $manual])->save();
@@ -152,6 +158,8 @@ final class InvoiceService
                     'cancelled_at' => now(),
                     'cancelled_reason' => $reason,
                 ])->save();
+
+                $this->releaseAppointment($fresh);
             }
 
             $invoice->setRawAttributes($fresh->getAttributes(), true);
@@ -266,6 +274,45 @@ final class InvoiceService
         ]);
         if ($appointment->payment_status !== 'waived') {
             $appointment->payment_status = $status === 'paid' ? 'paid' : ($paid > 0 ? 'partial' : 'unpaid');
+        }
+        $appointment->save();
+    }
+
+    /** One non-cancelled invoice per appointment; the lock on the appointment row serialises concurrent drafts. */
+    private function assertAppointmentFree(int $clinicId, mixed $appointmentId, ?int $exceptInvoiceId): void
+    {
+        if (empty($appointmentId)) {
+            return;
+        }
+
+        Appointment::where('id', $appointmentId)->where('clinic_id', $clinicId)->lockForUpdate()->first();
+
+        $taken = Invoice::where('clinic_id', $clinicId)
+            ->where('appointment_id', $appointmentId)
+            ->where('status', '!=', 'cancelled')
+            ->when($exceptInvoiceId, fn ($q) => $q->where('id', '!=', $exceptInvoiceId))
+            ->exists();
+
+        if ($taken) {
+            throw ValidationException::withMessages(['appointment_id' => 'This appointment already has an invoice.']);
+        }
+    }
+
+    /** The bill no longer exists: clear the mirrored money (discount resets to its 0 default) and recompute payment_status (waived is kept). */
+    private function releaseAppointment(Invoice $invoice): void
+    {
+        if (! $invoice->appointment_id) {
+            return;
+        }
+
+        $appointment = Appointment::where('id', $invoice->appointment_id)->where('clinic_id', $invoice->clinic_id)->first();
+        if (! $appointment) {
+            return;
+        }
+
+        $appointment->fill(['appointment_fee' => null, 'discount_amount' => 0, 'final_amount' => null]);
+        if ($appointment->payment_status !== 'waived') {
+            $appointment->payment_status = $this->amountPaid($invoice) > 0 ? 'partial' : 'unpaid';
         }
         $appointment->save();
     }

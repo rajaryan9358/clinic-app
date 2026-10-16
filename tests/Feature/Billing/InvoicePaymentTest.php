@@ -227,4 +227,94 @@ class InvoicePaymentTest extends TestCase
         $this->invoiceService()->markRefunded($payment, 'x');
         $this->assertContains('invoices', $locked->getArrayCopy());
     }
+
+    public function test_float_unsafe_amounts_still_settle_the_invoice(): void
+    {
+        [$invoice, $appointment] = $this->issuedWithAppointment(['items' => [['description' => 'Odd', 'quantity' => 1, 'unit_amount' => 200.02]]]);
+
+        $this->pay($invoice, 100);
+        $this->pay($invoice, 100.02);
+
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('paid', $appointment->fresh()->payment_status);
+    }
+
+    public function test_cancelling_a_zero_total_paid_invoice_walks_the_appointment_back(): void
+    {
+        [$invoice, $appointment] = $this->issuedWithAppointment(['discount_amount' => 801, 'tax_amount' => 0]);
+        $this->assertSame('paid', $appointment->fresh()->payment_status);
+
+        $this->invoiceService()->cancel($invoice);
+
+        $appointment->refresh();
+        $this->assertSame('unpaid', $appointment->payment_status);
+        $this->assertNull($appointment->appointment_fee);
+        $this->assertSame("0.00", $appointment->discount_amount);
+        $this->assertNull($appointment->final_amount);
+    }
+
+    public function test_cancelling_an_issued_invoice_clears_the_mirrored_money(): void
+    {
+        [$invoice, $appointment] = $this->issuedWithAppointment(['discount_amount' => 100]);
+        $this->assertNotNull($appointment->fresh()->final_amount);
+
+        $this->invoiceService()->cancel($invoice);
+
+        $appointment->refresh();
+        $this->assertSame('unpaid', $appointment->payment_status);
+        $this->assertNull($appointment->appointment_fee);
+        $this->assertSame("0.00", $appointment->discount_amount);
+        $this->assertNull($appointment->final_amount);
+    }
+
+    public function test_cancelling_keeps_a_waived_appointment_waived(): void
+    {
+        [$invoice, $appointment] = $this->issuedWithAppointment();
+        $appointment->update(['payment_status' => 'waived']);
+
+        $this->invoiceService()->cancel($invoice);
+
+        $this->assertSame('waived', $appointment->fresh()->payment_status);
+        $this->assertNull($appointment->fresh()->final_amount);
+    }
+
+    public function test_a_second_open_invoice_on_an_appointment_is_422_but_a_cancelled_one_does_not_block(): void
+    {
+        [$invoice, $appointment] = $this->issuedWithAppointment();
+        $data = $this->draftData($this->makeBillingPatient($invoice->clinic), ['appointment_id' => $appointment->id]);
+
+        $this->assertValidationMessage('This appointment already has an invoice.', fn () => $this->invoiceService()->draft($invoice->clinic_id, $data));
+        $this->assertSame(1, Invoice::count());
+
+        $this->invoiceService()->cancel($invoice);
+        $this->assertSame('draft', $this->invoiceService()->draft($invoice->clinic_id, $data)->status);
+    }
+
+    public function test_moving_a_draft_onto_an_invoiced_appointment_is_422(): void
+    {
+        [$invoice, $appointment] = $this->issuedWithAppointment();
+        $other = $this->invoiceService()->draft($invoice->clinic_id, $this->draftData($this->makeBillingPatient($invoice->clinic)));
+
+        $this->assertValidationMessage('This appointment already has an invoice.', fn () => $this->invoiceService()->update($other, ['appointment_id' => $appointment->id]));
+    }
+
+    public function test_sync_state_leaves_draft_and_cancelled_invoices_alone(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $patient = $this->makeBillingPatient($clinic);
+        $appointment = $this->makeBillingAppointment($patient, $this->makeBillingDoctor($clinic));
+        $draft = $this->invoiceService()->draft($clinic->id, $this->draftData($patient, [
+            'appointment_id' => $appointment->id, 'items' => [['description' => 'Free', 'quantity' => 1, 'unit_amount' => 0]],
+        ]));
+
+        $this->invoiceService()->syncState($draft);
+
+        $this->assertSame('draft', $draft->fresh()->status);
+        $this->assertNull($appointment->fresh()->final_amount);
+
+        $draft->forceFill(['status' => 'cancelled'])->save();
+        $this->invoiceService()->syncState($draft);
+        $this->assertSame('cancelled', $draft->fresh()->status);
+        $this->assertNull($appointment->fresh()->final_amount);
+    }
 }
