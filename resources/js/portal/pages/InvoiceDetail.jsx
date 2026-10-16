@@ -142,7 +142,7 @@ export default function InvoiceDetail() {
 
     async function pay() {
         if (payingRef.current) return;
-        const scope = scopeRef.current;
+        payingRef.current = scope;
         const scope = scopeRef.current;
         setPaying('starting');
         setPayError('');
