@@ -6,6 +6,8 @@ import Book from './pages/Book';
 import Consent from './pages/Consent';
 import Family from './pages/Family';
 import Home from './pages/Home';
+import InvoiceDetail from './pages/InvoiceDetail';
+import Invoices from './pages/Invoices';
 import Login from './pages/Login';
 import MagicLink from './pages/MagicLink';
 import PrescriptionDetail from './pages/PrescriptionDetail';
@@ -68,6 +70,8 @@ export default function App() {
                 <Route path="/prescriptions" element={<Prescriptions />} />
                 <Route path="/prescriptions/:id" element={<PrescriptionDetail />} />
                 <Route path="/book" element={<Book />} />
+                <Route path="/invoices" element={<Invoices />} />
+                <Route path="/invoices/:id" element={<InvoiceDetail />} />
                 <Route path="/family" element={<Family />} />
                 <Route path="/waitlist/:id" element={<WaitlistOffer />} />
             </Route>
