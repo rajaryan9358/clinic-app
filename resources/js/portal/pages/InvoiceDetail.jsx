@@ -47,8 +47,22 @@ export default function InvoiceDetail() {
     const scopeRef = useRef('');
     scopeRef.current = `${id}:${activeProfileId}`;
 
-    const [paying, setPaying] = useState(null); // 'starting' | 'checkout' | 'confirming' | null
-    const payingRef = useRef(null); // scope of the in-flight payment, or null
+    // In-flight payment stage per invoice scope ('starting' | 'checkout' | 'confirming'), so each
+    // invoice's flow owns its own lock and survives navigating away and back.
+    const [payingMap, setPayingMap] = useState({});
+    const inflightRef = useRef(new Set()); // synchronous double-tap guard, same keys as payingMap
+    const paying = payingMap[scopeRef.current] ?? null;
+    const setStage = (scope, stage) =>
+        setPayingMap((m) => {
+            const next = { ...m };
+            if (stage) next[scope] = stage;
+            else delete next[scope];
+            return next;
+        });
+    const unlock = (scope) => {
+        inflightRef.current.delete(scope);
+        setStage(scope, null);
+    };
     const [notice, setNotice] = useState(null); // { tone, text }
     const [payError, setPayError] = useState('');
     const [payUnavailable, setPayUnavailable] = useState(false);
@@ -96,8 +110,6 @@ export default function InvoiceDetail() {
         setNotice(null);
         setPayError('');
         setPayUnavailable(false);
-        setPaying(null);
-        payingRef.current = null;
         setDownloadError('');
         fetchInvoice();
         return () => {
@@ -109,7 +121,7 @@ export default function InvoiceDetail() {
     const stillHere = (scope) => scopeRef.current === scope;
 
     async function confirmPayment(scope, response) {
-        setPaying('confirming');
+        setStage(scope, 'confirming');
         try {
             const { data } = await api.post(`/invoices/${id}/confirm`, {
                 razorpay_order_id: response.razorpay_order_id,
@@ -135,16 +147,15 @@ export default function InvoiceDetail() {
             }
             fetchInvoice({ quiet: true });
         } finally {
-            if (payingRef.current === scope) payingRef.current = null;
-            if (stillHere(scope)) setPaying(null);
+            unlock(scope);
         }
     }
 
     async function pay() {
-        if (payingRef.current) return;
-        payingRef.current = scope;
         const scope = scopeRef.current;
-        setPaying('starting');
+        if (inflightRef.current.has(scope)) return;
+        inflightRef.current.add(scope);
+        setStage(scope, 'starting');
         setPayError('');
         setNotice(null);
 
@@ -153,9 +164,9 @@ export default function InvoiceDetail() {
             const { data } = await api.post(`/invoices/${id}/pay`);
             order = data.data;
         } catch (err) {
-            if (payingRef.current === scope) payingRef.current = null;
+            unlock(scope);
             if (!stillHere(scope)) return;
-            setPaying(null);
+            setStage(scope, null);
             const status = err?.response?.status;
             if (status === 404) {
                 setPayUnavailable(true);
@@ -172,24 +183,24 @@ export default function InvoiceDetail() {
         try {
             Razorpay = await loadRazorpay();
         } catch {
-            if (payingRef.current === scope) payingRef.current = null;
+            unlock(scope);
             if (stillHere(scope)) {
-                setPaying(null);
+                setStage(scope, null);
                 setPayError('Could not load the payment window. Check your connection and try again. Nothing was charged.');
             }
             return;
         }
 
         if (!stillHere(scope)) {
-            if (payingRef.current === scope) payingRef.current = null;
+            unlock(scope);
             return;
         }
 
         let finished = false; // success handler ran; ignore a late dismiss
         const release = (nextNotice) => {
-            if (payingRef.current === scope) payingRef.current = null;
+            unlock(scope);
             if (!stillHere(scope)) return;
-            setPaying(null);
+            setStage(scope, null);
             if (nextNotice) setNotice(nextNotice);
             fetchInvoice({ quiet: true });
         };
@@ -225,7 +236,7 @@ export default function InvoiceDetail() {
                     text: 'That payment did not go through. This invoice has not changed — you can try again.',
                 });
             });
-            setPaying('checkout');
+            setStage(scope, 'checkout');
             checkout.open();
         } catch {
             release();
