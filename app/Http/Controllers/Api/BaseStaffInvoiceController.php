@@ -47,7 +47,7 @@ abstract class BaseStaffInvoiceController extends Controller
         $q = trim((string) ($data['q'] ?? ''));
 
         $result = $this->scoped($request)
-            ->with(['patient' => fn ($query) => $query->withTrashed()])
+            ->with(['patient' => fn ($query) => $query->withTrashed(), 'appointment.doctor'])
             ->withSum(['payments as paid_sum' => fn ($query) => $query->where('status', 'success')], 'amount')
             ->when(isset($data['patient_id']), fn (Builder $b) => $b->where('patient_id', (int) $data['patient_id']))
             ->when(isset($data['appointment_id']), fn (Builder $b) => $b->where('appointment_id', (int) $data['appointment_id']))

@@ -2,15 +2,19 @@
 
 namespace Tests\Feature\Portal;
 
+use App\Models\Appointment;
 use App\Models\Clinic;
+use App\Models\Doctor;
 use App\Models\Invoice;
 use App\Models\Patient;
 use App\Models\Payment;
 use App\Services\Billing\FakeRazorpayGateway;
 use App\Services\Billing\InvoiceService;
 use App\Services\Billing\RazorpayGateway;
+use App\Services\InvoicePdfRenderer;
 use App\Support\PortalConsent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class PortalInvoiceTest extends TestCase
@@ -298,6 +302,60 @@ class PortalInvoiceTest extends TestCase
         }
 
         $this->assertStringContainsString('REF-123', $this->portalGet("/api/portal/invoices/{$invoice->id}", $token)->getContent());
+    }
+
+    public function test_the_patient_pdf_omits_staff_notes_and_unsettled_orders(): void
+    {
+        $patient = $this->consented($this->makePatient($this->clinic));
+        $token = $this->portalToken($patient);
+        $invoice = $this->issued($patient);
+        $invoice->forceFill(['notes' => 'STAFFNOTE-chase-this-debtor'])->save();
+        $this->service()->recordPayment($invoice, ['amount' => 100, 'payment_method' => 'cash']);
+        Payment::create([
+            'clinic_id' => $invoice->clinic_id, 'invoice_id' => $invoice->id, 'patient_id' => $patient->id,
+            'amount' => 400, 'payment_method' => 'online', 'status' => 'pending', 'paid_at' => now(),
+        ]);
+
+        // The portal route must use the patient-facing renderer mode.
+        $spy = $this->spy(InvoicePdfRenderer::class);
+        $this->portalGet("/api/portal/invoices/{$invoice->id}/pdf", $token);
+        $spy->shouldHaveReceived('render')->withArgs(fn ($i, $patientFacing) => $patientFacing === true)->once();
+        $this->app->forgetInstance(InvoicePdfRenderer::class);
+
+        $renderer = app(InvoicePdfRenderer::class);
+        $data = $renderer->data($invoice->fresh(), true);
+        $html = view('reports.invoice', $data)->render();
+
+        $this->assertStringNotContainsString('STAFFNOTE', $html);
+        $this->assertStringNotContainsString('Pending', $html);
+        $this->assertCount(1, $data['payments']);
+
+        // Staff copy is unchanged: it still shows both.
+        $staff = $renderer->data($invoice->fresh());
+        $this->assertSame('STAFFNOTE-chase-this-debtor', $staff['notes']);
+        $this->assertCount(2, $staff['payments']);
+    }
+
+    public function test_list_and_detail_carry_the_doctor_name(): void
+    {
+        $patient = $this->consented($this->makePatient($this->clinic));
+        $token = $this->portalToken($patient);
+        $doctor = Doctor::create(['clinic_id' => $this->clinic->id, 'full_name' => 'Dr Asha Rao', 'status' => 'active', 'slot_duration_minutes' => 30]);
+        $appt = Appointment::create([
+            'clinic_id' => $this->clinic->id, 'uuid' => (string) Str::uuid(), 'patient_id' => $patient->id, 'doctor_id' => $doctor->id,
+            'appointment_date' => '2026-10-15', 'start_time' => '10:00:00', 'end_time' => '10:30:00',
+            'visit_type' => 'new', 'booking_channel' => 'walk_in', 'status' => 'completed',
+        ]);
+        $with = $this->service()->issue($this->service()->draft($patient->clinic_id, [
+            'patient_id' => $patient->id, 'appointment_id' => $appt->id, 'invoice_date' => '2026-10-16',
+            'items' => [['description' => 'Consultation', 'quantity' => 1, 'unit_amount' => 500]],
+        ]));
+        $without = $this->issued($patient);
+
+        $rows = collect($this->portalGet('/api/portal/invoices', $token)->assertOk()->json('data'))->keyBy('id');
+        $this->assertSame('Dr Asha Rao', $rows[$with->id]['doctor_name']);
+        $this->assertNull($rows[$without->id]['doctor_name']);
+        $this->portalGet("/api/portal/invoices/{$with->id}", $token)->assertJsonPath('data.doctor_name', 'Dr Asha Rao');
     }
 
     /** @return array<string, string> */

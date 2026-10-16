@@ -18,13 +18,14 @@ class InvoicePdfRenderer
 {
     public function __construct(private readonly InvoiceService $invoices) {}
 
-    public function render(Invoice $invoice): PdfDocument
+    /** @param bool $patientFacing Render the copy a patient may download: no staff-authored text, no unsettled orders. */
+    public function render(Invoice $invoice, bool $patientFacing = false): PdfDocument
     {
-        return Pdf::loadView('reports.invoice', $this->data($invoice))->setPaper('a4', 'portrait');
+        return Pdf::loadView('reports.invoice', $this->data($invoice, $patientFacing))->setPaper('a4', 'portrait');
     }
 
     /** @return array<string, mixed> The variables reports.invoice is rendered with. */
-    public function data(Invoice $invoice): array
+    public function data(Invoice $invoice, bool $patientFacing = false): array
     {
         $invoice->loadMissing(['clinic', 'patient' => fn ($q) => $q->withTrashed(), 'items', 'payments']);
 
@@ -54,7 +55,9 @@ class InvoicePdfRenderer
             // failures, so they are left out of the history.
             'payments' => $invoice->payments
                 ->sortBy('id')
-                ->reject(fn (Payment $p) => $p->status === 'failed' && $p->payment_method === 'online')
+                ->reject(fn (Payment $p) => ($p->status === 'failed' && $p->payment_method === 'online')
+                    // An unsettled order is not money; staff want to see it, a patient does not.
+                    || ($patientFacing && $p->status === 'pending'))
                 ->map(fn (Payment $p) => [
                     'date' => ($p->paid_at ?? $p->created_at)?->format('d M Y') ?? '-',
                     'method' => str_replace('_', ' ', (string) $p->payment_method),
@@ -62,7 +65,8 @@ class InvoicePdfRenderer
                     'status' => $p->status === 'success' ? 'Paid' : ucfirst((string) $p->status),
                     'amount' => $this->money($p->amount),
                 ])->values()->all(),
-            'notes' => $invoice->notes,
+            // Invoice notes are written by staff for staff; never printed on the patient's copy.
+            'notes' => $patientFacing ? null : $invoice->notes,
             'footerNote' => ClinicSetting::billingFor((int) $invoice->clinic_id)['invoice_footer_note'],
         ];
     }

@@ -36,6 +36,7 @@ class InvoiceController extends Controller
     public function index(Request $request)
     {
         $items = $this->visible($request)
+            ->with('appointment.doctor')
             ->withSum(['payments as paid_sum' => fn ($q) => $q->where('status', 'success')], 'amount')
             ->orderByDesc('invoice_date')
             ->orderByDesc('id')
@@ -54,7 +55,7 @@ class InvoiceController extends Controller
     {
         $invoice = $this->find($request, $id);
 
-        return $renderer->render($invoice)->download('invoice-'.str_replace(['/', '\\'], '-', (string) ($invoice->invoice_number ?? $invoice->id)).'.pdf');
+        return $renderer->render($invoice, patientFacing: true)->download('invoice-'.str_replace(['/', '\\'], '-', (string) ($invoice->invoice_number ?? $invoice->id)).'.pdf');
     }
 
     public function pay(Request $request, int $id)

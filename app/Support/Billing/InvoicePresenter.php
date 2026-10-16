@@ -28,6 +28,7 @@ final class InvoicePresenter
             'invoice_number' => $invoice->invoice_number,
             'invoice_date' => $invoice->invoice_date?->toDateString(),
             'appointment_id' => $invoice->appointment_id,
+            'doctor_name' => $invoice->appointment?->doctor?->full_name,
             'patient' => $invoice->patient
                 ? ['id' => $invoice->patient->id, 'full_name' => $invoice->patient->full_name, 'phone' => $invoice->patient->phone]
                 : null,
@@ -40,7 +41,7 @@ final class InvoicePresenter
 
     public static function detail(Invoice $invoice): array
     {
-        $invoice->loadMissing(['patient' => fn ($q) => $q->withTrashed(), 'items', 'payments']);
+        $invoice->loadMissing(['patient' => fn ($q) => $q->withTrashed(), 'appointment.doctor', 'items', 'payments']);
 
         return self::item($invoice) + [
             'subtotal' => (float) $invoice->subtotal,
