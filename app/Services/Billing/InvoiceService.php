@@ -4,8 +4,10 @@ namespace App\Services\Billing;
 
 use App\Models\Appointment;
 use App\Models\ClinicSetting;
+use App\Models\Doctor;
 use App\Models\Invoice;
 use App\Models\InvoiceCounter;
+use App\Models\Service;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +38,6 @@ final class InvoiceService
                 'clinic_id' => $clinicId,
                 'patient_id' => $data['patient_id'],
                 'appointment_id' => $data['appointment_id'] ?? null,
-                
                 'invoice_date' => $data['invoice_date'] ?? $this->today()->toDateString(),
                 'notes' => $data['notes'] ?? null,
                 'status' => 'draft',
@@ -66,12 +67,22 @@ final class InvoiceService
                     'unit_amount' => (float) $i->unit_amount, 'amount' => (float) $i->amount,
                 ])->all();
 
-            $totals = $this->totals(
-                (int) $fresh->clinic_id,
-                $items,
-                (float) ($data['discount_amount'] ?? $fresh->discount_amount),
-                $data['tax_amount'] ?? null,
-            );
+            $clinicId = (int) $fresh->clinic_id;
+            $discount = (float) ($data['discount_amount'] ?? $fresh->discount_amount);
+
+            // There is no "tax was explicit" column. When the caller omits tax, keep the
+            // stored value if it differs from what the clinic percent would have produced
+            // for the stored subtotal/discount (i.e. someone set it by hand); otherwise
+            // it was automatic and is recomputed against the new items/discount.
+            $tax = $data['tax_amount'] ?? null;
+            if ($tax === null) {
+                $automatic = $this->automaticTax($clinicId, (float) $fresh->subtotal, (float) $fresh->discount_amount);
+                if (abs((float) $fresh->tax_amount - $automatic) >= 0.005) {
+                    $tax = (float) $fresh->tax_amount;
+                }
+            }
+
+            $totals = $this->totals($clinicId, $items, $discount, $tax);
 
             $fresh->fill(array_intersect_key($data, array_flip(['appointment_id', 'invoice_date', 'notes'])) + $totals)->save();
 
@@ -98,7 +109,9 @@ final class InvoiceService
             $clinicId = (int) $fresh->clinic_id;
             $period = self::financialYear($this->today());
 
-            InvoiceCounter::firstOrCreate(['clinic_id' => $clinicId, 'period' => $period]);
+            // insertOrIgnore never throws on the unique(clinic_id, period) race, so the
+            // first issue of a financial year cannot 500; the select below then locks the row.
+            InvoiceCounter::insertOrIgnore(['clinic_id' => $clinicId, 'period' => $period, 'next_number' => 1]);
             $counter = InvoiceCounter::where('clinic_id', $clinicId)->where('period', $period)->lockForUpdate()->firstOrFail();
 
             $number = (int) $counter->next_number;
@@ -135,7 +148,7 @@ final class InvoiceService
 
             $invoice->setRawAttributes($fresh->getAttributes(), true);
 
-            return $invoice;
+            return $invoice->load('items');
         });
     }
 
@@ -151,14 +164,14 @@ final class InvoiceService
         $clinicId = (int) $appointment->clinic_id;
 
         $service = $appointment->service_id
-            ? \App\Models\Service::forClinic($clinicId)->find($appointment->service_id)
+            ? Service::forClinic($clinicId)->find($appointment->service_id)
             : null;
         if ($service && (float) $service->fee > 0) {
             $lines[] = ['description' => $service->name, 'service_id' => $service->id, 'quantity' => 1, 'unit_amount' => (float) $service->fee];
         }
 
         $doctor = $appointment->doctor_id
-            ? \App\Models\Doctor::forClinic($clinicId)->find($appointment->doctor_id)
+            ? Doctor::forClinic($clinicId)->find($appointment->doctor_id)
             : null;
         if ($doctor) {
             $followup = $appointment->visit_type === 'followup';
@@ -179,6 +192,7 @@ final class InvoiceService
     /** Indian financial year (April-March), e.g. 2026-27. */
     public static function financialYear(CarbonInterface $date): string
     {
+        // Century rollover reads 2099-00 (start year + 1, mod 100); accepted as-is.
         $start = $date->month >= 4 ? $date->year : $date->year - 1;
 
         return sprintf('%d-%02d', $start, ($start + 1) % 100);
@@ -195,9 +209,17 @@ final class InvoiceService
      */
     private function normalizeItems(array $rawItems): array
     {
+        if ($rawItems === []) {
+            throw ValidationException::withMessages(['items' => 'An invoice needs at least one item.']);
+        }
+
         return array_values(array_map(function (array $item) {
             $quantity = (int) ($item['quantity'] ?? 1);
             $unit = round((float) $item['unit_amount'], 2);
+
+            if ($quantity < 1 || $unit < 0) {
+                throw ValidationException::withMessages(['items' => 'Each item needs a quantity of at least 1 and a unit amount of 0 or more.']);
+            }
 
             return [
                 'service_id' => $item['service_id'] ?? null,
@@ -218,13 +240,21 @@ final class InvoiceService
         $subtotal = round(array_sum(array_column($items, 'amount')), 2);
         $discount = round($discount, 2);
 
+        if ($discount < 0) {
+            throw ValidationException::withMessages(['discount_amount' => 'The discount cannot be negative.']);
+        }
+
+        if ($tax !== null && (float) $tax < 0) {
+            throw ValidationException::withMessages(['tax_amount' => 'The tax amount cannot be negative.']);
+        }
+
         if ($discount > $subtotal) {
             throw ValidationException::withMessages(['discount_amount' => 'The discount cannot be more than the subtotal.']);
         }
 
         $tax = $tax !== null
             ? round((float) $tax, 2)
-            : round(($subtotal - $discount) * ClinicSetting::billingFor($clinicId)['invoice_tax_percent'] / 100, 2);
+            : $this->automaticTax($clinicId, $subtotal, $discount);
 
         return [
             'subtotal' => $subtotal,
@@ -232,6 +262,11 @@ final class InvoiceService
             'tax_amount' => $tax,
             'total_amount' => round($subtotal - $discount + $tax, 2),
         ];
+    }
+
+    private function automaticTax(int $clinicId, float $subtotal, float $discount): float
+    {
+        return round(($subtotal - $discount) * ClinicSetting::billingFor($clinicId)['invoice_tax_percent'] / 100, 2);
     }
 
     /** @param array<int, array<string, mixed>> $items */
