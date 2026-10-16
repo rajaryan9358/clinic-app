@@ -29,12 +29,18 @@ final class PortalProfiles
      */
     public static function accountHoldersForPhone(string $normalisedPhone): Collection
     {
-        return Patient::query()
+        $candidates = Patient::query()
             ->whereNull('managed_by_patient_id')
             ->where('phone', 'like', '%'.substr($normalisedPhone, -10))
             ->get()
-            ->filter(fn (Patient $p) => PhoneNumber::normalise($p->phone) === $normalisedPhone
-                && self::portalEnabled($p->clinic_id))
+            ->filter(fn (Patient $p) => PhoneNumber::normalise($p->phone) === $normalisedPhone);
+
+        // One settings read for every candidate clinic rather than one per
+        // patient row: the same phone often reaches several clinics.
+        $enabled = self::portalEnabledMap($candidates->pluck('clinic_id')->unique()->all());
+
+        return $candidates
+            ->filter(fn (Patient $p) => $enabled[$p->clinic_id] ?? true)
             ->values();
     }
 
@@ -65,5 +71,25 @@ final class PortalProfiles
     public static function portalEnabled(int $clinicId): bool
     {
         return (bool) (ClinicSetting::where('clinic_id', $clinicId)->value('portal_enabled') ?? true);
+    }
+
+    /**
+     * Portal flag per clinic id in a single query. A clinic with no
+     * settings row is absent from the result and counts as enabled,
+     * matching portalEnabled().
+     *
+     * @param  array<int, int>  $clinicIds
+     * @return array<int, bool>
+     */
+    public static function portalEnabledMap(array $clinicIds): array
+    {
+        if ($clinicIds === []) {
+            return [];
+        }
+
+        return ClinicSetting::whereIn('clinic_id', $clinicIds)
+            ->pluck('portal_enabled', 'clinic_id')
+            ->map(fn ($enabled) => (bool) ($enabled ?? true))
+            ->all();
     }
 }

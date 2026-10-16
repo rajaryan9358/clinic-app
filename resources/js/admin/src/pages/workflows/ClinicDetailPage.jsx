@@ -1080,7 +1080,9 @@ function SettingsTab({ clinicId }) {
 
     if (loading) return <LoadingState />;
 
-    const toggle = (key) => setForm((p) => ({ ...p, [key]: !p[key] }));
+    // Flip from the value the switch is actually showing, so the first click
+    // on a defaulted-on flag turns it off rather than re-sending `true`.
+    const toggle = (key, dflt = false) => setForm((p) => ({ ...p, [key]: !(p[key] ?? dflt) }));
 
     return (
         <div className="max-w-xl space-y-5">
@@ -1091,17 +1093,21 @@ function SettingsTab({ clinicId }) {
                 <Card className="p-5">
                     <h3 className="mb-4 text-sm font-semibold text-gray-900">Booking Controls</h3>
                     <div className="space-y-3">
+                        {/* `dflt` mirrors what the backend assumes when a clinic has no
+                            clinic_settings row yet (PortalBookingPolicy::settingsFor,
+                            PortalProfiles::portalEnabled): those flags are on until
+                            someone turns them off, so the switch must not read as off. */}
                         {[
-                            { key: 'booking_enabled', label: 'Online booking enabled' },
+                            { key: 'booking_enabled', label: 'Online booking enabled', dflt: true },
                             { key: 'whatsapp_booking_enabled', label: 'WhatsApp booking enabled' },
                             { key: 'walkin_enabled', label: 'Walk-in appointments' },
                             { key: 'token_system_enabled', label: 'Token system' },
                             { key: 'auto_confirm_appointments', label: 'Auto-confirm appointments' },
-                            { key: 'allow_reschedule', label: 'Allow patient rescheduling' },
-                            { key: 'allow_cancel', label: 'Allow patient cancellation' },
-                            { key: 'portal_enabled', label: 'Patient portal enabled' },
-                        ].map(({ key, label }) => (
-                            <Toggle key={key} checked={Boolean(form[key])} onChange={() => toggle(key)} label={label} />
+                            { key: 'allow_reschedule', label: 'Allow patient rescheduling', dflt: true },
+                            { key: 'allow_cancel', label: 'Allow patient cancellation', dflt: true },
+                            { key: 'portal_enabled', label: 'Patient portal enabled', dflt: true },
+                        ].map(({ key, label, dflt = false }) => (
+                            <Toggle key={key} checked={form[key] ?? dflt} onChange={() => toggle(key, dflt)} label={label} />
                         ))}
                     </div>
                 </Card>

@@ -39,20 +39,33 @@ class AppointmentController extends Controller
         $tz = config('app.clinic_timezone', 'Asia/Kolkata');
         $now = Carbon::now($tz);
 
-        $appointments = Appointment::where('patient_id', $patient->id)->with('doctor')->get();
+        // appointment_date/start_time are stored as clinic-local wall time,
+        // so the split and the ordering are both expressible in SQL — the
+        // database returns just the page's rows instead of every
+        // appointment the patient has ever had.
+        $today = $now->toDateString();
+        $timeNow = $now->format('H:i:s');
 
-        $startOf = fn (Appointment $a) => Carbon::parse($a->appointment_date->toDateString().' '.$a->start_time, $tz);
+        $query = Appointment::where('patient_id', $patient->id)->with('doctor');
+
+        $onOrAfterNow = fn ($q) => $q->where('appointment_date', '>', $today)
+            ->orWhere(fn ($q2) => $q2->where('appointment_date', '=', $today)->where('start_time', '>=', $timeNow));
+
+        $beforeNow = fn ($q) => $q->where('appointment_date', '<', $today)
+            ->orWhere(fn ($q2) => $q2->where('appointment_date', '=', $today)->where('start_time', '<', $timeNow));
 
         if ($filter === 'upcoming') {
-            $appointments = $appointments->filter(fn ($a) => $startOf($a)->gte($now))
-                ->sortBy(fn ($a) => $startOf($a)->timestamp)
-                ->values();
+            $appointments = $query->where($onOrAfterNow)
+                ->orderBy('appointment_date')->orderBy('start_time')->orderBy('id')
+                ->get();
         } elseif ($filter === 'past') {
-            $appointments = $appointments->filter(fn ($a) => $startOf($a)->lt($now))
-                ->sortByDesc(fn ($a) => $startOf($a)->timestamp)
-                ->values();
+            $appointments = $query->where($beforeNow)
+                ->orderByDesc('appointment_date')->orderByDesc('start_time')->orderByDesc('id')
+                ->get();
         } else {
-            $appointments = $appointments->sortByDesc(fn ($a) => $startOf($a)->timestamp)->values();
+            $appointments = $query
+                ->orderByDesc('appointment_date')->orderByDesc('start_time')->orderByDesc('id')
+                ->get();
         }
 
         return $this->success('OK', $appointments->map(fn ($a) => AppointmentPresenter::item($a))->all());
