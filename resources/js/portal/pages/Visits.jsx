@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import AppointmentCard from '../components/AppointmentCard';
+import WaitlistCard from '../components/WaitlistCard';
 import { Card, ErrorText, Spinner } from '../components/ui';
 
 const FILTERS = [
@@ -20,7 +21,8 @@ const EMPTY_MESSAGES = {
  * `GET appointments?filter=` list, scoped to the acting profile. The
  * filter is plain client state (not a URL param) — there's nothing else on
  * this page worth deep-linking to, and the default ("upcoming") is what a
- * patient almost always wants first.
+ * patient almost always wants first. Active waitlist entries sit above
+ * the list (WaitlistCard), independent of the filter.
  */
 export default function Visits() {
     const [filter, setFilter] = useState('upcoming');
@@ -52,6 +54,8 @@ export default function Visits() {
     return (
         <div className="space-y-4">
             <h1 className="text-xl font-semibold text-slate-900">Visits</h1>
+
+            <WaitlistCard />
 
             <div className="flex gap-2">
                 {FILTERS.map((f) => (

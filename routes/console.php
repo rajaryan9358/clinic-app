@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\ProcessWaitlist;
 use App\Console\Commands\SendWhatsAppReminders;
 use App\Console\Commands\SyncSubscriptions;
 use Illuminate\Foundation\Inspiring;
@@ -12,3 +13,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command(SyncSubscriptions::class)->hourly();
 Schedule::command(SendWhatsAppReminders::class)->everyFifteenMinutes()->withoutOverlapping();
+Schedule::command(ProcessWaitlist::class)->everyMinute()->withoutOverlapping();

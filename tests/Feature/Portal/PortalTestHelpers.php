@@ -68,6 +68,13 @@ trait PortalTestHelpers
         return $this->withHeaders($this->portalHeaders($token, $patientId))->postJson($uri, $data);
     }
 
+    protected function portalDelete(string $uri, string $token, mixed $patientId = null): TestResponse
+    {
+        app('auth')->forgetGuards();
+
+        return $this->withHeaders($this->portalHeaders($token, $patientId))->deleteJson($uri);
+    }
+
     private function portalHeaders(string $token, mixed $patientId): array
     {
         $headers = ['Authorization' => 'Bearer '.$token];

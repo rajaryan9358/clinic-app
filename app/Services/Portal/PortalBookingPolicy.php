@@ -5,7 +5,9 @@ namespace App\Services\Portal;
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\ClinicSetting;
+use App\Models\WaitlistEntry;
 use App\Services\AppointmentService;
+use App\Services\Waitlist\WaitlistService;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -27,6 +29,10 @@ use Illuminate\Validation\ValidationException;
  *    a slot that was free when listed but got taken in the meantime
  *    surfaces as a 409 "just taken" conflict rather than a generic
  *    "not an offered time" 422.
+ *
+ * Waitlist holds (E3): a slot held for another patient is hidden from
+ * `freeSlots()` and listed by `takenSlots()` (the portal's "Join
+ * waitlist" times) alongside the booked ones.
  */
 final class PortalBookingPolicy
 {
@@ -104,9 +110,12 @@ final class PortalBookingPolicy
     }
 
     /**
+     * $forPatientId: a live waitlist hold for this patient doesn't hide the
+     * slot from them; holds for anyone else always do (null ⇒ every hold).
+     *
      * @return array<int, array{start_time: string, end_time: string}>
      */
-    public function freeSlots(int $clinicId, int $doctorId, string $date, ?int $excludeAppointmentId = null): array
+    public function freeSlots(int $clinicId, int $doctorId, string $date, ?int $excludeAppointmentId = null, ?int $forPatientId = null): array
     {
         $this->assertDateInWindow($clinicId, $date);
 
@@ -116,10 +125,16 @@ final class PortalBookingPolicy
 
         $days = app(AppointmentService::class)->getDoctorAvailability($clinicId, $doctorId, $date, $date, $excludeAppointmentId);
         $slots = $days[0]['slots'] ?? [];
+        $holds = app(WaitlistService::class)->holdsOn($clinicId, $doctorId, $date);
 
         $free = [];
         foreach ($slots as $slot) {
             if (! $slot['available']) {
+                continue;
+            }
+
+            $heldFor = $holds[$slot['start_time']] ?? null;
+            if ($heldFor !== null && $heldFor !== $forPatientId) {
                 continue;
             }
 
@@ -132,6 +147,66 @@ final class PortalBookingPolicy
         }
 
         return $free;
+    }
+
+    /**
+     * Offered slots (same window/notice/grid as freeSlots) that the patient
+     * could join the waitlist for: booked, or held for someone else — minus
+     * those the patient already has an active entry or their own visit in.
+     * Empty when the clinic has the waitlist off.
+     *
+     * @return array<int, array{start_time: string, end_time: string}>
+     */
+    public function takenSlots(int $clinicId, int $doctorId, string $date, int $forPatientId): array
+    {
+        $this->assertDateInWindow($clinicId, $date);
+
+        $waitlist = app(WaitlistService::class);
+        if (! $waitlist->settings($clinicId)['enabled']) {
+            return [];
+        }
+
+        $tz = config('app.clinic_timezone', 'Asia/Kolkata');
+        $settings = $this->settings($clinicId);
+        $noticeCutoff = Carbon::now($tz)->addMinutes($settings['min_booking_notice_minutes']);
+
+        $days = app(AppointmentService::class)->getDoctorAvailability($clinicId, $doctorId, $date, $date);
+        $slots = $days[0]['slots'] ?? [];
+        $holds = $waitlist->holdsOn($clinicId, $doctorId, $date);
+
+        $hhmm = fn ($t) => substr((string) $t, 0, 5);
+        $joined = WaitlistEntry::query()->active()
+            ->where('patient_id', $forPatientId)
+            ->where('doctor_id', $doctorId)
+            ->whereDate('appointment_date', $date)
+            ->pluck('start_time')->map($hhmm)->all();
+        $ownVisits = Appointment::query()
+            ->where('patient_id', $forPatientId)
+            ->where('doctor_id', $doctorId)
+            ->whereDate('appointment_date', $date)
+            ->whereNotIn('status', [AppointmentStatus::CANCELLED->value, AppointmentStatus::RESCHEDULED->value])
+            ->pluck('start_time')->map($hhmm)->all();
+
+        $taken = [];
+        foreach ($slots as $slot) {
+            $heldFor = $holds[$slot['start_time']] ?? null;
+            $heldForOther = $heldFor !== null && $heldFor !== $forPatientId;
+            if ($slot['available'] && ! $heldForOther) {
+                continue;
+            }
+
+            if (in_array($slot['start_time'], $joined, true) || in_array($slot['start_time'], $ownVisits, true)) {
+                continue;
+            }
+
+            if (Carbon::parse($date.' '.$slot['start_time'], $tz)->lessThan($noticeCutoff)) {
+                continue;
+            }
+
+            $taken[] = ['start_time' => $slot['start_time'], 'end_time' => $slot['end_time']];
+        }
+
+        return $taken;
     }
 
     /**

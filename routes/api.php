@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Clinic\MeController as ClinicMeController;
 use App\Http\Controllers\Api\Clinic\PatientController as ClinicPatientController;
 use App\Http\Controllers\Api\Clinic\PatientFamilyController as ClinicPatientFamilyController;
 use App\Http\Controllers\Api\Clinic\PatientPortalLinkController as ClinicPatientPortalLinkController;
+use App\Http\Controllers\Api\Clinic\WaitlistController as ClinicWaitlistController;
 use App\Http\Controllers\Api\Clinic\PatientProfileController as ClinicPatientProfileController;
 use App\Http\Controllers\Api\Clinic\PaymentController as ClinicPaymentController;
 use App\Http\Controllers\Api\Clinic\ReminderLogController as ClinicReminderLogController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\Api\Portal\FamilyController as PortalFamilyController;
 use App\Http\Controllers\Api\Portal\LinkController as PortalLinkController;
 use App\Http\Controllers\Api\Portal\OtpController as PortalOtpController;
 use App\Http\Controllers\Api\Portal\PrescriptionController as PortalPrescriptionController;
+use App\Http\Controllers\Api\Portal\WaitlistController as PortalWaitlistController;
 use App\Http\Controllers\Api\PublicPrescriptionPdfController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\SuperAdmin\AppointmentController as SuperAdminAppointmentController;
@@ -52,6 +54,7 @@ use App\Http\Controllers\Api\SuperAdmin\InvoiceController as SuperAdminInvoiceCo
 use App\Http\Controllers\Api\SuperAdmin\PatientController as SuperAdminPatientController;
 use App\Http\Controllers\Api\SuperAdmin\PatientFamilyController as SuperAdminPatientFamilyController;
 use App\Http\Controllers\Api\SuperAdmin\PatientPortalLinkController as SuperAdminPatientPortalLinkController;
+use App\Http\Controllers\Api\SuperAdmin\WaitlistController as SuperAdminWaitlistController;
 use App\Http\Controllers\Api\SuperAdmin\PatientProfileController as SuperAdminPatientProfileController;
 use App\Http\Controllers\Api\SuperAdmin\PaymentController as SuperAdminPaymentController;
 use App\Http\Controllers\Api\SuperAdmin\PlanController as SuperAdminPlanController;
@@ -135,6 +138,13 @@ Route::prefix('portal')->group(function () {
             Route::get('doctors', [PortalDoctorController::class, 'index']);
             Route::get('doctors/{id}/slots', [PortalDoctorController::class, 'slots']);
 
+            Route::get('waitlist', [PortalWaitlistController::class, 'index']);
+            Route::post('waitlist', [PortalWaitlistController::class, 'store']);
+            Route::get('waitlist/{id}', [PortalWaitlistController::class, 'show']);
+            Route::delete('waitlist/{id}', [PortalWaitlistController::class, 'destroy']);
+            Route::post('waitlist/{id}/book', [PortalWaitlistController::class, 'book']);
+            Route::post('waitlist/{id}/decline', [PortalWaitlistController::class, 'decline']);
+
             Route::get('prescriptions', [PortalPrescriptionController::class, 'index']);
             Route::get('prescriptions/{id}', [PortalPrescriptionController::class, 'show']);
             Route::get('prescriptions/{id}/pdf', [PortalPrescriptionController::class, 'pdf']);
@@ -192,6 +202,11 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::post('appointments/{id}/lifecycle', [SuperAdminAppointmentController::class, 'lifecycle']);
     Route::post('appointments/{id}/reschedule', [SuperAdminAppointmentController::class, 'reschedule']);
     Route::get('appointments/{id}/detail', [SuperAdminAppointmentController::class, 'detail']);
+
+    Route::get('waitlist', [SuperAdminWaitlistController::class, 'index']);
+    Route::post('waitlist', [SuperAdminWaitlistController::class, 'store']);
+    Route::delete('waitlist/{id}', [SuperAdminWaitlistController::class, 'destroy']);
+
     Route::get('appointments/{id}/prescription', [SuperAdminAppointmentController::class, 'prescription']);
     Route::get('appointments/{id}/report.pdf', [SuperAdminAppointmentController::class, 'reportPdf']);
     Route::get('appointments/{id}/prescription.pdf', [SuperAdminAppointmentController::class, 'prescriptionPdf']);
@@ -282,6 +297,11 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::post('reviews/{id}/reply', [ClinicReviewController::class, 'saveReply'])->middleware('perm:reviews.edit');
     Route::post('appointments/{id}/reschedule', [ClinicAppointmentController::class, 'reschedule'])->middleware('perm:appointments.edit');
     Route::get('appointments/{id}/detail', [ClinicAppointmentController::class, 'detail'])->middleware('perm:appointments.view');
+
+    Route::get('waitlist', [ClinicWaitlistController::class, 'index'])->middleware('perm:appointments.view');
+    Route::post('waitlist', [ClinicWaitlistController::class, 'store'])->middleware('perm:appointments.create');
+    Route::delete('waitlist/{id}', [ClinicWaitlistController::class, 'destroy'])->middleware('perm:appointments.create');
+
     Route::get('appointments/{id}/prescription', [ClinicAppointmentController::class, 'prescription'])->middleware('perm:appointments.view');
     Route::get('appointments/{id}/report.pdf', [ClinicAppointmentController::class, 'reportPdf'])->middleware('perm:appointments.view');
     Route::get('appointments/{id}/prescription.pdf', [ClinicAppointmentController::class, 'prescriptionPdf'])->middleware('perm:appointments.view');

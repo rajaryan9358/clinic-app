@@ -1168,6 +1168,24 @@ function SettingsTab({ clinicId }) {
                     </Field>
                 </Card>
 
+                <Card className="p-5">
+                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Waitlist</h3>
+                    <div className="space-y-4">
+                        <Toggle checked={form.waitlist_enabled ?? true} onChange={() => setForm((p) => ({ ...p, waitlist_enabled: !(p.waitlist_enabled ?? true) }))} label="Waitlist enabled" />
+                        <Field label="Waitlist hold (minutes)" hint="How long a freed slot is held for the next patient in line (5–240).">
+                            <input
+                                type="number"
+                                min={5}
+                                max={240}
+                                value={form.waitlist_hold_minutes ?? ''}
+                                onChange={(e) => setForm((p) => ({ ...p, waitlist_hold_minutes: e.target.value }))}
+                                placeholder="30"
+                                className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </Field>
+                    </div>
+                </Card>
+
                 <div className="flex justify-end">
                     <button
                         type="submit"

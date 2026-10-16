@@ -7,11 +7,14 @@ import { Card, ErrorText, Spinner } from '../components/ui';
 /**
  * Consumes a staff-issued magic-link token (`/portal/login/:token`) via
  * `POST auth/link`, then signs the browser in exactly like OTP verify.
+ * A link may carry a `redirect_path` (waitlist offers: the offer page,
+ * plus which profile to act as); session.resolveRedirect vets it and
+ * selects the profile, otherwise we land on `/`.
  */
 export default function MagicLink() {
     const { token } = useParams();
     const navigate = useNavigate();
-    const { completeLogin } = useSession();
+    const { completeLogin, resolveRedirect } = useSession();
     const [status, setStatus] = useState('loading');
     const [error, setError] = useState('');
     const attempted = useRef(false);
@@ -25,13 +28,17 @@ export default function MagicLink() {
         attempted.current = true;
 
         api.post('/auth/link', { token })
-            .then(({ data }) => completeLogin(data.data))
-            .then(() => navigate('/', { replace: true }))
+            .then(({ data }) =>
+                completeLogin(data.data).then((meData) => {
+                    const target = data.data?.redirect_path ? resolveRedirect(meData, data.data.redirect_path) : '/';
+                    navigate(target, { replace: true });
+                }),
+            )
             .catch((err) => {
                 setStatus('error');
                 setError(err?.response?.data?.message || 'This link has expired.');
             });
-    }, [token, navigate, completeLogin]);
+    }, [token, navigate, completeLogin, resolveRedirect]);
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">

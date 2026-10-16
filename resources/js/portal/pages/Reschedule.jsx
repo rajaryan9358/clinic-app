@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import DateStrip from '../components/DateStrip';
+import JoinWaitlist from '../components/JoinWaitlist';
 import SlotGrid from '../components/SlotGrid';
 import useDoctorSlots from '../hooks/useDoctorSlots';
 import { addDays, isoDate } from '../lib/format';
-import { Button, ErrorText, Spinner } from '../components/ui';
+import { Button, Card, ErrorText, Spinner } from '../components/ui';
 
 const STRIP_DAYS = 14;
 
@@ -16,7 +17,9 @@ const STRIP_DAYS = 14;
  * clinic's real `max_advance_booking_days` window is enforced by the slots
  * endpoint (a 422 "outside the booking window" for a date beyond it), so a
  * shorter window just means the later chips come back empty/blocked rather
- * than being hidden ahead of time.
+ * than being hidden ahead of time. Taken times can be waitlisted from the
+ * grid, and a 409 (the chosen time was just taken) offers "Join waitlist
+ * for this time" for that slot.
  */
 export default function Reschedule() {
     const { id } = useParams();
@@ -31,10 +34,24 @@ export default function Reschedule() {
         return Array.from({ length: STRIP_DAYS }, (_, i) => isoDate(addDays(today, i)));
     }, []);
 
-    const { date, slots, loading: slotsLoading, error: slotsError, selectedSlot, setSelectedSlot, load: loadSlots } = useDoctorSlots();
+    const {
+        date,
+        slots,
+        taken,
+        loading: slotsLoading,
+        error: slotsError,
+        selectedSlot,
+        setSelectedSlot,
+        load: loadSlots,
+        joinWaitlist,
+    } = useDoctorSlots();
 
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    // The slot the last attempt lost with a 409, for the "Join waitlist for
+    // this time" fallback; only shown while that date is still selected.
+    const [conflict, setConflict] = useState(null);
+    const [conflictJoinOpen, setConflictJoinOpen] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -61,9 +78,10 @@ export default function Reschedule() {
     }, [appointment?.doctor?.id]);
 
     async function submit() {
-        if (!date || !selectedSlot) return;
+        if (submitting || !date || !selectedSlot) return;
         setSubmitting(true);
         setSubmitError('');
+        setConflict(null);
         try {
             await api.post(`/appointments/${id}/reschedule`, {
                 appointment_date: date,
@@ -73,6 +91,8 @@ export default function Reschedule() {
         } catch (err) {
             setSubmitError(err?.response?.data?.message || 'Could not reschedule this visit.');
             if (err?.response?.status === 409) {
+                setConflict({ date, slot: selectedSlot });
+                setConflictJoinOpen(false);
                 loadSlots(appointment.doctor.id, date);
             }
         } finally {
@@ -110,17 +130,49 @@ export default function Reschedule() {
                 </p>
             </div>
 
-            <DateStrip dates={dates} selectedDate={date} onSelect={(d) => loadSlots(appointment.doctor.id, d)} />
+            <DateStrip
+                dates={dates}
+                selectedDate={date}
+                onSelect={(d) => {
+                    loadSlots(appointment.doctor.id, d);
+                    setConflict(null);
+                    setSubmitError('');
+                }}
+            />
 
             <SlotGrid
+                key={date || ''}
                 loading={slotsLoading}
                 error={slotsError}
                 slots={slots}
+                taken={taken}
+                date={date}
                 selectedSlot={selectedSlot}
-                onSelect={setSelectedSlot}
+                onSelect={(s) => {
+                    setSelectedSlot(s);
+                    setConflict(null);
+                    setSubmitError('');
+                }}
+                onJoin={joinWaitlist}
             />
 
             {submitError ? <ErrorText>{submitError}</ErrorText> : null}
+            {conflict && conflict.date === date && !selectedSlot && (
+                <Card>
+                    {conflictJoinOpen ? (
+                        <JoinWaitlist
+                            date={conflict.date}
+                            slot={conflict.slot}
+                            onJoin={joinWaitlist}
+                            onClose={() => setConflict(null)}
+                        />
+                    ) : (
+                        <Button variant="secondary" onClick={() => setConflictJoinOpen(true)}>
+                            Join waitlist for this time
+                        </Button>
+                    )}
+                </Card>
+            )}
             <Button onClick={submit} disabled={!selectedSlot} loading={submitting}>
                 Confirm new time
             </Button>

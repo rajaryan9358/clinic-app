@@ -15,6 +15,13 @@ const STATUS_CONFIG = {
     no_show:         { dot: 'bg-orange-500',  text: 'text-orange-700', bg: 'bg-orange-50',   border: 'border-orange-200' },
     rescheduled:     { dot: 'bg-indigo-400',  text: 'text-indigo-700', bg: 'bg-indigo-50',   border: 'border-indigo-200' },
 
+    // ── Waitlist ──────────────────────────────────────────────────────────────
+    waiting:         { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
+    offered:         { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
+    booked:          { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
+    declined:        { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
+    removed:         { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
+
     // ── Invoice / Payment ─────────────────────────────────────────────────────
     draft:           { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
     final:           { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },

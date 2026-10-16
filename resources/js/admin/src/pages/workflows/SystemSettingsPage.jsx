@@ -45,6 +45,11 @@ const TEMPLATE_INFO = {
         category: 'Utility',
         params: 'Body: 1 patient name, 2 clinic name. URL button: {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}.',
     },
+    waitlist_slot_open: {
+        label: 'Waitlist Slot Open',
+        category: 'Utility',
+        params: 'body: 1 patient, 2 clinic, 3 doctor, 4 date, 5 time, 6 hold minutes · URL button {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}',
+    },
 };
 
 function Card({ children, className = '' }) {

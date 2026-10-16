@@ -13,6 +13,7 @@ import CreateStaffWizardPage from './pages/workflows/CreateStaffWizardPage';
 import OnboardClinicWizardPage from './pages/workflows/OnboardClinicWizardPage';
 import SetupDoctorWizardPage from './pages/workflows/SetupDoctorWizardPage';
 import AppointmentsFlowPage from './pages/workflows/AppointmentsFlowPage';
+import WaitlistPage from './pages/workflows/WaitlistPage';
 import PrescriptionPage from './pages/workflows/PrescriptionPage';
 import PatientProfilePage from './pages/workflows/PatientProfilePage';
 import DoctorSetupFlowPage from './pages/workflows/DoctorSetupFlowPage';
@@ -132,6 +133,7 @@ function AuthenticatedShell() {
                 <Route path="/workflows/setup-doctor" element={<RequirePerm perm="doctors.create"><SetupDoctorWizardPage /></RequirePerm>} />
                 <Route path="/workflows/appointments" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentsFlowPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><ModuleFormPage forcedModuleKey="appointments" /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/waitlist" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><WaitlistPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/:id/prescription" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><PrescriptionPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/communication/delivery-issues" element={<BlockSuperAdmin><CommunicationDeliveryIssuesPage /></BlockSuperAdmin>} />
                 <Route path="/workflows/my-profile" element={<MyDoctorProfilePage />} />

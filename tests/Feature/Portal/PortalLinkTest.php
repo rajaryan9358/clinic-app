@@ -15,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -281,5 +282,71 @@ class PortalLinkTest extends TestCase
         $response = $this->postJson('/api/portal/auth/link', ['token' => $token]);
         $response->assertStatus(422);
         $this->assertSame('This link has expired.', $response->json('message'));
+    }
+
+    public function test_exchange_returns_null_redirect_path_when_absent(): void
+    {
+        $clinic = $this->makeClinic();
+        $patient = $this->makePatient($clinic, ['phone' => '9876543210']);
+        $token = $this->issueLink($patient);
+
+        $response = $this->postJson('/api/portal/auth/link', ['token' => $token]);
+
+        $response->assertOk();
+        $this->assertNull($response->json('data.redirect_path'));
+    }
+
+    public function test_exchange_returns_a_safe_redirect_path(): void
+    {
+        $clinic = $this->makeClinic();
+        $patient = $this->makePatient($clinic, ['phone' => '9876543210']);
+
+        [$token, $link] = $this->issueForRedirect($patient, '/waitlist/5?profile=9');
+
+        $response = $this->postJson('/api/portal/auth/link', ['token' => $token]);
+
+        $response->assertOk();
+        $this->assertSame('/waitlist/5?profile=9', $response->json('data.redirect_path'));
+        $this->assertNotNull($link->fresh()->consumed_at);
+    }
+
+    #[DataProvider('unsafeRedirectPaths')]
+    public function test_link_exchange_only_returns_safe_redirect_paths(string $unsafePath): void
+    {
+        $clinic = $this->makeClinic();
+        $patient = $this->makePatient($clinic, ['phone' => '9876543210']);
+
+        [$token] = $this->issueForRedirect($patient, $unsafePath);
+
+        $response = $this->postJson('/api/portal/auth/link', ['token' => $token]);
+
+        $response->assertOk();
+        $this->assertNull($response->json('data.redirect_path'));
+    }
+
+    public static function unsafeRedirectPaths(): array
+    {
+        return [
+            'protocol-relative' => ['//evil.com'],
+            'absolute url' => ['https://x'],
+            'javascript scheme' => ['javascript:x'],
+            'trailing newline' => ["/waitlist/1\n"],
+        ];
+    }
+
+    /**
+     * Issues a login link the way WaitlistService will: directly via
+     * PortalLinkService::issueForRedirect(), bypassing the WhatsApp send,
+     * with whatever redirect path the test wants to exercise (including
+     * unsafe ones the exchange endpoint must still filter out).
+     *
+     * @return array{0: string, 1: \App\Models\PatientLoginLink}
+     */
+    private function issueForRedirect(Patient $patient, string $redirectPath): array
+    {
+        $service = $this->app->make(\App\Services\Portal\PortalLinkService::class);
+        $result = $service->issueForRedirect($patient, Carbon::now()->addMinutes(30), $redirectPath);
+
+        return [$result['token'], $result['link']];
     }
 }

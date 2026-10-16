@@ -2,23 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import DateStrip from '../components/DateStrip';
+import JoinWaitlist from '../components/JoinWaitlist';
 import SlotGrid from '../components/SlotGrid';
 import useDoctorSlots from '../hooks/useDoctorSlots';
+import { MODE_LABELS, VISIT_TYPES, modeOptionsFor } from '../lib/booking';
 import { addDays, isoDate } from '../lib/format';
 import { Button, Card, ErrorText, Spinner } from '../components/ui';
 
 const STRIP_DAYS = 14;
-
-const VISIT_TYPES = [
-    { value: 'new', label: 'New visit' },
-    { value: 'followup', label: 'Follow-up' },
-];
-
-const MODE_LABELS = {
-    in_person: 'In person',
-    video: 'Video call',
-    phone: 'Phone call',
-};
 
 /**
  * `/book`: doctor -> date -> slot (DateStrip/SlotGrid/useDoctorSlots —
@@ -26,7 +17,9 @@ const MODE_LABELS = {
  * Honours `?doctor_id=&visit_type=` presets (from "Book follow-up" links
  * on VisitDetail/PrescriptionDetail) by preselecting them; the rest of the
  * flow still has to be completed by the patient since neither a date nor a
- * slot can be assumed.
+ * slot can be assumed. Taken times can be waitlisted from the grid, and a
+ * 409 (the chosen time was just taken) offers "Join waitlist for this
+ * time" for that slot.
  */
 export default function Book() {
     const navigate = useNavigate();
@@ -48,12 +41,14 @@ export default function Book() {
     const {
         date,
         slots,
+        taken,
         loading: slotsLoading,
         error: slotsError,
         selectedSlot: slot,
         setSelectedSlot: setSlot,
         load: loadSlots,
         reset: resetSlots,
+        joinWaitlist,
     } = useDoctorSlots();
 
     const [visitType, setVisitType] = useState(presetVisitType === 'followup' ? 'followup' : 'new');
@@ -62,6 +57,11 @@ export default function Book() {
 
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    // The slot a booking attempt just lost with a 409, for the "Join
+    // waitlist for this time" fallback. Only shown while that doctor/date
+    // is still the one on screen.
+    const [conflict, setConflict] = useState(null);
+    const [conflictJoinOpen, setConflictJoinOpen] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -81,7 +81,7 @@ export default function Book() {
     }, []);
 
     const doctor = doctors.find((d) => d.id === doctorId) || null;
-    const modeOptions = doctor?.consultation_modes?.length ? doctor.consultation_modes : ['in_person'];
+    const modeOptions = modeOptionsFor(doctor);
 
     useEffect(() => {
         if (doctor && !modeOptions.includes(mode)) {
@@ -97,12 +97,26 @@ export default function Book() {
         // flight for it) rather than letting stale slots survive the
         // doctor switch.
         resetSlots();
+        setConflict(null);
+    }
+
+    function selectDate(d) {
+        loadSlots(doctorId, d);
+        setConflict(null);
+        setSubmitError('');
+    }
+
+    function selectSlot(s) {
+        setSlot(s);
+        setConflict(null);
+        setSubmitError('');
     }
 
     async function submit() {
-        if (!doctorId || !date || !slot) return;
+        if (submitting || !doctorId || !date || !slot) return;
         setSubmitting(true);
         setSubmitError('');
+        setConflict(null);
         try {
             const { data } = await api.post('/appointments', {
                 doctor_id: doctorId,
@@ -116,6 +130,8 @@ export default function Book() {
         } catch (err) {
             setSubmitError(err?.response?.data?.message || 'Could not book this visit.');
             if (err?.response?.status === 409) {
+                setConflict({ doctorId, date, slot });
+                setConflictJoinOpen(false);
                 loadSlots(doctorId, date);
             }
         } finally {
@@ -155,15 +171,43 @@ export default function Book() {
             {doctorId && (
                 <div>
                     <h2 className="mb-2 text-sm font-medium text-slate-500">Date</h2>
-                    <DateStrip dates={dates} selectedDate={date} onSelect={(d) => loadSlots(doctorId, d)} />
+                    <DateStrip dates={dates} selectedDate={date} onSelect={selectDate} />
                 </div>
             )}
 
             {doctorId && date && (
                 <div>
                     <h2 className="mb-2 text-sm font-medium text-slate-500">Time</h2>
-                    <SlotGrid loading={slotsLoading} error={slotsError} slots={slots} selectedSlot={slot} onSelect={setSlot} />
+                    <SlotGrid
+                        key={`${doctorId}:${date}`}
+                        loading={slotsLoading}
+                        error={slotsError}
+                        slots={slots}
+                        taken={taken}
+                        date={date}
+                        selectedSlot={slot}
+                        onSelect={selectSlot}
+                        onJoin={joinWaitlist}
+                    />
                 </div>
+            )}
+
+            {conflict && conflict.doctorId === doctorId && conflict.date === date && !slot && (
+                <Card className="space-y-2">
+                    <ErrorText>{submitError}</ErrorText>
+                    {conflictJoinOpen ? (
+                        <JoinWaitlist
+                            date={conflict.date}
+                            slot={conflict.slot}
+                            onJoin={joinWaitlist}
+                            onClose={() => setConflict(null)}
+                        />
+                    ) : (
+                        <Button variant="secondary" onClick={() => setConflictJoinOpen(true)}>
+                            Join waitlist for this time
+                        </Button>
+                    )}
+                </Card>
             )}
 
             {doctorId && date && slot && (

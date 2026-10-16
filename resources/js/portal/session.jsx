@@ -71,6 +71,40 @@ export function SessionProvider({ children }) {
         [setProfile, refresh],
     );
 
+    // Where to go after a login whose link carried a `redirect_path` (a
+    // waitlist offer: `/waitlist/{id}?profile={patientId}`). Only a
+    // same-origin path — starting with a single `/`, no backslashes — is
+    // honoured; anything else falls back to `/`. A `profile` query param
+    // selects that acting profile, but only if it's one of this account's
+    // `me.profiles`; it's stripped from the returned path either way.
+    const resolveRedirect = useCallback(
+        (meData, redirectPath) => {
+            if (typeof redirectPath !== 'string' || !/^\/(?![/\\])/.test(redirectPath) || redirectPath.includes('\\')) {
+                return '/';
+            }
+            let url;
+            try {
+                url = new URL(redirectPath, window.location.origin);
+            } catch {
+                return '/';
+            }
+            if (url.origin !== window.location.origin) return '/';
+
+            const profileParam = url.searchParams.get('profile');
+            url.searchParams.delete('profile');
+            if (profileParam !== null) {
+                const profileId = Number(profileParam);
+                if (Number.isInteger(profileId) && meData?.profiles?.some((p) => p.id === profileId)) {
+                    setProfile(profileId);
+                }
+            }
+
+            const path = `${url.pathname}${url.search}${url.hash}`;
+            return path.startsWith('/') && !path.startsWith('//') ? path : '/';
+        },
+        [setProfile],
+    );
+
     const logout = useCallback(async () => {
         try {
             await api.post('/auth/logout');
@@ -90,8 +124,8 @@ export function SessionProvider({ children }) {
     );
 
     const value = useMemo(
-        () => ({ me, loading, refresh, activeProfileId, activeProfile, setProfile, completeLogin, logout }),
-        [me, loading, refresh, activeProfileId, activeProfile, setProfile, completeLogin, logout],
+        () => ({ me, loading, refresh, activeProfileId, activeProfile, setProfile, completeLogin, resolveRedirect, logout }),
+        [me, loading, refresh, activeProfileId, activeProfile, setProfile, completeLogin, resolveRedirect, logout],
     );
 
     return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

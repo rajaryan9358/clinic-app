@@ -136,4 +136,56 @@ class ClinicSettingsTest extends TestCase
             'walkin_enabled' => false,
         ])->assertSuccessful();
     }
+
+    // Waitlist (E3): no row yet defaults to enabled/30, and hold minutes
+    // must be 5-240.
+
+    public function test_no_settings_row_defaults_to_waitlist_enabled_and_thirty_minutes(): void
+    {
+        $clinic = $this->clinic('i');
+        // Insert only clinic_id so the migration's column defaults (not
+        // any model-side default) are what populate the other columns.
+        $setting = ClinicSetting::create(['clinic_id' => $clinic->id])->fresh();
+
+        $this->assertTrue($setting->waitlist_enabled);
+        $this->assertSame(30, $setting->waitlist_hold_minutes);
+    }
+
+    public function test_hold_minutes_below_five_is_rejected(): void
+    {
+        $clinic = $this->clinic('j');
+        $setting = ClinicSetting::create(['clinic_id' => $clinic->id]);
+        Sanctum::actingAs($this->user($clinic, 'clinic_admin'));
+
+        $this->putJson("/api/clinic/settings/clinic/{$setting->id}", [
+            'waitlist_hold_minutes' => 4,
+        ])->assertStatus(422);
+    }
+
+    public function test_hold_minutes_above_two_hundred_forty_is_rejected(): void
+    {
+        $clinic = $this->clinic('k');
+        $setting = ClinicSetting::create(['clinic_id' => $clinic->id]);
+        Sanctum::actingAs($this->user($clinic, 'clinic_admin'));
+
+        $this->putJson("/api/clinic/settings/clinic/{$setting->id}", [
+            'waitlist_hold_minutes' => 241,
+        ])->assertStatus(422);
+    }
+
+    public function test_valid_waitlist_settings_are_saved(): void
+    {
+        $clinic = $this->clinic('l');
+        $setting = ClinicSetting::create(['clinic_id' => $clinic->id]);
+        Sanctum::actingAs($this->user($clinic, 'clinic_admin'));
+
+        $this->putJson("/api/clinic/settings/clinic/{$setting->id}", [
+            'waitlist_enabled' => false,
+            'waitlist_hold_minutes' => 45,
+        ])->assertOk();
+
+        $setting->refresh();
+        $this->assertFalse($setting->waitlist_enabled);
+        $this->assertSame(45, $setting->waitlist_hold_minutes);
+    }
 }
