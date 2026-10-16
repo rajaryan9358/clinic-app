@@ -42,7 +42,10 @@ final class InvoiceService
                 'notes' => $data['notes'] ?? null,
                 'status' => 'draft',
             ] + $totals);
-            $invoice->forceFill(['created_by_user_id' => $userId])->save();
+            $invoice->forceFill([
+                'created_by_user_id' => $userId,
+                'tax_is_manual' => ($data['tax_amount'] ?? null) !== null,
+            ])->save();
 
             $this->writeItems($invoice, $items);
 
@@ -70,21 +73,16 @@ final class InvoiceService
             $clinicId = (int) $fresh->clinic_id;
             $discount = (float) ($data['discount_amount'] ?? $fresh->discount_amount);
 
-            // There is no "tax was explicit" column. When the caller omits tax, keep the
-            // stored value if it differs from what the clinic percent would have produced
-            // for the stored subtotal/discount (i.e. someone set it by hand); otherwise
-            // it was automatic and is recomputed against the new items/discount.
-            $tax = $data['tax_amount'] ?? null;
-            if ($tax === null) {
-                $automatic = $this->automaticTax($clinicId, (float) $fresh->subtotal, (float) $fresh->discount_amount);
-                if (abs((float) $fresh->tax_amount - $automatic) >= 0.005) {
-                    $tax = (float) $fresh->tax_amount;
-                }
-            }
+            // tax_is_manual records that a caller set the tax by hand: honour the stored
+            // figure when this call omits tax_amount, otherwise recompute from the clinic percent.
+            $explicitTax = array_key_exists('tax_amount', $data) && $data['tax_amount'] !== null;
+            $manual = $explicitTax || (bool) $fresh->tax_is_manual;
+            $tax = $explicitTax ? $data['tax_amount'] : ($manual ? (float) $fresh->tax_amount : null);
 
             $totals = $this->totals($clinicId, $items, $discount, $tax);
 
-            $fresh->fill(array_intersect_key($data, array_flip(['appointment_id', 'invoice_date', 'notes'])) + $totals)->save();
+            $fresh->fill(array_intersect_key($data, array_flip(['appointment_id', 'invoice_date', 'notes'])) + $totals);
+            $fresh->forceFill(['tax_is_manual' => $manual])->save();
 
             if (array_key_exists('items', $data)) {
                 $fresh->items()->delete();

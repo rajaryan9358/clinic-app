@@ -48,6 +48,7 @@ return new class extends Migration
             $table->decimal('subtotal', 12, 2);
             $table->decimal('discount_amount', 12, 2)->default(0);
             $table->decimal('tax_amount', 12, 2)->default(0);
+            $table->boolean('tax_is_manual')->default(false);
             $table->decimal('total_amount', 12, 2);
             $table->enum('status', ['draft', 'issued', 'paid', 'cancelled'])->default('draft');
             $table->text('notes')->nullable();

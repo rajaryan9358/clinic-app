@@ -28,6 +28,7 @@ class Invoice extends Model
             'total_amount' => 'decimal:2',
             'issued_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'tax_is_manual' => 'boolean',
         ];
     }
 

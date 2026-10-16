@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Models\ClinicSetting;
 use App\Models\Invoice;
 use App\Models\InvoiceCounter;
 use App\Models\User;
@@ -328,5 +329,49 @@ class InvoiceServiceTest extends TestCase
         ));
 
         $this->assertSame('INV/2026-27/00001', $this->invoiceService()->issue($invoice)->invoice_number);
+    }
+
+    public function test_a_hand_set_tax_survives_a_clinic_rate_change_and_item_edit(): void
+    {
+        $clinic = $this->makeBillingClinic(['invoice_tax_percent' => 10]);
+        $invoice = $this->invoiceService()->draft($clinic->id, $this->draftData($this->makeBillingPatient($clinic), ['tax_amount' => 25]));
+        $this->assertTrue((bool) $invoice->tax_is_manual);
+
+        ClinicSetting::where('clinic_id', $clinic->id)->update(['invoice_tax_percent' => 18]);
+        $updated = $this->invoiceService()->update($invoice, [
+            'items' => [['description' => 'Only', 'quantity' => 1, 'unit_amount' => 200]],
+        ]);
+
+        $this->assertSame('25.00', $updated->tax_amount);
+        $this->assertSame('225.00', $updated->total_amount);
+        $this->assertTrue((bool) $updated->tax_is_manual);
+    }
+
+    public function test_an_automatic_tax_follows_a_clinic_rate_change_and_item_edit(): void
+    {
+        $clinic = $this->makeBillingClinic(['invoice_tax_percent' => 10]);
+        $invoice = $this->invoiceService()->draft($clinic->id, $this->draftData($this->makeBillingPatient($clinic)));
+        $this->assertFalse((bool) $invoice->tax_is_manual);
+
+        ClinicSetting::where('clinic_id', $clinic->id)->update(['invoice_tax_percent' => 18]);
+        $updated = $this->invoiceService()->update($invoice, [
+            'items' => [['description' => 'Only', 'quantity' => 1, 'unit_amount' => 200]],
+        ]);
+
+        $this->assertSame('36.00', $updated->tax_amount);
+        $this->assertSame('236.00', $updated->total_amount);
+        $this->assertFalse((bool) $updated->tax_is_manual);
+    }
+
+    public function test_a_new_explicit_tax_on_update_overrides_and_marks_it_manual(): void
+    {
+        $clinic = $this->makeBillingClinic(['invoice_tax_percent' => 10]);
+        $invoice = $this->invoiceService()->draft($clinic->id, $this->draftData($this->makeBillingPatient($clinic)));
+
+        $updated = $this->invoiceService()->update($invoice, ['tax_amount' => 40]);
+
+        $this->assertSame('40.00', $updated->tax_amount);
+        $this->assertSame('841.00', $updated->total_amount);
+        $this->assertTrue((bool) $updated->tax_is_manual);
     }
 }
