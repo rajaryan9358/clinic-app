@@ -70,9 +70,18 @@ final class InvoicePresenter
     public static function portalDetail(Invoice $invoice): array
     {
         $detail = self::detail($invoice);
-        $detail['payments'] = array_values(array_filter(
-            $detail['payments'],
-            fn (array $p) => ! $p['superseded'] && $p['status'] !== 'pending',
+
+        // Staff-authored free text (invoice notes, cancellation and refund reasons, payment notes)
+        // is internal and must never reach the patient.
+        unset($detail['notes'], $detail['cancelled_reason'], $detail['cancelled_at']);
+
+        $detail['payments'] = array_values(array_map(
+            function (array $p) {
+                unset($p['notes'], $p['refund_reason']);
+
+                return $p;
+            },
+            array_filter($detail['payments'], fn (array $p) => ! $p['superseded'] && $p['status'] !== 'pending'),
         ));
 
         return $detail;

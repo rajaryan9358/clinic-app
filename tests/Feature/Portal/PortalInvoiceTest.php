@@ -282,6 +282,24 @@ class PortalInvoiceTest extends TestCase
         $this->portalGet("/api/portal/invoices/{$theirs->id}", $token, $child->id)->assertOk();
     }
 
+    public function test_staff_authored_text_never_reaches_the_portal(): void
+    {
+        $patient = $this->consented($this->makePatient($this->clinic));
+        $token = $this->portalToken($patient);
+        $invoice = $this->issued($patient);
+        $invoice->forceFill(['notes' => 'STAFFNOTE-invoice-dispute'])->save();
+        $this->service()->recordPayment($invoice, ['amount' => 100, 'payment_method' => 'cash', 'reference_number' => 'REF-123', 'notes' => 'STAFFNOTE-payment-bounced']);
+        $refunded = $this->service()->recordPayment($invoice, ['amount' => 50, 'payment_method' => 'cash']);
+        $this->service()->markRefunded($refunded, 'STAFFNOTE-refund-reason');
+
+        foreach (['/api/portal/invoices', "/api/portal/invoices/{$invoice->id}"] as $uri) {
+            $body = $this->portalGet($uri, $token)->assertOk()->getContent();
+            $this->assertStringNotContainsString('STAFFNOTE', $body);
+        }
+
+        $this->assertStringContainsString('REF-123', $this->portalGet("/api/portal/invoices/{$invoice->id}", $token)->getContent());
+    }
+
     /** @return array<string, string> */
     private function confirmBody(string $orderId, string $paymentId): array
     {
