@@ -202,6 +202,63 @@ class PortalAppointmentsTest extends TestCase
         $this->portalGet("/api/portal/appointments/{$othersAppointment->id}", $token, $patient->id)->assertNotFound();
     }
 
+    public function test_list_filters_in_sql_rather_than_loading_every_appointment(): void
+    {
+        $doctor = $this->makeDoctorWithSchedule($this->clinic);
+        $patient = $this->consentedPatient($this->clinic);
+
+        foreach (range(1, 3) as $i) {
+            $this->directAppointment($this->clinic, $doctor, $patient, [
+                'appointment_date' => $this->now->copy()->addDays($i)->toDateString(),
+                'start_time' => '09:00:00',
+            ]);
+            $this->directAppointment($this->clinic, $doctor, $patient, [
+                'appointment_date' => $this->now->copy()->subDays($i)->toDateString(),
+                'start_time' => '09:00:00',
+            ]);
+        }
+
+        $selects = [];
+        \Illuminate\Support\Facades\DB::listen(function ($query) use (&$selects) {
+            if (str_contains($query->sql, 'from "appointments"') || str_contains($query->sql, 'from `appointments`')) {
+                $selects[] = $query->sql;
+            }
+        });
+
+        $this->portalGet('/api/portal/appointments?filter=past', $this->portalToken($patient), $patient->id)->assertOk();
+
+        $listQuery = collect($selects)->first(fn (string $sql) => str_contains($sql, 'patient_id'));
+
+        $this->assertNotNull($listQuery, 'expected a query selecting the patient\'s appointments');
+        $this->assertStringContainsString(
+            'appointment_date',
+            $listQuery,
+            'the past/upcoming split must happen in SQL, not by loading every appointment into PHP'
+        );
+    }
+
+    public function test_an_appointment_starting_exactly_now_counts_as_upcoming(): void
+    {
+        $doctor = $this->makeDoctorWithSchedule($this->clinic);
+        $patient = $this->consentedPatient($this->clinic);
+
+        $startingNow = $this->directAppointment($this->clinic, $doctor, $patient, [
+            'appointment_date' => $this->now->copy()->toDateString(),
+            'start_time' => $this->now->copy()->format('H:i:s'),
+        ]);
+
+        $token = $this->portalToken($patient);
+
+        $upcoming = $this->portalGet('/api/portal/appointments?filter=upcoming', $token, $patient->id);
+        $upcoming->assertOk();
+        $this->assertSame([$startingNow->id], array_column($upcoming->json('data'), 'id'));
+
+        app('auth')->forgetGuards();
+        $past = $this->portalGet('/api/portal/appointments?filter=past', $token, $patient->id);
+        $past->assertOk();
+        $this->assertSame([], array_column($past->json('data'), 'id'));
+    }
+
     public function test_item_exposes_independent_cancel_and_reschedule_blocked_reasons(): void
     {
         // allow_cancel disabled, allow_reschedule left enabled: cancel and

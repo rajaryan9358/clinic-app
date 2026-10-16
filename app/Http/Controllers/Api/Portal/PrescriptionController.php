@@ -28,7 +28,7 @@ class PrescriptionController extends Controller
         /** @var Patient $patient */
         $patient = $request->attributes->get('portal_patient');
 
-        $appointmentIds = Appointment::where('patient_id', $patient->id)->pluck('id');
+        $appointmentIds = Appointment::where('patient_id', $patient->id)->select('id');
 
         $latestFinalIds = PrescriptionResolver::finalQuery()
             ->whereIn('appointment_id', $appointmentIds)
@@ -57,7 +57,7 @@ class PrescriptionController extends Controller
         /** @var Patient $patient */
         $patient = $request->attributes->get('portal_patient');
 
-        $appointmentIds = Appointment::where('patient_id', $patient->id)->pluck('id');
+        $appointmentIds = Appointment::where('patient_id', $patient->id)->select('id');
 
         $rx = PrescriptionResolver::finalQuery()
             ->whereIn('appointment_id', $appointmentIds)
@@ -91,7 +91,7 @@ class PrescriptionController extends Controller
         /** @var Patient $patient */
         $patient = $request->attributes->get('portal_patient');
 
-        $appointmentIds = Appointment::where('patient_id', $patient->id)->pluck('id');
+        $appointmentIds = Appointment::where('patient_id', $patient->id)->select('id');
 
         $rx = PrescriptionResolver::finalQuery()
             ->whereIn('appointment_id', $appointmentIds)

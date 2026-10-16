@@ -125,6 +125,30 @@ class PortalPrescriptionsTest extends TestCase
         $this->assertSame(['Amoxicillin'], $byAppointment[$apptB->id]['medicines']);
     }
 
+    public function test_list_does_not_hydrate_every_appointment_id_into_php(): void
+    {
+        $patient = $this->consentedPatient($this->clinic);
+
+        foreach (range(1, 5) as $i) {
+            $appt = $this->appointment($patient, ['appointment_date' => Carbon::now()->subDays($i)->toDateString()]);
+            $this->rx($appt, ['status' => 'final', 'finalized_at' => now()]);
+        }
+
+        $queries = [];
+        \Illuminate\Support\Facades\DB::listen(function ($query) use (&$queries) {
+            $queries[] = $query->sql;
+        });
+
+        $this->portalGet('/api/portal/prescriptions', $this->portalToken($patient), $patient->id)->assertOk();
+
+        $idDump = collect($queries)->first(fn (string $sql) => preg_match('/^select ["`]id["`] from ["`]appointments["`]/', $sql) === 1);
+
+        $this->assertNull(
+            $idDump,
+            'the patient\'s appointment ids must stay in SQL as a subquery, not be loaded into PHP: '.(string) $idDump
+        );
+    }
+
     public function test_detail_returns_final_prescription_shape(): void
     {
         $patient = $this->consentedPatient($this->clinic);

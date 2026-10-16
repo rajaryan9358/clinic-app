@@ -52,6 +52,71 @@ class PortalConsentFamilyTest extends TestCase
         $this->assertSame('Please accept the privacy notice to continue.', $response->json('message'));
     }
 
+    public function test_consent_text_is_broken_into_paragraphs(): void
+    {
+        $clinic = $this->makeClinic();
+        $account = $this->makePatient($clinic);
+
+        $response = $this->portalGet('/api/portal/consent', $this->portalToken($account));
+
+        $response->assertOk();
+        $paragraphs = array_values(array_filter(explode("\n", (string) $response->json('data.text')), 'strlen'));
+
+        $this->assertGreaterThan(1, count($paragraphs), 'the privacy notice should render as several paragraphs, not one block');
+        $this->assertSame(PortalConsent::VERSION, $response->json('data.version'));
+    }
+
+    public function test_repunctuating_the_notice_does_not_reprompt_consented_patients(): void
+    {
+        $clinic = $this->makeClinic();
+        $account = $this->makePatient($clinic);
+        $this->consentFor($account);
+
+        // Paragraph breaks are cosmetic: a patient who already accepted
+        // this version must not be asked again.
+        $this->portalGet('/api/portal/dashboard', $this->portalToken($account))->assertOk();
+        $this->assertSame('2026-09-v1', PortalConsent::VERSION);
+    }
+
+    public function test_family_list_without_consent_is_428(): void
+    {
+        $clinic = $this->makeClinic();
+        $account = $this->makePatient($clinic);
+
+        $token = $this->portalToken($account);
+
+        $response = $this->portalGet('/api/portal/family', $token);
+
+        $response->assertStatus(428);
+        $this->assertSame('consent_required', $response->json('code'));
+
+        // The consent gate is what refused it, nothing else about the route.
+        $this->consentFor($account);
+        $this->portalGet('/api/portal/family', $token)->assertOk();
+    }
+
+    public function test_adding_a_dependent_without_consent_is_428(): void
+    {
+        $clinic = $this->makeClinic();
+        $account = $this->makePatient($clinic);
+
+        $token = $this->portalToken($account);
+
+        $response = $this->portalPost('/api/portal/family', $token, null, [
+            'full_name' => 'Dependent Child',
+        ]);
+
+        $response->assertStatus(428);
+        $this->assertSame('consent_required', $response->json('code'));
+        $this->assertSame(0, Patient::where('managed_by_patient_id', $account->id)->count());
+
+        // Same request succeeds once consent is on file, so the 428 above
+        // came from the gate and not from the payload or the route.
+        $this->consentFor($account);
+        $this->portalPost('/api/portal/family', $token, null, ['full_name' => 'Dependent Child'])->assertCreated();
+        $this->assertSame(1, Patient::where('managed_by_patient_id', $account->id)->count());
+    }
+
     public function test_get_consent_works_before_accepting(): void
     {
         $clinic = $this->makeClinic();
