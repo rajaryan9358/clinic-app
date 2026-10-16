@@ -12,6 +12,7 @@ use App\Services\Billing\FakeRazorpayGateway;
 use App\Services\Billing\InvoiceService;
 use App\Services\Billing\RazorpayGateway;
 use App\Services\InvoicePdfRenderer;
+use App\Support\Billing\InvoicePresenter;
 use App\Support\PortalConsent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -356,6 +357,47 @@ class PortalInvoiceTest extends TestCase
         $this->assertSame('Dr Asha Rao', $rows[$with->id]['doctor_name']);
         $this->assertNull($rows[$without->id]['doctor_name']);
         $this->portalGet("/api/portal/invoices/{$with->id}", $token)->assertJsonPath('data.doctor_name', 'Dr Asha Rao');
+    }
+
+
+    public function test_can_pay_online_is_true_when_enabled_and_configured(): void
+    {
+        $patient = $this->consented($this->makePatient($this->clinic));
+        $token = $this->portalToken($patient);
+        $invoice = $this->issued($patient);
+
+        $this->portalGet("/api/portal/invoices/{$invoice->id}", $token)->assertJsonPath('data.can_pay_online', true);
+        $this->portalGet('/api/portal/invoices', $token)->assertJsonPath('data.0.can_pay_online', true);
+    }
+
+    public function test_can_pay_online_is_false_when_the_setting_is_off(): void
+    {
+        $clinic = $this->makeClinic(['online_payment_enabled' => false]);
+        $patient = $this->consented($this->makePatient($clinic));
+        $token = $this->portalToken($patient);
+        $invoice = $this->issued($patient);
+
+        $this->portalGet("/api/portal/invoices/{$invoice->id}", $token)->assertJsonPath('data.can_pay_online', false);
+        $this->portalGet('/api/portal/invoices', $token)->assertJsonPath('data.0.can_pay_online', false);
+    }
+
+    public function test_can_pay_online_is_false_when_the_gateway_is_unconfigured(): void
+    {
+        $this->gw->configured = false;
+        $patient = $this->consented($this->makePatient($this->clinic));
+        $token = $this->portalToken($patient);
+        $invoice = $this->issued($patient);
+
+        $this->portalGet("/api/portal/invoices/{$invoice->id}", $token)->assertJsonPath('data.can_pay_online', false);
+        $this->portalGet('/api/portal/invoices', $token)->assertJsonPath('data.0.can_pay_online', false);
+    }
+
+    public function test_can_pay_online_is_absent_from_the_staff_shapes(): void
+    {
+        $invoice = $this->issued($this->consented($this->makePatient($this->clinic)));
+
+        $this->assertArrayNotHasKey('can_pay_online', InvoicePresenter::detail($invoice));
+        $this->assertArrayNotHasKey('can_pay_online', InvoicePresenter::item($invoice));
     }
 
     /** @return array<string, string> */

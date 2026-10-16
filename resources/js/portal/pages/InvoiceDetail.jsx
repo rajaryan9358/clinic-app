@@ -194,7 +194,6 @@ export default function InvoiceDetail() {
                 currency: order.currency || 'INR',
                 name: 'Invoice payment',
                 description: order.invoice_number ? `Invoice ${order.invoice_number}` : undefined,
-                theme: { color: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || undefined },
                 handler: (response) => {
                     finished = true;
                     confirmPayment(scope, response);
@@ -269,7 +268,7 @@ export default function InvoiceDetail() {
 
     const chip = statusChip(invoice);
     const balance = balanceLine(invoice);
-    const canPay = invoice.status === 'issued' && Number(invoice.balance) > 0 && !payUnavailable;
+    const canPay = invoice.can_pay_online === true && invoice.status !== 'paid' && Number(invoice.balance) > 0 && !payUnavailable;
     const busy = paying !== null;
     const discount = Number(invoice.discount_amount) || 0;
     const tax = Number(invoice.tax_amount) || 0;
@@ -375,7 +374,7 @@ export default function InvoiceDetail() {
                         {paying === 'confirming' ? 'Confirming payment…' : `Pay ${formatMoney(invoice.balance)}`}
                     </Button>
                 )}
-                {payUnavailable && Number(invoice.balance) > 0 && (
+                {payUnavailable && invoice.status !== 'paid' && Number(invoice.balance) > 0 && (
                     <p className="text-sm text-slate-600">Online payment is not available right now. Please pay at the clinic.</p>
                 )}
                 <Button variant="secondary" onClick={downloadPdf} loading={downloading} disabled={downloading}>

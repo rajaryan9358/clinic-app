@@ -35,20 +35,26 @@ class InvoiceController extends Controller
 
     public function index(Request $request)
     {
+        /** @var Patient $patient */
+        $patient = $request->attributes->get('portal_patient');
+        $canPay = $this->canPayOnline((int) $patient->clinic_id);
+
         $items = $this->visible($request)
             ->with('appointment.doctor')
             ->withSum(['payments as paid_sum' => fn ($q) => $q->where('status', 'success')], 'amount')
             ->orderByDesc('invoice_date')
             ->orderByDesc('id')
             ->get()
-            ->map(fn (Invoice $i) => InvoicePresenter::item($i));
+            ->map(fn (Invoice $i) => InvoicePresenter::portalItem($i, $canPay));
 
         return $this->success('OK', $items->values()->all());
     }
 
     public function show(Request $request, int $id)
     {
-        return $this->success('OK', InvoicePresenter::portalDetail($this->find($request, $id)));
+        $invoice = $this->find($request, $id);
+
+        return $this->success('OK', InvoicePresenter::portalDetail($invoice, $this->canPayOnline((int) $invoice->clinic_id)));
     }
 
     public function pdf(Request $request, int $id, InvoicePdfRenderer $renderer)
@@ -77,7 +83,9 @@ class InvoiceController extends Controller
 
         $this->payments->confirm($invoice, $data['razorpay_order_id'], $data['razorpay_payment_id'], $data['razorpay_signature']);
 
-        return $this->success('OK', InvoicePresenter::portalDetail($this->find($request, $id)));
+        $fresh = $this->find($request, $id);
+
+        return $this->success('OK', InvoicePresenter::portalDetail($fresh, $this->canPayOnline((int) $fresh->clinic_id)));
     }
 
     /** Invoices of the acting profile that the clinic has issued and not voided. */
@@ -102,10 +110,16 @@ class InvoiceController extends Controller
     {
         $invoice = $this->find($request, $id);
 
-        if (! ClinicSetting::billingFor((int) $invoice->clinic_id)['online_payment_enabled'] || ! $this->gateway->isConfigured()) {
+        if (! $this->canPayOnline((int) $invoice->clinic_id)) {
             abort(404);
         }
 
         return $invoice;
+    }
+
+    /** The pair of conditions PatientPaymentService gates on, so the flag cannot disagree with `pay`. */
+    private function canPayOnline(int $clinicId): bool
+    {
+        return ClinicSetting::billingFor($clinicId)['online_payment_enabled'] && $this->gateway->isConfigured();
     }
 }

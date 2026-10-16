@@ -39,6 +39,12 @@ final class InvoicePresenter
         ];
     }
 
+    /** Portal list row: the list shape plus whether this patient can pay online (resolved once per request by the caller). */
+    public static function portalItem(Invoice $invoice, bool $canPayOnline): array
+    {
+        return self::item($invoice) + ['can_pay_online' => $canPayOnline];
+    }
+
     public static function detail(Invoice $invoice): array
     {
         $invoice->loadMissing(['patient' => fn ($q) => $q->withTrashed(), 'appointment.doctor', 'items', 'payments']);
@@ -69,9 +75,10 @@ final class InvoicePresenter
      * money the patient moved. A superseded online checkout (`failed`) and an unsettled `pending`
      * order are internal bookkeeping; showing either would read as a failed or phantom payment.
      */
-    public static function portalDetail(Invoice $invoice): array
+    public static function portalDetail(Invoice $invoice, bool $canPayOnline = false): array
     {
         $detail = self::detail($invoice);
+        $detail['can_pay_online'] = $canPayOnline;
 
         // Staff-authored free text (invoice notes, cancellation and refund reasons, payment notes)
         // is internal and must never reach the patient.
