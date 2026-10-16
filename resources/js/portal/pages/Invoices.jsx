@@ -8,7 +8,7 @@ import { formatMoney, statusChip } from '../lib/money';
 
 /**
  * `GET invoices` — the acting profile's issued and paid invoices, newest
- * first. A "Pay" pill shows only when something is owed (balance > 0); a
+ * first. A "Pay" pill shows only when something is owed (balance > 0) and the flag `can_pay_online` is set; a
  * negative balance is an overpayment and is labelled as such, never as due.
  * Re-fetches when the acting profile changes; `active` drops stale responses.
  */
@@ -65,6 +65,7 @@ export default function Invoices() {
                     {items.map((invoice) => {
                         const chip = statusChip(invoice);
                         const balance = Number(invoice.balance) || 0;
+                        const canPay = invoice.can_pay_online === true;
                         return (
                             <li key={invoice.id}>
                                 <Link to={`/invoices/${invoice.id}`} className="block">
@@ -95,7 +96,7 @@ export default function Invoices() {
                                                     <p className="text-xs text-slate-500">Overpaid by {formatMoney(Math.abs(balance))}</p>
                                                 )}
                                             </div>
-                                            {balance > 0 && (
+                                            {balance > 0 && canPay && (
                                                 <span className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-sm font-medium text-white">
                                                     Pay
                                                 </span>
