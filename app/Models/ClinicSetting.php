@@ -17,6 +17,7 @@ class ClinicSetting extends Model
         'default_slot_duration_minutes', 'booking_notice_text', 'terms_text', 'privacy_policy_text',
         'walkin_enabled', 'token_system_enabled', 'max_advance_booking_days', 'min_booking_notice_minutes',
         'reminder_hours_before', 'portal_enabled', 'waitlist_enabled', 'waitlist_hold_minutes',
+        'invoicing_enabled', 'online_payment_enabled', 'invoice_prefix', 'invoice_tax_percent', 'invoice_footer_note',
     ];
 
     protected function casts(): array
@@ -35,6 +36,9 @@ class ClinicSetting extends Model
             'min_booking_notice_minutes' => 'integer',
             'reminder_hours_before' => 'integer',
             'waitlist_hold_minutes' => 'integer',
+            'invoicing_enabled' => 'boolean',
+            'online_payment_enabled' => 'boolean',
+            'invoice_tax_percent' => 'decimal:2',
         ];
     }
 
@@ -70,6 +74,11 @@ class ClinicSetting extends Model
             'portal_enabled' => ['sometimes', 'boolean'],
             'waitlist_enabled' => ['sometimes', 'boolean'],
             'waitlist_hold_minutes' => ['sometimes', 'integer', 'min:5', 'max:240'],
+            'invoicing_enabled' => ['sometimes', 'boolean'],
+            'online_payment_enabled' => ['sometimes', 'boolean'],
+            'invoice_prefix' => ['sometimes', 'string', 'max:10'],
+            'invoice_tax_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'invoice_footer_note' => ['sometimes', 'nullable', 'string', 'max:500'],
         ];
     }
 }
