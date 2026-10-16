@@ -43,7 +43,7 @@ return new class extends Migration
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
-            $table->string('invoice_number')->unique();
+            $table->string('invoice_number')->nullable();
             $table->date('invoice_date');
             $table->decimal('subtotal', 12, 2);
             $table->decimal('discount_amount', 12, 2)->default(0);
@@ -59,6 +59,7 @@ return new class extends Migration
 
             $table->index(['clinic_id', 'status']);
             $table->index(['clinic_id', 'invoice_date'], 'inv_clinic_date_idx');
+            $table->unique(['clinic_id', 'invoice_number'], 'invoices_clinic_number_unique');
         });
 
         Schema::create('payments', function (Blueprint $table) {

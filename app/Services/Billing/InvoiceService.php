@@ -9,7 +9,6 @@ use App\Models\InvoiceCounter;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -19,9 +18,6 @@ use Illuminate\Validation\ValidationException;
  * The number is allocated at issue only, under a row lock on the clinic's
  * counter, and is never reused (cancelling keeps it). Statuses are
  * draft/issued/paid/cancelled; "partly paid" is derived elsewhere.
- *
- * invoice_number is NOT NULL UNIQUE in the schema, so a draft carries a
- * unique `DRAFT-<uuid>` placeholder until issue() replaces it.
  */
 final class InvoiceService
 {
@@ -40,7 +36,7 @@ final class InvoiceService
                 'clinic_id' => $clinicId,
                 'patient_id' => $data['patient_id'],
                 'appointment_id' => $data['appointment_id'] ?? null,
-                'invoice_number' => 'DRAFT-'.Str::uuid(),
+                
                 'invoice_date' => $data['invoice_date'] ?? $this->today()->toDateString(),
                 'notes' => $data['notes'] ?? null,
                 'status' => 'draft',

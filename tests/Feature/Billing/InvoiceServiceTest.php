@@ -112,6 +112,31 @@ class InvoiceServiceTest extends TestCase
         $this->assertSame('INV/2026-27/00001', $b->invoice_number);
     }
 
+    public function test_a_drafted_invoice_has_no_number_until_issued(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $a = $this->invoiceService()->draft($clinic->id, $this->draftData($this->makeBillingPatient($clinic)));
+        $b = $this->invoiceService()->draft($clinic->id, $this->draftData($this->makeBillingPatient($clinic)));
+
+        $this->assertNull($a->fresh()->invoice_number);
+        $this->assertNull($b->fresh()->invoice_number);
+        $this->assertSame('INV/2026-27/00001', $this->invoiceService()->issue($a)->invoice_number);
+    }
+
+    public function test_invoice_number_is_unique_per_clinic_not_globally(): void
+    {
+        $c1 = $this->makeBillingClinic();
+        $c2 = $this->makeBillingClinic();
+        $make = fn ($clinic) => $this->invoiceService()->draft($clinic->id, $this->draftData($this->makeBillingPatient($clinic)));
+        $forceNumber = fn ($invoice) => $invoice->forceFill(['invoice_number' => 'INV/2026-27/00001'])->save();
+
+        $forceNumber($make($c1));
+        $forceNumber($make($c2));
+
+        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $forceNumber($make($c1));
+    }
+
     public function test_financial_year_runs_april_to_march(): void
     {
         $this->assertSame('2026-27', InvoiceService::financialYear(Carbon::parse('2026-04-01')));
