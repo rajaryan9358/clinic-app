@@ -17,4 +17,14 @@ interface RazorpayGateway
     public function verifyPaymentSignature(string $paymentId, string $subscriptionId, string $signature): bool;
 
     public function verifyWebhookSignature(string $body, string $signature): bool;
+
+    /**
+     * A one-off order for a patient invoice. The amount is in paise, and the
+     * notes carry invoice_id and clinic_id so a webhook can be traced back.
+     *
+     * @return array{id: string}
+     */
+    public function createOrder(int $amountInPaise, string $receipt, array $notes): array;
+
+    public function verifyOrderSignature(string $orderId, string $paymentId, string $signature): bool;
 }

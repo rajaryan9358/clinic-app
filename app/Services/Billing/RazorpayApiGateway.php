@@ -64,6 +64,30 @@ class RazorpayApiGateway implements RazorpayGateway
         return hash_equals(hash_hmac('sha256', $paymentId.'|'.$subscriptionId, $secret), $signature);
     }
 
+    public function createOrder(int $amountInPaise, string $receipt, array $notes): array
+    {
+        $order = $this->api()->order->create([
+            'amount' => $amountInPaise,
+            'currency' => 'INR',
+            'receipt' => $receipt,
+            'payment_capture' => 1,
+            'notes' => $notes,
+        ]);
+
+        return ['id' => (string) $order['id']];
+    }
+
+    /** Checkout returns sha256("{order_id}|{payment_id}") signed with the key secret. */
+    public function verifyOrderSignature(string $orderId, string $paymentId, string $signature): bool
+    {
+        $secret = (string) PlatformSettings::get('razorpay_key_secret', '');
+        if ($secret === '' || $signature === '') {
+            return false;
+        }
+
+        return hash_equals(hash_hmac('sha256', $orderId.'|'.$paymentId, $secret), $signature);
+    }
+
     public function verifyWebhookSignature(string $body, string $signature): bool
     {
         $secret = (string) PlatformSettings::get('razorpay_webhook_secret', '');
