@@ -416,11 +416,11 @@ function DoctorMultiSelect({ options, value, onChange, loading, error }) {
     );
 }
 
-function Toggle({ checked, onChange, label }) {
+function Toggle({ checked, onChange, label, disabled = false }) {
     return (
-        <label className="flex cursor-pointer items-center gap-3">
+        <label className={`flex items-center gap-3 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
             <div className="relative">
-                <input type="checkbox" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
+                <input type="checkbox" checked={Boolean(checked)} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
                 <div className={`flex h-5 w-9 items-center rounded-full transition-colors ${Boolean(checked) ? 'bg-blue-600' : 'bg-gray-200'}`}>
                     <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${Boolean(checked) ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </div>
@@ -1045,6 +1045,20 @@ function SettingsTab({ clinicId }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    // Whether the platform's Razorpay keys are set (null = could not be determined).
+    const [gatewayConfigured, setGatewayConfigured] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        client.get('/super-admin/settings/system')
+            .then((res) => {
+                if (cancelled) return;
+                const d = res.data?.data || {};
+                setGatewayConfigured(Boolean(d.razorpay_key_id) && Boolean(d.razorpay_key_secret_set));
+            })
+            .catch(() => { if (!cancelled) setGatewayConfigured(null); });
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -1064,10 +1078,15 @@ function SettingsTab({ clinicId }) {
         setError('');
         setSuccess('');
         try {
+            // The invoice prefix and tax percent reject null/blank; leave them out so the stored value stands.
+            const payload = { ...form };
+            ['invoice_prefix', 'invoice_tax_percent'].forEach((k) => {
+                if (payload[k] === null || payload[k] === undefined || String(payload[k]).trim() === '') delete payload[k];
+            });
             if (setting?.id) {
-                await client.put(`/super-admin/settings/clinic/${setting.id}`, form);
+                await client.put(`/super-admin/settings/clinic/${setting.id}`, payload);
             } else {
-                await client.post('/super-admin/settings/clinic', { ...form, clinic_id: clinicId });
+                await client.post('/super-admin/settings/clinic', { ...payload, clinic_id: clinicId });
             }
             setSuccess('Settings saved successfully.');
             setTimeout(() => setSuccess(''), 3000);
@@ -1187,6 +1206,65 @@ function SettingsTab({ clinicId }) {
                                 onChange={(e) => setForm((p) => ({ ...p, waitlist_hold_minutes: e.target.value }))}
                                 placeholder="30"
                                 className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </Field>
+                    </div>
+                </Card>
+
+                <Card className="p-5">
+                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Invoicing</h3>
+                    <div className="space-y-4">
+                        {/* Backend defaults when the clinic has no settings row: invoicing ON, online payment OFF. */}
+                        <Toggle checked={form.invoicing_enabled ?? true} onChange={() => toggle('invoicing_enabled', true)} label="Invoicing enabled" />
+                        <div>
+                            {/* An enabled switch stays operable when the gateway is unconfigured so it can still be turned off. */}
+                            <Toggle
+                                checked={form.online_payment_enabled ?? false}
+                                disabled={gatewayConfigured === false && !(form.online_payment_enabled ?? false)}
+                                onChange={() => toggle('online_payment_enabled', false)}
+                                label="Online payment enabled"
+                            />
+                            {gatewayConfigured === false ? (
+                                <p className="mt-1 text-xs text-amber-700">
+                                    {(form.online_payment_enabled ?? false)
+                                        ? 'The Razorpay gateway is not configured, so patients cannot pay online even though this is on.'
+                                        : 'Unavailable: the Razorpay gateway is not configured. Add the key ID and key secret under System Settings → Payments first.'}
+                                </p>
+                            ) : (
+                                <p className="mt-1 text-xs text-gray-400">Lets patients pay issued invoices from the portal. Requires the Razorpay gateway to be configured in System Settings.</p>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="Invoice number prefix" hint="Up to 10 characters. Numbers look like PREFIX/2026-27/00001.">
+                                <input
+                                    type="text"
+                                    maxLength={10}
+                                    value={form.invoice_prefix ?? ''}
+                                    onChange={(e) => setForm((p) => ({ ...p, invoice_prefix: e.target.value }))}
+                                    placeholder="INV"
+                                    className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                            </Field>
+                            <Field label="Invoice tax (%)" hint="Applied automatically to new invoices (0–100).">
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step="0.01"
+                                    value={form.invoice_tax_percent ?? ''}
+                                    onChange={(e) => setForm((p) => ({ ...p, invoice_tax_percent: e.target.value }))}
+                                    placeholder="0"
+                                    className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                />
+                            </Field>
+                        </div>
+                        <Field label="Invoice footer note" hint="Printed at the bottom of every invoice PDF (max 500 characters).">
+                            <textarea
+                                rows={3}
+                                maxLength={500}
+                                value={form.invoice_footer_note ?? ''}
+                                onChange={(e) => setForm((p) => ({ ...p, invoice_footer_note: e.target.value }))}
+                                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                             />
                         </Field>
                     </div>
