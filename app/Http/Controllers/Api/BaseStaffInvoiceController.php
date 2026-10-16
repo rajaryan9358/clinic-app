@@ -152,7 +152,7 @@ abstract class BaseStaffInvoiceController extends Controller
     {
         $invoice = $this->find($request, $id);
 
-        return $renderer->render($invoice)->download('invoice-'.str_replace(['/', '\\'], '-',(string) ($invoice->invoice_number ?? $invoice->id)).'.pdf');
+        return $renderer->render($invoice)->download('invoice-'.str_replace(['/', '\\'], '-', (string) ($invoice->invoice_number ?? $invoice->id)).'.pdf');
     }
 
     /** Sends the patient a WhatsApp with a login link that lands on this invoice in the portal. */
@@ -166,8 +166,14 @@ abstract class BaseStaffInvoiceController extends Controller
 
         $patient = Patient::withTrashed()->findOrFail($invoice->patient_id);
         $holder = $patient->managed_by_patient_id !== null
-            ? Patient::withTrashed()->findOrFail($patient->managed_by_patient_id)
+            ? Patient::withTrashed()->where('clinic_id', $invoice->clinic_id)->find($patient->managed_by_patient_id)
             : $patient;
+
+        // A holder outside the invoice's clinic (or missing) is bad data: refuse rather than
+        // issue a login link for another clinic's patient.
+        if ($holder === null) {
+            throw ValidationException::withMessages(['patient' => 'The account holder for this patient could not be found in this clinic.']);
+        }
 
         $issued = $links->issueForRedirect(
             $holder,

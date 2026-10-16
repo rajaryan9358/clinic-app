@@ -202,6 +202,54 @@ class InvoiceDocumentTest extends TestCase
         $this->assertStringEndsWith($holder->phone, $this->fake->sent[0]['to']);
     }
 
+    public function test_dependent_managed_by_another_clinics_patient_gets_no_link_and_no_message(): void
+    {
+        $outsider = $this->makeBillingPatient($this->makeBillingClinic());
+        $dependent = Patient::create([
+            'clinic_id' => $this->clinic->id, 'uuid' => (string) Str::uuid(), 'first_name' => 'Kid',
+            'phone' => '8000000001', 'managed_by_patient_id' => $outsider->id,
+        ]);
+        $invoice = $this->issued(null, $dependent);
+
+        Sanctum::actingAs($this->receptionist());
+        $this->postJson("/api/clinic/invoices/{$invoice->id}/send")
+            ->assertStatus(422)->assertJsonValidationErrors('patient');
+
+        $this->assertSame(0, PatientLoginLink::where('patient_id', $outsider->id)->count());
+        $this->assertSame(0, PatientLoginLink::count());
+        $this->assertSame([], $this->fake->sent);
+    }
+
+    public function test_notifier_never_resolves_a_holder_from_another_clinic(): void
+    {
+        $outsider = $this->makeBillingPatient($this->makeBillingClinic());
+        $dependent = Patient::create([
+            'clinic_id' => $this->clinic->id, 'uuid' => (string) Str::uuid(), 'first_name' => 'Kid',
+            'phone' => '8000000001', 'managed_by_patient_id' => $outsider->id,
+        ]);
+        $invoice = $this->issued(null, $dependent);
+
+        $row = app(\App\Services\WhatsApp\PatientNotifier::class)->invoiceReady($invoice, 'tok');
+
+        $this->assertSame('skipped', $row->delivery_status);
+        $this->assertSame([], $this->fake->sent);
+    }
+
+    public function test_invoice_ready_formats_a_four_figure_total_with_a_thousands_separator(): void
+    {
+        $patient = $this->makeBillingPatient($this->clinic);
+        $invoice = $this->invoiceService()->issue($this->invoiceService()->draft($this->clinic->id, $this->draftData($patient, [
+            'items' => [['description' => 'Procedure', 'quantity' => 1, 'unit_amount' => 1234]],
+        ])));
+
+        Sanctum::actingAs($this->receptionist());
+        $this->postJson("/api/clinic/invoices/{$invoice->id}/send")->assertOk();
+
+        $params = $this->bodyParams($this->fake->sent[0]);
+        $this->assertSame('₹1,234.00', $params[3]);
+        $this->assertSame('Amount due: ₹1,234.00', $params[4]);
+    }
+
     public function test_draft_and_cancelled_invoices_cannot_be_sent(): void
     {
         $draft = $this->invoiceService()->draft($this->clinic->id, $this->draftData($this->makeBillingPatient($this->clinic)));

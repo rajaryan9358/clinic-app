@@ -219,7 +219,7 @@ class PatientNotifier
         $invoice->loadMissing(['clinic:id,name', 'patient' => fn ($q) => $q->withTrashed()]);
         $patient = $invoice->patient;
         $holder = $patient?->managed_by_patient_id !== null
-            ? Patient::withTrashed()->find($patient->managed_by_patient_id)
+            ? Patient::withTrashed()->where('clinic_id', $invoice->clinic_id)->find($patient->managed_by_patient_id)
             : $patient;
 
         $clinicName = (string) ($invoice->clinic?->name ?? '');
