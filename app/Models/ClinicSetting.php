@@ -48,6 +48,28 @@ class ClinicSetting extends Model
     }
 
     /**
+     * Billing settings for a clinic in one query. A missing row, or a null
+     * column, falls back to: invoicing on, online payment off, prefix INV,
+     * tax 0, no footer note.
+     *
+     * @return array{invoicing_enabled: bool, online_payment_enabled: bool, invoice_prefix: string, invoice_tax_percent: float, invoice_footer_note: ?string}
+     */
+    public static function billingFor(int $clinicId): array
+    {
+        $row = static::where('clinic_id', $clinicId)->first([
+            'invoicing_enabled', 'online_payment_enabled', 'invoice_prefix', 'invoice_tax_percent', 'invoice_footer_note',
+        ]);
+
+        return [
+            'invoicing_enabled' => (bool) ($row?->invoicing_enabled ?? true),
+            'online_payment_enabled' => (bool) ($row?->online_payment_enabled ?? false),
+            'invoice_prefix' => (string) ($row?->invoice_prefix ?? 'INV'),
+            'invoice_tax_percent' => (float) ($row?->invoice_tax_percent ?? 0),
+            'invoice_footer_note' => $row?->invoice_footer_note,
+        ];
+    }
+
+    /**
      * Validation rules covering every writable clinic_settings field.
      * Shared by the clinic-scoped and super-admin settings controllers so
      * store() and update() apply the same constraints.

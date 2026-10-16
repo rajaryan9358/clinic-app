@@ -37,10 +37,13 @@ class InvoiceSchemaTest extends TestCase
 
     private function payment(Clinic $clinic, Patient $patient, array $overrides = []): Payment
     {
-        return Payment::create(array_merge([
+        $payment = new Payment;
+        $payment->forceFill(array_merge([
             'clinic_id' => $clinic->id, 'patient_id' => $patient->id, 'amount' => 500,
             'payment_method' => 'online', 'paid_at' => now(), 'status' => 'pending',
-        ], $overrides));
+        ], $overrides))->save();
+
+        return $payment;
     }
 
     public function test_invoice_items_and_counters_tables_exist_with_their_columns(): void
@@ -91,16 +94,76 @@ class InvoiceSchemaTest extends TestCase
         $this->payment($clinic, $patient, ['razorpay_payment_id' => 'pay_dup']);
     }
 
-    public function test_clinic_settings_defaults_when_no_row(): void
+    public function test_billing_settings_default_when_the_clinic_has_no_row(): void
+    {
+        $this->assertSame([
+            'invoicing_enabled' => true,
+            'online_payment_enabled' => false,
+            'invoice_prefix' => 'INV',
+            'invoice_tax_percent' => 0.0,
+            'invoice_footer_note' => null,
+        ], ClinicSetting::billingFor($this->clinic()->id));
+    }
+
+    public function test_billing_settings_row_values_win(): void
     {
         $clinic = $this->clinic();
-        $setting = ClinicSetting::create(['clinic_id' => $clinic->id])->fresh();
+        ClinicSetting::create([
+            'clinic_id' => $clinic->id, 'invoicing_enabled' => false, 'online_payment_enabled' => true,
+            'invoice_prefix' => 'BILL', 'invoice_tax_percent' => 12.5, 'invoice_footer_note' => 'Thanks',
+        ]);
 
-        $this->assertTrue($setting->invoicing_enabled);
-        $this->assertFalse($setting->online_payment_enabled);
-        $this->assertSame('INV', $setting->invoice_prefix);
-        $this->assertEquals(0, $setting->invoice_tax_percent);
-        $this->assertNull($setting->invoice_footer_note);
+        $this->assertSame([
+            'invoicing_enabled' => false,
+            'online_payment_enabled' => true,
+            'invoice_prefix' => 'BILL',
+            'invoice_tax_percent' => 12.5,
+            'invoice_footer_note' => 'Thanks',
+        ], ClinicSetting::billingFor($clinic->id));
+    }
+
+    public function test_billing_settings_row_with_null_footer_note(): void
+    {
+        $clinic = $this->clinic();
+        ClinicSetting::create(['clinic_id' => $clinic->id]);
+
+        $billing = ClinicSetting::billingFor($clinic->id);
+
+        $this->assertNull($billing['invoice_footer_note']);
+        $this->assertSame('INV', $billing['invoice_prefix']);
+        $this->assertTrue($billing['invoicing_enabled']);
+    }
+
+    public function test_gateway_and_lifecycle_columns_are_not_mass_assignable(): void
+    {
+        $clinic = $this->clinic();
+        $patient = $this->patient($clinic);
+        $user = User::create([
+            'clinic_id' => $clinic->id, 'uuid' => (string) Str::uuid(), 'full_name' => 'U',
+            'email' => 'u@inv.test', 'password' => 'x', 'role' => 'clinic_admin', 'status' => 'active',
+        ]);
+
+        $payment = Payment::create([
+            'clinic_id' => $clinic->id, 'patient_id' => $patient->id, 'amount' => 1,
+            'payment_method' => 'cash', 'paid_at' => now(),
+            'razorpay_payment_id' => 'pay_X', 'razorpay_order_id' => 'order_X',
+            'refunded_at' => now(), 'refund_reason' => 'x',
+        ])->fresh();
+        $this->assertNull($payment->razorpay_payment_id);
+        $this->assertNull($payment->razorpay_order_id);
+        $this->assertNull($payment->refunded_at);
+        $this->assertNull($payment->refund_reason);
+
+        $invoice = Invoice::create([
+            'clinic_id' => $clinic->id, 'patient_id' => $patient->id, 'invoice_number' => 'INV-1',
+            'invoice_date' => now()->toDateString(), 'subtotal' => 1, 'total_amount' => 1,
+            'issued_at' => now(), 'cancelled_at' => now(), 'cancelled_reason' => 'x',
+            'created_by_user_id' => $user->id,
+        ])->fresh();
+        $this->assertNull($invoice->issued_at);
+        $this->assertNull($invoice->cancelled_at);
+        $this->assertNull($invoice->cancelled_reason);
+        $this->assertNull($invoice->created_by_user_id);
     }
 
     public function test_invoice_tax_percent_rejects_101_and_accepts_100(): void

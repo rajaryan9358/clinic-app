@@ -14,7 +14,6 @@ class Payment extends Model
     protected $fillable = [
         'clinic_id', 'invoice_id', 'appointment_id', 'patient_id', 'amount', 'payment_method',
         'reference_number', 'paid_at', 'status', 'collected_by_user_id', 'notes',
-        'razorpay_order_id', 'razorpay_payment_id', 'refunded_at', 'refund_reason',
     ];
 
     protected function casts(): array

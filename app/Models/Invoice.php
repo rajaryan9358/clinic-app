@@ -16,7 +16,6 @@ class Invoice extends Model
     protected $fillable = [
         'clinic_id', 'patient_id', 'appointment_id', 'invoice_number', 'invoice_date',
         'subtotal', 'discount_amount', 'tax_amount', 'total_amount', 'status', 'notes',
-        'issued_at', 'cancelled_at', 'cancelled_reason', 'created_by_user_id',
     ];
 
     protected function casts(): array
