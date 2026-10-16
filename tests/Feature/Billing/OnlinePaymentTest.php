@@ -16,6 +16,7 @@ use Illuminate\Database\Query\Grammars\SQLiteGrammar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Tests\TestCase;
@@ -83,6 +84,15 @@ class OnlinePaymentTest extends TestCase
         ]]]];
     }
 
+    /** Asserts a Log::warning whose message contains $needle. */
+    private function assertWarned(string $needle, ?\Closure $contextCheck = null): void
+    {
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn ($message, $context = []) => str_contains((string) $message, $needle)
+                && ($contextCheck === null || $contextCheck($context)),
+        )->atLeast()->once();
+    }
+
     public function test_start_order_creates_a_pending_payment_for_the_outstanding_amount(): void
     {
         $invoice = $this->issued();
@@ -124,7 +134,7 @@ class OnlinePaymentTest extends TestCase
         $this->assertSame(1, Payment::count());
     }
 
-    public function test_start_order_does_not_reuse_a_pending_order_for_a_stale_amount(): void
+    public function test_start_order_supersedes_the_pending_order_when_the_outstanding_changed(): void
     {
         $invoice = $this->issued();
         $stale = $this->payments()->startOrder($invoice);
@@ -135,9 +145,57 @@ class OnlinePaymentTest extends TestCase
         $this->assertNotSame($stale['order_id'], $fresh['order_id']);
         $this->assertSame(501.00, $fresh['amount']);
         $this->assertSame(50100, $this->gw->createdOrders[1]['amountInPaise']);
-        // The stale row is left pending (it still resolves a late webhook) and counts for nothing.
-        $this->assertSame(2, Payment::where('status', 'pending')->count());
+
+        // Exactly one live order per invoice: the old one is superseded, but keeps
+        // its order id so a late capture on it still resolves.
+        $superseded = Payment::where('razorpay_order_id', $stale['order_id'])->sole();
+        $this->assertSame('failed', $superseded->status);
+        $this->assertStringContainsString('uperseded', (string) $superseded->notes);
+        $this->assertSame($stale['order_id'], $superseded->razorpay_order_id);
+        $this->assertSame(1, Payment::where('status', 'pending')->count());
         $this->assertSame(300.0, $this->invoiceService()->amountPaid($invoice));
+    }
+
+    public function test_a_capture_on_a_superseded_order_is_still_banked_and_logged(): void
+    {
+        $invoice = $this->issued();
+        $stale = $this->payments()->startOrder($invoice);
+        $this->invoiceService()->recordPayment($invoice, ['amount' => 300, 'payment_method' => 'cash']);
+        $this->payments()->startOrder($invoice);
+
+        Log::spy();
+        $this->sendWebhook($this->captureEvent($invoice, $stale['order_id'], 'pay_old'))->assertOk();
+
+        $banked = Payment::where('razorpay_order_id', $stale['order_id'])->sole();
+        $this->assertSame(['success', 'pay_old', '801.00'], [$banked->status, $banked->razorpay_payment_id, $banked->amount]);
+        $this->assertSame(1101.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertWarned('superseded', fn ($c) => ($c['payment_id'] ?? null) === 'pay_old');
+    }
+
+    public function test_start_order_does_not_hold_the_invoice_lock_across_the_gateway_call(): void
+    {
+        // A hanging gateway must not block every payment operation on the invoice,
+        // and a rollback must not be able to orphan an order that was created.
+        $gateway = new class extends FakeRazorpayGateway
+        {
+            public array $levels = [];
+
+            public function createOrder(int $amountInPaise, string $receipt, array $notes): array
+            {
+                $this->levels[] = DB::transactionLevel();
+
+                return parent::createOrder($amountInPaise, $receipt, $notes);
+            }
+        };
+        $this->app->instance(RazorpayGateway::class, $gateway);
+
+        $invoice = $this->issued();
+        $baseline = DB::transactionLevel();   // RefreshDatabase wraps each test in one transaction
+        $this->payments()->startOrder($invoice);
+
+        $this->assertSame([$baseline], $gateway->levels);
+        $this->assertSame('pending', Payment::sole()->status);
     }
 
     public function test_start_order_is_422_when_online_payment_is_disabled(): void
@@ -272,6 +330,7 @@ class OnlinePaymentTest extends TestCase
         $invoice = $this->issued();
         $order = $this->payments()->startOrder($invoice);
         $event = $this->captureEvent($invoice, $order['order_id'], 'pay_1');
+        $entity = $event['payload']['payment']['entity'];
 
         $this->sendWebhook($event, 'evt_same')->assertOk();
         $this->sendWebhook($event, 'evt_same')->assertOk();   // duplicate delivery
@@ -282,6 +341,139 @@ class OnlinePaymentTest extends TestCase
         $this->assertSame(['success', 'pay_1', '801.00'], [$payment->status, $payment->razorpay_payment_id, $payment->amount]);
         $this->assertSame(801.0, $this->invoiceService()->amountPaid($invoice));
         $this->assertSame('paid', $invoice->fresh()->status);
+
+        // The replay must be resolved by razorpay_payment_id and hand that row
+        // back - not fall through to the status guard and report nothing settled.
+        $replayed = $this->payments()->settleFromWebhook($entity);
+        $this->assertNotNull($replayed);
+        $this->assertSame($payment->id, $replayed->id);
+        $this->assertSame('pay_1', $replayed->razorpay_payment_id);
+    }
+
+    public function test_a_second_capture_on_a_settled_order_cannot_overwrite_its_payment_id(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+        $this->sendWebhook($this->captureEvent($invoice, $order['order_id'], 'pay_1'))->assertOk();
+
+        // Same order, a different payment id: the money is already banked, and the
+        // audit trail must keep pointing at the capture that paid for it.
+        $this->sendWebhook($this->captureEvent($invoice, $order['order_id'], 'pay_2'))->assertOk();
+
+        $payment = Payment::sole();
+        $this->assertSame('pay_1', $payment->razorpay_payment_id);
+        $this->assertSame('success', $payment->status);
+        $this->assertSame(801.0, $this->invoiceService()->amountPaid($invoice));
+    }
+
+    public function test_an_authorized_or_failed_payment_event_banks_nothing(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+
+        // Razorpay emits payment.authorized before payment.captured: authorised
+        // money is not captured money, and must not mark the invoice paid.
+        foreach (['payment.authorized', 'payment.failed'] as $event) {
+            $payload = $this->captureEvent($invoice, $order['order_id'], 'pay_1');
+            $payload['event'] = $event;
+            $this->sendWebhook($payload)->assertOk();
+        }
+
+        $payment = Payment::sole();
+        $this->assertSame('pending', $payment->status);
+        $this->assertNull($payment->razorpay_payment_id);
+        $this->assertSame(0.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('issued', $invoice->fresh()->status);
+    }
+
+    public function test_a_malformed_payment_entity_is_ignored_with_a_200(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+
+        // A non-2xx would have Razorpay retry for ever, and the rolled-back
+        // dedupe row would let every retry hit the same failure.
+        foreach ([['id' => ['nested' => 'x']], ['order_id' => ['nested' => 'x']], ['id' => null, 'order_id' => null]] as $i => $broken) {
+            $payload = $this->captureEvent($invoice, $order['order_id'], 'pay_1');
+            $payload['payload']['payment']['entity'] = array_merge($payload['payload']['payment']['entity'], $broken);
+            $this->sendWebhook($payload, 'evt_broken_'.$i)->assertOk();
+        }
+
+        $payment = Payment::sole();
+        $this->assertSame('pending', $payment->status);
+        $this->assertNull($payment->razorpay_payment_id);
+        $this->assertSame(0.0, $this->invoiceService()->amountPaid($invoice));
+    }
+
+    public function test_a_capture_whose_notes_are_not_an_array_still_settles(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+
+        $payload = $this->captureEvent($invoice, $order['order_id'], 'pay_1');
+        $payload['payload']['payment']['entity']['notes'] = 'not-an-array';
+        $this->sendWebhook($payload)->assertOk();
+
+        // No clinic hint, so the order id alone resolves the row - and no crash.
+        $this->assertSame('success', Payment::sole()->status);
+        $this->assertSame(801.0, $this->invoiceService()->amountPaid($invoice));
+    }
+
+    public function test_a_capture_on_a_cancelled_invoice_is_banked_and_logged(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+        $this->invoiceService()->cancel($invoice, 'duplicate');   // a pending row is not money, so this is allowed
+
+        Log::spy();
+        $this->sendWebhook($this->captureEvent($invoice, $order['order_id'], 'pay_1'))->assertOk();
+
+        // The money is real, so it is banked - but the clinic is now holding
+        // patient money against a void invoice, which has to be greppable.
+        $payment = Payment::sole();
+        $this->assertSame(['success', 'pay_1', '801.00'], [$payment->status, $payment->razorpay_payment_id, $payment->amount]);
+        $this->assertSame(801.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('cancelled', $invoice->fresh()->status);
+        $this->assertWarned('not open', fn ($c) => ($c['invoice_id'] ?? null) === $invoice->id
+            && ($c['payment_id'] ?? null) === 'pay_1'
+            && ($c['amount'] ?? null) === 801.0
+            && ($c['invoice_status'] ?? null) === 'cancelled');
+    }
+
+    public function test_confirm_does_not_hand_back_a_refunded_payment(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+        $payment = $this->payments()->confirm($invoice, $order['order_id'], 'pay_1', 'sig');
+        $this->invoiceService()->markRefunded($payment, 'patient asked');
+
+        // Handing a refunded row back as a success would have the portal render
+        // an unpaid invoice as paid.
+        try {
+            $this->payments()->confirm($invoice, $order['order_id'], 'pay_1', 'sig');
+            $this->fail('Expected a 409 conflict.');
+        } catch (ConflictHttpException $e) {
+            $this->assertSame('This payment has already been recorded.', $e->getMessage());
+        }
+
+        $this->assertSame('refunded', Payment::sole()->status);
+        $this->assertSame(0.0, $this->invoiceService()->amountPaid($invoice));
+        $this->assertSame('issued', $invoice->fresh()->status);
+    }
+
+    public function test_a_capture_without_an_amount_is_not_banked(): void
+    {
+        $invoice = $this->issued();
+        $order = $this->payments()->startOrder($invoice);
+
+        $payload = $this->captureEvent($invoice, $order['order_id'], 'pay_1');
+        unset($payload['payload']['payment']['entity']['amount']);
+        $this->sendWebhook($payload)->assertOk();
+
+        $payment = Payment::sole();
+        $this->assertSame('pending', $payment->status);
+        $this->assertNull($payment->razorpay_payment_id);
+        $this->assertSame(0.0, $this->invoiceService()->amountPaid($invoice));
     }
 
     public function test_webhook_for_an_unknown_order_is_ignored(): void
@@ -327,18 +519,42 @@ class OnlinePaymentTest extends TestCase
         $this->assertSame('issued', $invoice->fresh()->status);
     }
 
-    public function test_subscription_webhooks_still_reach_the_subscription_handler(): void
+    /** @return array{0:ClinicSubscription, 1:array} a pending subscription and a charged payload for it */
+    private function subscriptionCharge(array $paymentExtra = []): array
     {
-        $clinic = Clinic::create(['uuid' => (string) Str::uuid(), 'name' => 'C', 'slug' => 'sub-c', 'status' => 'active']);
+        $clinic = Clinic::create(['uuid' => (string) Str::uuid(), 'name' => 'C', 'slug' => 'sub-'.Str::random(6), 'status' => 'active']);
         $plan = Plan::create(['name' => 'Starter', 'monthly_price' => 99900]);
         $sub = ClinicSubscription::create(['clinic_id' => $clinic->id, 'plan_id' => $plan->id, 'billing_cycle' => 'monthly',
             'status' => 'pending_payment', 'grace_ends_at' => now()->addDay(), 'razorpay_subscription_id' => 'sub_1']);
 
-        $this->sendWebhook(['event' => 'subscription.charged', 'payload' => [
+        return [$sub, ['event' => 'subscription.charged', 'payload' => [
             'subscription' => ['entity' => ['id' => 'sub_1', 'status' => 'active',
                 'current_start' => now()->timestamp, 'current_end' => now()->addMonth()->timestamp]],
-            'payment' => ['entity' => ['id' => 'pay_sub_1', 'amount' => 99900, 'method' => 'upi', 'order_id' => 'order_sub_1']],
-        ]])->assertOk();
+            'payment' => ['entity' => array_merge(
+                ['id' => 'pay_sub_1', 'amount' => 99900, 'method' => 'upi', 'order_id' => 'order_sub_1'],
+                $paymentExtra,
+            )],
+        ]]];
+    }
+
+    public function test_subscription_webhooks_still_reach_the_subscription_handler(): void
+    {
+        [$sub, $payload] = $this->subscriptionCharge();
+
+        $this->sendWebhook($payload)->assertOk();
+
+        $this->assertSame('active', $sub->refresh()->status);
+        $this->assertSame(1, SubscriptionTransaction::count());
+        $this->assertSame(0, Payment::count());
+    }
+
+    public function test_a_subscription_charge_carrying_an_invoice_note_still_reaches_the_subscription_handler(): void
+    {
+        // An invoice_id note must never be enough to steal an event that carries
+        // a subscription entity - that would silently drop the clinic's charge.
+        [$sub, $payload] = $this->subscriptionCharge(['notes' => ['invoice_id' => '1', 'clinic_id' => '1']]);
+
+        $this->sendWebhook($payload)->assertOk();
 
         $this->assertSame('active', $sub->refresh()->status);
         $this->assertSame(1, SubscriptionTransaction::count());
