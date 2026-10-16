@@ -45,6 +45,11 @@ const TEMPLATE_INFO = {
         category: 'Utility',
         params: 'Body: 1 patient name, 2 clinic name. URL button: {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}.',
     },
+    invoice_ready: {
+        label: 'Invoice Ready',
+        category: 'Utility',
+        params: 'body: 1 patient, 2 clinic, 3 invoice number, 4 total, 5 due wording · URL button {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}',
+    },
     waitlist_slot_open: {
         label: 'Waitlist Slot Open',
         category: 'Utility',

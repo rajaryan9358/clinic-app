@@ -193,6 +193,8 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::get('invoices/{id}', [SuperAdminInvoiceController::class, 'show']);
     Route::put('invoices/{id}', [SuperAdminInvoiceController::class, 'update']);
     Route::post('invoices/{id}/issue', [SuperAdminInvoiceController::class, 'issue']);
+    Route::get('invoices/{id}/pdf', [SuperAdminInvoiceController::class, 'pdf']);
+    Route::post('invoices/{id}/send', [SuperAdminInvoiceController::class, 'send']);
     Route::post('invoices/{id}/cancel', [SuperAdminInvoiceController::class, 'cancel']);
     Route::post('invoices/{id}/payments', [SuperAdminInvoiceController::class, 'recordPayment']);
     Route::post('payments/{id}/refund', [SuperAdminInvoiceController::class, 'refund']);
@@ -286,6 +288,8 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::get('invoices/{id}', [ClinicInvoiceController::class, 'show'])->middleware('perm:billing.view');
     Route::put('invoices/{id}', [ClinicInvoiceController::class, 'update'])->middleware('perm:billing.create');
     Route::post('invoices/{id}/issue', [ClinicInvoiceController::class, 'issue'])->middleware('perm:billing.create');
+    Route::get('invoices/{id}/pdf', [ClinicInvoiceController::class, 'pdf'])->middleware('perm:billing.view');
+    Route::post('invoices/{id}/send', [ClinicInvoiceController::class, 'send'])->middleware('perm:billing.create');
     Route::post('invoices/{id}/payments', [ClinicInvoiceController::class, 'recordPayment'])->middleware('perm:billing.create');
     Route::post('invoices/{id}/cancel', [ClinicInvoiceController::class, 'cancel'])->middleware('perm:billing.edit');
     Route::post('payments/{id}/refund', [ClinicInvoiceController::class, 'refund'])->middleware('perm:billing.edit');

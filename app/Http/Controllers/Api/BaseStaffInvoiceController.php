@@ -6,12 +6,17 @@ use App\Http\Controllers\Concerns\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Invoice;
+use App\Models\Patient;
 use App\Models\Payment;
 use App\Services\Billing\InvoiceService;
+use App\Services\InvoicePdfRenderer;
+use App\Services\Portal\PortalLinkService;
+use App\Services\WhatsApp\PatientNotifier;
 use App\Support\Billing\InvoicePresenter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Staff invoice endpoints shared by the clinic and super-admin APIs. Every rule lives in
@@ -141,6 +146,40 @@ abstract class BaseStaffInvoiceController extends Controller
             ->findOrFail($id);
 
         return $this->success('Payment refunded successfully', InvoicePresenter::payment($this->invoices->markRefunded($payment, $data['reason'])));
+    }
+
+    public function pdf(Request $request, int $id, InvoicePdfRenderer $renderer)
+    {
+        $invoice = $this->find($request, $id);
+
+        return $renderer->render($invoice)->download('invoice-'.str_replace(['/', '\\'], '-',(string) ($invoice->invoice_number ?? $invoice->id)).'.pdf');
+    }
+
+    /** Sends the patient a WhatsApp with a login link that lands on this invoice in the portal. */
+    public function send(Request $request, int $id, PortalLinkService $links, PatientNotifier $notifier)
+    {
+        $invoice = $this->find($request, $id);
+
+        if (! in_array($invoice->status, ['issued', 'paid'], true)) {
+            throw ValidationException::withMessages(['invoice' => 'Only an issued invoice can be sent to the patient.']);
+        }
+
+        $patient = Patient::withTrashed()->findOrFail($invoice->patient_id);
+        $holder = $patient->managed_by_patient_id !== null
+            ? Patient::withTrashed()->findOrFail($patient->managed_by_patient_id)
+            : $patient;
+
+        $issued = $links->issueForRedirect(
+            $holder,
+            now()->addDays(7),
+            "/invoices/{$invoice->id}?profile={$patient->id}",
+            $request->user()?->id,
+        );
+
+        $message = $notifier->invoiceReady($invoice, $issued['token']);
+        $message->refresh();
+
+        return $this->success('Invoice sent successfully', ['delivery_status' => $message->delivery_status]);
     }
 
     public function prefill(Request $request, int $id)
