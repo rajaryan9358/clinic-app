@@ -7,6 +7,7 @@ use App\Models\ClinicSetting;
 use App\Models\Doctor;
 use App\Models\Invoice;
 use App\Models\InvoiceCounter;
+use App\Models\Payment;
 use App\Models\Service;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -23,6 +24,8 @@ use Illuminate\Validation\ValidationException;
  */
 final class InvoiceService
 {
+    private const COUNTER_METHODS = ['cash', 'upi', 'card', 'bank_transfer', 'other'];
+
     /**
      * @param  array{patient_id:int, appointment_id?:int, invoice_date?:string, discount_amount?:float,
      *               tax_amount?:float, notes?:string, items:array<int, array{description:string,
@@ -124,6 +127,9 @@ final class InvoiceService
                 'issued_at' => now(),
             ])->save();
 
+            // Mirrors the money onto the appointment (and marks a zero-total invoice paid).
+            $this->syncState($fresh);
+
             $invoice->setRawAttributes($fresh->getAttributes(), true);
 
             return $invoice->load('items');
@@ -137,6 +143,10 @@ final class InvoiceService
             $fresh = Invoice::where('id', $invoice->id)->where('clinic_id', $invoice->clinic_id)->lockForUpdate()->firstOrFail();
 
             if ($fresh->status !== 'cancelled') {
+                if ($this->amountPaid($fresh) > 0) {
+                    throw ValidationException::withMessages(['invoice' => 'Refund the payments before cancelling this invoice.']);
+                }
+
                 $fresh->forceFill([
                     'status' => 'cancelled',
                     'cancelled_at' => now(),
@@ -148,6 +158,125 @@ final class InvoiceService
 
             return $invoice->load('items');
         });
+    }
+
+    /**
+     * Record a counter payment (cash/UPI/card/...) against an issued invoice.
+     *
+     * @param  array{amount:float|int|string, payment_method:string, reference_number?:?string, paid_at?:mixed, notes?:?string}  $data
+     */
+    public function recordPayment(Invoice $invoice, array $data, ?int $userId = null): Payment
+    {
+        return DB::transaction(function () use ($invoice, $data, $userId) {
+            $fresh = Invoice::where('id', $invoice->id)->where('clinic_id', $invoice->clinic_id)->lockForUpdate()->firstOrFail();
+
+            if ($fresh->status === 'draft') {
+                throw ValidationException::withMessages(['invoice' => 'Issue the invoice before taking a payment.']);
+            }
+            if ($fresh->status === 'cancelled') {
+                throw ValidationException::withMessages(['invoice' => 'A cancelled invoice cannot take a payment.']);
+            }
+            if (! in_array($data['payment_method'] ?? null, self::COUNTER_METHODS, true)) {
+                throw ValidationException::withMessages(['payment_method' => 'That is not a valid payment method.']);
+            }
+
+            $amount = round((float) ($data['amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                throw ValidationException::withMessages(['amount' => 'The payment amount must be more than zero.']);
+            }
+
+            $outstanding = round((float) $fresh->total_amount - $this->amountPaid($fresh), 2);
+            if ($amount > $outstanding) {
+                throw ValidationException::withMessages(['amount' => 'That is more than the amount outstanding.']);
+            }
+
+            $payment = Payment::create([
+                'clinic_id' => $fresh->clinic_id,
+                'invoice_id' => $fresh->id,
+                'appointment_id' => $fresh->appointment_id,
+                'patient_id' => $fresh->patient_id,
+                'amount' => $amount,
+                'payment_method' => $data['payment_method'],
+                'reference_number' => $data['reference_number'] ?? null,
+                'paid_at' => $data['paid_at'] ?? now(),
+                'status' => 'success',
+                'collected_by_user_id' => $userId,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            $this->syncState($fresh);
+            $invoice->setRawAttributes($fresh->getAttributes(), true);
+
+            return $payment;
+        });
+    }
+
+    /** Marks a successful payment refunded (money is returned outside the system) and recomputes state. */
+    public function markRefunded(Payment $payment, string $reason): Payment
+    {
+        return DB::transaction(function () use ($payment, $reason) {
+            $invoice = Invoice::where('id', $payment->invoice_id)->where('clinic_id', $payment->clinic_id)->lockForUpdate()->firstOrFail();
+            $fresh = Payment::where('id', $payment->id)->where('clinic_id', $payment->clinic_id)->lockForUpdate()->firstOrFail();
+
+            if ($fresh->status !== 'success') {
+                throw ValidationException::withMessages(['payment' => 'Only a successful payment can be refunded.']);
+            }
+
+            $fresh->status = 'refunded';
+            $fresh->forceFill(['refunded_at' => now(), 'refund_reason' => $reason])->save();
+
+            $this->syncState($invoice);
+            $payment->setRawAttributes($fresh->getAttributes(), true);
+
+            return $payment;
+        });
+    }
+
+    /**
+     * Bring the invoice status and its appointment in line with the payments.
+     * Call inside a transaction holding the invoice lock. Draft and cancelled
+     * invoices are left alone; a waived appointment keeps its payment_status.
+     */
+    public function syncState(Invoice $invoice): void
+    {
+        if (! in_array($invoice->status, ['issued', 'paid'], true)) {
+            return;
+        }
+
+        $paid = $this->amountPaid($invoice);
+        $status = $paid >= round((float) $invoice->total_amount, 2) ? 'paid' : 'issued';
+
+        if ($invoice->status !== $status) {
+            $invoice->forceFill(['status' => $status])->save();
+        }
+
+        if (! $invoice->appointment_id) {
+            return;
+        }
+
+        $appointment = Appointment::where('id', $invoice->appointment_id)->where('clinic_id', $invoice->clinic_id)->first();
+        if (! $appointment) {
+            return;
+        }
+
+        $appointment->fill([
+            'appointment_fee' => $invoice->subtotal,
+            'discount_amount' => $invoice->discount_amount,
+            'final_amount' => $invoice->total_amount,
+        ]);
+        if ($appointment->payment_status !== 'waived') {
+            $appointment->payment_status = $status === 'paid' ? 'paid' : ($paid > 0 ? 'partial' : 'unpaid');
+        }
+        $appointment->save();
+    }
+
+    /** Sum of successful payments, in rupees. */
+    public function amountPaid(Invoice $invoice): float
+    {
+        return round((float) Payment::where('invoice_id', $invoice->id)
+            ->where('clinic_id', $invoice->clinic_id)
+            ->where('status', 'success')
+            ->sum('amount'), 2);
     }
 
     /**
