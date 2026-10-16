@@ -33,6 +33,11 @@ final class InvoiceService
      */
     public function draft(int $clinicId, array $data, ?int $userId = null): Invoice
     {
+        // Only new invoices are gated: issuing, paying, cancelling and refunding existing ones must keep working.
+        if (! ClinicSetting::billingFor($clinicId)['invoicing_enabled']) {
+            throw ValidationException::withMessages(['invoice' => 'Invoicing is turned off for this clinic.']);
+        }
+
         $items = $this->normalizeItems($data['items'] ?? []);
         $totals = $this->totals($clinicId, $items, (float) ($data['discount_amount'] ?? 0), $data['tax_amount'] ?? null);
 

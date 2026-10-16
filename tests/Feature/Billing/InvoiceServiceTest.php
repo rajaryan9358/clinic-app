@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceCounter;
 use App\Models\User;
 use App\Services\Billing\InvoiceService;
+use App\Support\Billing\InvoicePresenter;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\Grammars\SQLiteGrammar;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -373,5 +374,57 @@ class InvoiceServiceTest extends TestCase
         $this->assertSame('40.00', $updated->tax_amount);
         $this->assertSame('841.00', $updated->total_amount);
         $this->assertTrue((bool) $updated->tax_is_manual);
+    }
+
+    public function test_draft_is_refused_when_invoicing_is_disabled(): void
+    {
+        $clinic = $this->makeBillingClinic(['invoicing_enabled' => false]);
+        $patient = $this->makeBillingPatient($clinic);
+
+        $this->assertValidationMessage('Invoicing is turned off for this clinic.', fn () => $this->invoiceService()->draft($clinic->id, $this->draftData($patient)));
+        $this->assertSame(0, Invoice::count());
+    }
+
+    public function test_draft_is_allowed_when_the_clinic_has_no_settings_row(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $patient = $this->makeBillingPatient($clinic);
+
+        $this->assertSame('draft', $this->invoiceService()->draft($clinic->id, $this->draftData($patient))->status);
+    }
+
+    public function test_existing_invoices_can_still_be_issued_paid_and_cancelled_with_invoicing_off(): void
+    {
+        $clinic = $this->makeBillingClinic(['invoicing_enabled' => true]);
+        $patient = $this->makeBillingPatient($clinic);
+        $service = $this->invoiceService();
+
+        $invoice = $service->draft($clinic->id, $this->draftData($patient));
+        $other = $service->draft($clinic->id, $this->draftData($patient));
+
+        ClinicSetting::where('clinic_id', $clinic->id)->update(['invoicing_enabled' => false]);
+
+        $issued = $service->issue($invoice);
+        $this->assertSame('issued', $issued->status);
+
+        $payment = $service->recordPayment($issued, ['amount' => 100, 'payment_method' => 'cash']);
+        $this->assertSame('success', $payment->status);
+
+        $refunded = $service->markRefunded($payment, 'mistake');
+        $this->assertSame('refunded', $refunded->status);
+
+        $this->assertSame('cancelled', $service->cancel($other)->status);
+    }
+
+    public function test_detail_presenter_exposes_tax_is_manual_but_the_portal_does_not(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $patient = $this->makeBillingPatient($clinic);
+
+        $invoice = $this->invoiceService()->draft($clinic->id, $this->draftData($patient, ['tax_amount' => 25]));
+
+        $this->assertTrue(InvoicePresenter::detail($invoice)['tax_is_manual']);
+        $this->assertArrayNotHasKey('tax_is_manual', InvoicePresenter::portalDetail($invoice));
+        $this->assertArrayNotHasKey('tax_is_manual', InvoicePresenter::item($invoice));
     }
 }

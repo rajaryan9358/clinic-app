@@ -63,8 +63,8 @@ const EMPTY_FORM = { items: [newLine()], discount: '', tax: '', notes: '', invoi
 const formFromInvoice = (inv) => ({
     items: (inv.items || []).length ? inv.items.map(lineFromApi) : [newLine()],
     discount: Number(inv.discount_amount) > 0 ? String(inv.discount_amount) : '',
-    // Left blank on purpose: blank lets the server keep computing the clinic's automatic tax.
-    tax: '',
+    // A hand-set tax is shown so it can be seen and kept; an automatic one stays blank so the server keeps computing it.
+    tax: inv.tax_is_manual ? String(inv.tax_amount ?? '') : '',
     notes: inv.notes || '',
     invoiceDate: inv.invoice_date || '',
 });
@@ -688,12 +688,14 @@ export default function InvoiceDetailPage() {
                                     </div>
                                     <div>
                                         <label className={labelClass}>Tax (override)</label>
-                                        <input type="number" min="0" step="0.01" value={form.tax} onChange={(e) => setForm((p) => ({ ...p, tax: e.target.value }))} placeholder="Automatic" className={inputClass} />
+                                        <input type="number" min="0" step="0.01" value={form.tax} onChange={(e) => setForm((p) => ({ ...p, tax: e.target.value }))} placeholder={invoice?.tax_is_manual ? undefined : 'Automatic'} className={inputClass} />
                                     </div>
                                 </div>
                                 <p className="text-xs text-slate-500">
-                                    Leave tax blank to use the clinic&apos;s automatic tax. Tax and the total are calculated when you save.
-                                    {!isNew && Number(invoice?.tax_amount) > 0 ? ` Current tax: ${formatRupees(invoice.tax_amount)}.` : ''}
+                                    {invoice?.tax_is_manual
+                                        ? `Tax was set by hand (${formatRupees(invoice.tax_amount)}) and stays at that amount until you enter a different one; it cannot be switched back to automatic.`
+                                        : `Leave tax blank to use the clinic's automatic tax${!isNew && Number(invoice?.tax_amount) > 0 ? ` (currently ${formatRupees(invoice.tax_amount)})` : ''}.`}
+                                    {' '}Tax and the total are calculated when you save.
                                 </p>
                                 <div>
                                     <label className={labelClass}>Invoice date</label>

@@ -47,6 +47,7 @@ final class InvoicePresenter
             'subtotal' => (float) $invoice->subtotal,
             'discount_amount' => (float) $invoice->discount_amount,
             'tax_amount' => (float) $invoice->tax_amount,
+            'tax_is_manual' => (bool) $invoice->tax_is_manual,
             'notes' => $invoice->notes,
             'issued_at' => $invoice->issued_at?->toIso8601String(),
             'cancelled_at' => $invoice->cancelled_at?->toIso8601String(),
@@ -74,7 +75,7 @@ final class InvoicePresenter
 
         // Staff-authored free text (invoice notes, cancellation and refund reasons, payment notes)
         // is internal and must never reach the patient.
-        unset($detail['notes'], $detail['cancelled_reason'], $detail['cancelled_at']);
+        unset($detail['notes'], $detail['cancelled_reason'], $detail['cancelled_at'], $detail['tax_is_manual']);
 
         $detail['payments'] = array_values(array_map(
             function (array $p) {
