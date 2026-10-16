@@ -17,7 +17,6 @@ use App\Http\Controllers\Api\Clinic\PatientFamilyController as ClinicPatientFami
 use App\Http\Controllers\Api\Clinic\PatientPortalLinkController as ClinicPatientPortalLinkController;
 use App\Http\Controllers\Api\Clinic\WaitlistController as ClinicWaitlistController;
 use App\Http\Controllers\Api\Clinic\PatientProfileController as ClinicPatientProfileController;
-use App\Http\Controllers\Api\Clinic\PaymentController as ClinicPaymentController;
 use App\Http\Controllers\Api\Clinic\ReminderLogController as ClinicReminderLogController;
 use App\Http\Controllers\Api\Clinic\ReportController as ClinicReportController;
 use App\Http\Controllers\Api\Clinic\ReviewController as ClinicReviewController;
@@ -56,7 +55,6 @@ use App\Http\Controllers\Api\SuperAdmin\PatientFamilyController as SuperAdminPat
 use App\Http\Controllers\Api\SuperAdmin\PatientPortalLinkController as SuperAdminPatientPortalLinkController;
 use App\Http\Controllers\Api\SuperAdmin\WaitlistController as SuperAdminWaitlistController;
 use App\Http\Controllers\Api\SuperAdmin\PatientProfileController as SuperAdminPatientProfileController;
-use App\Http\Controllers\Api\SuperAdmin\PaymentController as SuperAdminPaymentController;
 use App\Http\Controllers\Api\SuperAdmin\PlanController as SuperAdminPlanController;
 use App\Http\Controllers\Api\SuperAdmin\ReminderLogController as SuperAdminReminderLogController;
 use App\Http\Controllers\Api\SuperAdmin\ReportController as SuperAdminReportController;
@@ -190,8 +188,15 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     registerCrudRoutes('whatsapp/conversations', SuperAdminWhatsappConversationController::class);
     registerCrudRoutes('whatsapp/messages', SuperAdminWhatsappMessageController::class);
     registerCrudRoutes('whatsapp/sessions', SuperAdminWhatsappFlowSessionController::class);
-    registerCrudRoutes('invoices', SuperAdminInvoiceController::class);
-    registerCrudRoutes('payments', SuperAdminPaymentController::class);
+    Route::get('invoices', [SuperAdminInvoiceController::class, 'index']);
+    Route::post('invoices', [SuperAdminInvoiceController::class, 'store']);
+    Route::get('invoices/{id}', [SuperAdminInvoiceController::class, 'show']);
+    Route::put('invoices/{id}', [SuperAdminInvoiceController::class, 'update']);
+    Route::post('invoices/{id}/issue', [SuperAdminInvoiceController::class, 'issue']);
+    Route::post('invoices/{id}/cancel', [SuperAdminInvoiceController::class, 'cancel']);
+    Route::post('invoices/{id}/payments', [SuperAdminInvoiceController::class, 'recordPayment']);
+    Route::post('payments/{id}/refund', [SuperAdminInvoiceController::class, 'refund']);
+    Route::get('appointments/{id}/invoice-prefill', [SuperAdminInvoiceController::class, 'prefill']);
     registerCrudRoutes('settings/clinic', SuperAdminClinicSettingController::class);
     registerCrudRoutes('audit-logs', SuperAdminAuditLogController::class);
     registerCrudRoutes('reviews', SuperAdminReviewController::class);
@@ -275,8 +280,16 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     registerCrudRoutes('whatsapp/conversations', ClinicWhatsappConversationController::class, 'whatsapp');
     registerCrudRoutes('whatsapp/messages', ClinicWhatsappMessageController::class, 'whatsapp');
     registerCrudRoutes('whatsapp/sessions', ClinicWhatsappFlowSessionController::class, 'whatsapp');
-    registerCrudRoutes('invoices', ClinicInvoiceController::class, 'billing');
-    registerCrudRoutes('payments', ClinicPaymentController::class, 'billing');
+    // Invoices and payments are never generic CRUD: every write goes through InvoiceService.
+    Route::get('invoices', [ClinicInvoiceController::class, 'index'])->middleware('perm:billing.view');
+    Route::post('invoices', [ClinicInvoiceController::class, 'store'])->middleware('perm:billing.create');
+    Route::get('invoices/{id}', [ClinicInvoiceController::class, 'show'])->middleware('perm:billing.view');
+    Route::put('invoices/{id}', [ClinicInvoiceController::class, 'update'])->middleware('perm:billing.create');
+    Route::post('invoices/{id}/issue', [ClinicInvoiceController::class, 'issue'])->middleware('perm:billing.create');
+    Route::post('invoices/{id}/payments', [ClinicInvoiceController::class, 'recordPayment'])->middleware('perm:billing.create');
+    Route::post('invoices/{id}/cancel', [ClinicInvoiceController::class, 'cancel'])->middleware('perm:billing.edit');
+    Route::post('payments/{id}/refund', [ClinicInvoiceController::class, 'refund'])->middleware('perm:billing.edit');
+    Route::get('appointments/{id}/invoice-prefill', [ClinicInvoiceController::class, 'prefill'])->middleware('perm:billing.view');
     Route::prefix('settings/clinic')->group(function () {
         // Clinic settings are a singleton per clinic: "create" counts as edit.
         Route::get('/', [ClinicClinicSettingController::class, 'index'])->middleware('perm:clinic_settings.view');
