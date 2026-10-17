@@ -550,7 +550,8 @@ final class WaitlistService
             return $patient;
         }
 
-        return Patient::query()->find($patient->managed_by_patient_id);
+        // Same-clinic only: a holder in another clinic is bad data and must never receive a login link.
+        return Patient::query()->where('clinic_id', $patient->clinic_id)->find($patient->managed_by_patient_id);
     }
 
     private function appointmentDate(Appointment $appointment): ?string
