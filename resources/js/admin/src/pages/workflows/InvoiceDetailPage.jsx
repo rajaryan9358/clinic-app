@@ -4,6 +4,7 @@ import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDate, formatDateTime } from '../../utils/dateFormat';
 import { formatRupees } from '../../utils/money';
@@ -579,7 +580,7 @@ export default function InvoiceDetailPage() {
     const openPayBox = () => setPayBox({ open: true, amount: balance > 0 ? balance.toFixed(2) : '', method: 'cash', reference: '', notes: '' });
 
     if (loading) {
-        return <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-sm text-slate-600 shadow-sm">Loading…</div>;
+        return <Skeleton variant="fields" rows={8} />;
     }
 
     if (!isNew && !invoice) {

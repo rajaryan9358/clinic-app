@@ -4,6 +4,7 @@ import client from '../api/client';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AppIcon from '../components/AppIcon';
+import Skeleton from '../components/Skeleton';
 import StatusBadge from '../components/StatusBadge';
 import ClinicStatusBadge from '../components/billing/ClinicStatusBadge.jsx';
 import { modules } from '../config/modules';
@@ -742,7 +743,7 @@ Write an appropriate reply.`;
                 </div>
             ) : null}
 
-            {loading ? <div className="rounded border bg-white p-4">Loading...</div> : (
+            {loading ? <Skeleton variant="table" rows={8} cols={5} /> : (
                 <DataTable
                     rows={rows}
                     actionMode="buttons"

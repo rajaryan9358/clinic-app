@@ -4,6 +4,7 @@ import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 
 function prettyDate(ymd) {
@@ -366,7 +367,7 @@ export default function PrescriptionPage() {
             ) : null}
 
             {loading ? (
-                <div className="rx-surface rounded-2xl bg-white p-5 text-sm text-slate-600">Loading…</div>
+                <div className="rx-surface rounded-2xl bg-white p-6"><Skeleton variant="fields" rows={8} card={false} /></div>
             ) : error ? (
                 <div className="rx-surface rounded-2xl bg-rose-50 p-5 text-sm text-rose-700">{error}</div>
             ) : (

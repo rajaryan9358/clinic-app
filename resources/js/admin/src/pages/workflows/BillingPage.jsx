@@ -4,6 +4,7 @@ import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
+import { SkeletonTableRows } from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDate } from '../../utils/dateFormat';
 import { formatRupees } from '../../utils/money';
@@ -249,7 +250,7 @@ export default function BillingPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {loading && !rows.length ? (
-                                <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+                                <SkeletonTableRows rows={6} cols={7} />
                             ) : null}
                             {!loading && !rows.length ? (
                                 <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">No invoices.</td></tr>

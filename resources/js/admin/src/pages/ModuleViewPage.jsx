@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import AppIcon from '../components/AppIcon';
+import Skeleton from '../components/Skeleton';
 import StatusBadge from '../components/StatusBadge';
 import { modules } from '../config/modules';
 import { canAccessModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
@@ -312,7 +313,7 @@ function ModuleViewPageInner() {
             {loadError ? (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">{loadError}</div>
             ) : !record ? (
-                <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">Loading…</div>
+                <Skeleton variant="fields" rows={8} />
             ) : (
                 <div className="space-y-4">
                     {sections.length === 0 ? (

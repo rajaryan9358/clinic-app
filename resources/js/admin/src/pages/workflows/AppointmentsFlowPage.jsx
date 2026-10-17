@@ -6,6 +6,7 @@ import { useScope } from '../../context/ScopeContext';
 import AppointmentDetailDrawer from '../../components/AppointmentDetailDrawer';
 import StatusBadge from '../../components/StatusBadge';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
 function modeButton(active) {
@@ -1033,7 +1034,7 @@ export default function AppointmentsFlowPage() {
                 </div>
 
                 {loading ? (
-                    <div className="p-5 text-sm text-slate-600">Loading…</div>
+                    <Skeleton variant="table" rows={6} cols={6} card={false} />
                 ) : !rows.length ? (
                     <div className="p-5 text-sm text-slate-600">No appointments found.</div>
                 ) : (
