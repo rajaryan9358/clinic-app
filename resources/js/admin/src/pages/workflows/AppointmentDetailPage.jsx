@@ -326,11 +326,11 @@ export default function AppointmentDetailPage() {
         rose:    'bg-rose-600 hover:bg-rose-700 text-white',
     };
 
-    // Back returns to the queue exactly as the user left it (its filters live in the URL); a page
-    // opened directly has no history to go back to, so it falls through to the plain queue.
+    // Always goes to the appointments queue (the label says so). When the user came from the queue,
+    // its filters travel in the link state and are restored through the URL.
     const goBack = () => {
-        if (location.key !== 'default') navigate(-1);
-        else navigate('/workflows/appointments');
+        const search = location.state?.queueSearch;
+        navigate({ pathname: '/workflows/appointments', search: search ? `?${search}` : '' });
     };
 
     return (

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
@@ -30,6 +30,7 @@ export default function WaitlistPage() {
     const { user } = useAuth();
     const scope = useScope();
     const location = useLocation();
+    const navigate = useNavigate();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const canManage = Boolean(scope?.can?.('appointments.create'));
 
@@ -46,6 +47,7 @@ export default function WaitlistPage() {
     const [error, setError] = useState('');
     // The add page returns here with its confirmation in the navigation state.
     const [notice, setNotice] = useState(() => location.state?.notice || '');
+    const noticeFiltersRef = useRef(`${filters.doctorId}|${filters.date}|${filters.status}`);
 
     const [removeConfirm, setRemoveConfirm] = useState({ id: null, busy: false });
 
@@ -54,8 +56,20 @@ export default function WaitlistPage() {
     useEffect(() => {
         setPage(1);
         setRemoveConfirm({ id: null, busy: false });
-        setNotice(location.state?.notice || '');
     }, [filters.doctorId, filters.date, filters.status, location.key]);
+
+    // The add page's confirmation arrives once in the navigation state; consume it so a refresh or
+    // a later filter change does not bring it back. Changing a filter dismisses it.
+    useEffect(() => {
+        if (location.state?.notice) navigate(location.pathname, { replace: true, state: null });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        const key = [filters.doctorId, filters.date, filters.status].join('|');
+        if (noticeFiltersRef.current === key) return;
+        noticeFiltersRef.current = key;
+        setNotice('');
+    }, [filters.doctorId, filters.date, filters.status]);
 
     useEffect(() => {
         let cancelled = false;

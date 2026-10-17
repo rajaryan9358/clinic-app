@@ -16,6 +16,13 @@ function modeButton(active) {
 
 const MODES = ['today', 'calendar', 'upcoming', 'list', 'range'];
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Shape check plus a real-calendar check, so ?day=9999-99-99 never reaches the API.
+const isRealYmd = (v) => {
+    if (!v || !YMD_RE.test(v)) return false;
+    const [y, m, d] = v.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
 
 // The queue's filters live in the URL so that opening an appointment (a separate page) and coming
 // back restores them. Parameters: mode, day (calendar mode), from + to (range mode), q (search),
@@ -95,12 +102,12 @@ function AppointmentsQueue() {
     }); // today | calendar | upcoming | list | range
     const [date, setDate] = useState(() => {
         const fromUrl = searchParams.get('day');
-        return fromUrl && YMD_RE.test(fromUrl) ? fromUrl : toYMD(new Date());
+        return isRealYmd(fromUrl) ? fromUrl : toYMD(new Date());
     });
     const [range, setRange] = useState(() => {
         const from = searchParams.get('from');
         const to = searchParams.get('to');
-        return { from: from && YMD_RE.test(from) ? from : '', to: to && YMD_RE.test(to) ? to : '' };
+        return { from: isRealYmd(from) ? from : '', to: isRealYmd(to) ? to : '' };
     });
     const [search, setSearch] = useState(() => searchParams.get('q') || '');
     const [status, setStatus] = useState(() => {
@@ -415,7 +422,10 @@ function AppointmentsQueue() {
 
 
     // Mirror the filters into the URL (replace, so filtering does not stack history entries).
+    // Debounced like the list fetch: history.replaceState is rate-limited in some browsers (Safari
+    // throws past ~100 calls per 30s), so typing in the search box must not write per keystroke.
     useEffect(() => {
+        const t = setTimeout(() => {
         const next = new URLSearchParams();
         next.set('mode', mode);
         if (mode === 'calendar') next.set('day', date);
@@ -428,7 +438,13 @@ function AppointmentsQueue() {
         if (visitType) next.set('visit', visitType);
         if (channel) next.set('channel', channel);
         if (next.toString() === searchParams.toString()) return;
-        setSearchParams(next, { replace: true, state: { queueFilters: true } });
+        try {
+            setSearchParams(next, { replace: true, state: { queueFilters: true } });
+        } catch {
+            // The URL is a convenience for "back"; never let a history error blank the queue.
+        }
+        }, 250);
+        return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mode, date, range.from, range.to, search, status, visitType, channel]);
 
@@ -1203,6 +1219,7 @@ function AppointmentsQueue() {
                                             <div className="flex items-center justify-end gap-2">
                                                 <Link
                                                     to={`/workflows/appointments/${r.id}`}
+                                                    state={{ queueSearch: searchParams.toString() }}
                                                     className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
                                                 >
                                                     <AppIcon name="view" className="h-3.5 w-3.5" />
