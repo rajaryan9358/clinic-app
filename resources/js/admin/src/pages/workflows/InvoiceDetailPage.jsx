@@ -86,9 +86,6 @@ const FEE_VISIT_TYPES = [
 
 const APPOINTMENT_WINDOW_DAYS = 90;
 
-// Every appointment status except cancelled; one request each (see the appointments effect).
-const BILLABLE_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_consultation', 'completed', 'no_show', 'rescheduled'];
-
 // Local calendar date (YYYY-MM-DD) N days ago; toISOString would shift it to UTC.
 const dateDaysAgo = (days) => {
     const d = new Date();
@@ -289,19 +286,18 @@ export default function InvoiceDetailPage() {
         setBillable({ loading: true, error: '', items: [] });
         (async () => {
             try {
-                // The status filter takes a single value and, for doctor-role users, an unfiltered list is
-                // narrowed to open visits only (hiding completed ones), so ask for each status explicitly.
-                const [invRes, ...apptRes] = await Promise.all([
+                // For doctor-role users the server narrows an unfiltered list to open visits only, which
+                // would hide completed ones; the second, completed-only request covers that. Results are merged by id.
+                const window90 = {
+                    patient_id: patientId,
+                    appointment_date_from: dateDaysAgo(APPOINTMENT_WINDOW_DAYS),
+                    appointment_date_to: dateDaysAgo(0),
+                    per_page: 100,
+                };
+                const [invRes, allRes, completedRes] = await Promise.all([
                     client.get(`${base}/invoices`, { params: { patient_id: patientId, per_page: 100 } }),
-                    ...BILLABLE_APPOINTMENT_STATUSES.map((status) => client.get(`${base}/appointments`, {
-                        params: {
-                            patient_id: patientId,
-                            status,
-                            appointment_date_from: dateDaysAgo(APPOINTMENT_WINDOW_DAYS),
-                            appointment_date_to: dateDaysAgo(0),
-                            per_page: 100,
-                        },
-                    })),
+                    client.get(`${base}/appointments`, { params: window90 }),
+                    client.get(`${base}/appointments`, { params: { ...window90, status: 'completed' } }),
                 ]);
                 if (cancelled) return;
                 const billed = new Set(
@@ -309,8 +305,9 @@ export default function InvoiceDetailPage() {
                         .filter((i) => i.status !== 'cancelled' && i.appointment_id)
                         .map((i) => Number(i.appointment_id)),
                 );
-                const items = apptRes
-                    .flatMap((r) => r?.data?.data || [])
+                const byId = new Map();
+                [allRes, completedRes].flatMap((r) => r?.data?.data || []).forEach((a) => byId.set(Number(a.id), a));
+                const items = [...byId.values()]
                     .filter((a) => a.status !== 'cancelled' && !billed.has(Number(a.id)))
                     .sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)) || b.id - a.id);
                 setBillable({ loading: false, error: '', items });
