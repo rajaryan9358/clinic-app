@@ -25,7 +25,8 @@ export default function FollowupFormPage() {
 
     const [taskType, setTaskType] = useState('call');
     const [dueDate, setDueDate] = useState(todayYMD);
-    const [assignee, setAssignee] = useState('');
+    // Doctors and assistants default to themselves so the task lands in their own queue.
+    const [assignee, setAssignee] = useState(() => (['doctor', 'assistant'].includes(user?.role) && user?.id ? String(user.id) : ''));
     const [staff, setStaff] = useState([]);
 
     const [busy, setBusy] = useState(false);
@@ -66,17 +67,12 @@ export default function FollowupFormPage() {
         if (!canSubmit) return;
         setBusy(true);
         setError('');
-        // The API scopes a doctor's list to their own tasks, so stamp the doctor
-        // they are acting as; otherwise the new task would vanish from their list.
-        let doctorId = null;
-        try { doctorId = Number(localStorage.getItem('active_doctor_id')) || null; } catch { /* storage unavailable */ }
         try {
             await client.post(`${base}/followups`, {
                 patient_id: patient.id,
                 task_type: taskType,
                 due_date: dueDate,
                 assigned_to_user_id: assignee ? Number(assignee) : null,
-                doctor_id: doctorId,
                 status: 'pending',
             });
             navigate('/workflows/followups', { replace: true });
@@ -159,6 +155,7 @@ export default function FollowupFormPage() {
                     <label htmlFor="fu-assignee" className="text-sm font-semibold text-slate-900">Assigned to</label>
                     <select id="fu-assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)} className={`mt-2 ${inputClass}`}>
                         <option value="">Unassigned</option>
+                        {user?.id && !staff.some((u) => String(u.id) === String(user.id)) ? <option value={String(user.id)}>{user.full_name || user.name || "Me"} (me)</option> : null}
                         {staff.map((u) => <option key={u.id} value={String(u.id)}>{u.full_name || u.name || `User #${u.id}`}</option>)}
                     </select>
                 </div>

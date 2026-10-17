@@ -77,7 +77,7 @@ const GROUPS = [
     { key: 'later', title: 'Later', tone: 'text-slate-900', match: (d) => d > 7 },
 ];
 
-function FollowupRow({ task, kind, days, canEdit, onDone }) {
+function FollowupRow({ task, kind, days, canEdit, onDone, busy }) {
     const patientName = task.patient?.full_name || `Patient #${task.patient_id}`;
     const phone = String(task.patient?.phone || '').replace(/[^\d+]/g, '');
     const isPending = kind === 'pending';
@@ -141,7 +141,8 @@ function FollowupRow({ task, kind, days, canEdit, onDone }) {
                         <button
                             type="button"
                             onClick={() => onDone(task)}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+                            disabled={busy}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                         >
                             <AppIcon name="check" className="h-4 w-4" />
                             Done
@@ -191,9 +192,11 @@ export default function FollowupsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // Tasks marked Done that are still inside the undo window (hidden from the list).
-    const [undoing, setUndoing] = useState([]);
-    const timersRef = useRef(new Map()); // task id -> { timer, task }
+    // Done is sent immediately. `busy` holds ids with a request in flight;
+    // `recent` holds just-completed tasks whose Undo is still on offer.
+    const [busy, setBusy] = useState([]);
+    const [recent, setRecent] = useState([]);
+    const timersRef = useRef(new Map()); // task id -> toast dismissal timer
     const statusRef = useRef(filters.status);
     statusRef.current = filters.status;
 
@@ -261,17 +264,22 @@ export default function FollowupsPage() {
         return () => { cancelled = true; };
     }, [base, filters.doctorId, filters.assigneeId, filters.status, reloadKey]);
 
-    // Leaving the page must not lose a Done that is still inside its undo window.
     useEffect(() => () => {
-        timersRef.current.forEach(({ timer, task }) => {
-            clearTimeout(timer);
-            client.post(`${base}/followups/${task.id}/complete`).catch(() => {});
-        });
+        timersRef.current.forEach((timer) => clearTimeout(timer));
         timersRef.current.clear();
-    }, [base]);
+    }, []);
 
-    const commitDone = async (task) => {
-        timersRef.current.delete(task.id);
+    const dropToast = (id) => {
+        clearTimeout(timersRef.current.get(id));
+        timersRef.current.delete(id);
+        setRecent((list) => list.filter((t) => t.id !== id));
+    };
+
+    // Completes straight away; Undo (below) is a real revert, so a click is never silently lost.
+    const markDone = async (task) => {
+        if (busy.includes(task.id)) return; // prevent double-submit
+        setError('');
+        setBusy((b) => [...b, task.id]);
         try {
             await client.post(`${base}/followups/${task.id}/complete`);
             setData((d) => {
@@ -285,29 +293,38 @@ export default function FollowupsPage() {
                     doneTotal: d.doneTotal + 1,
                 };
             });
-            setUndoing((list) => list.filter((t) => t.id !== task.id));
+            setRecent((list) => [...list.filter((t) => t.id !== task.id), task]);
+            timersRef.current.set(task.id, setTimeout(() => dropToast(task.id), UNDO_MS));
         } catch (e) {
-            // The task returns to its group and the server's own words explain why.
-            setUndoing((list) => list.filter((t) => t.id !== task.id));
+            // The row stays where it was and the server's own words explain why.
             setError(apiError(e, 'Could not mark the follow-up as done'));
             // A 422 means it was already closed elsewhere; refresh so the list agrees.
             if (e?.response?.status === 422) setReloadKey((k) => k + 1);
+        } finally {
+            setBusy((b) => b.filter((id) => id !== task.id));
         }
     };
 
-    const markDone = (task) => {
-        if (timersRef.current.has(task.id)) return; // already counting down
+    // Put the task back to pending through the generic update (same followups.edit gate).
+    const undoDone = async (task) => {
+        dropToast(task.id);
         setError('');
-        setUndoing((list) => [...list, task]);
-        timersRef.current.set(task.id, { timer: setTimeout(() => commitDone(task), UNDO_MS), task });
-    };
-
-    const undoDone = (task) => {
-        const entry = timersRef.current.get(task.id);
-        if (!entry) return;
-        clearTimeout(entry.timer);
-        timersRef.current.delete(task.id);
-        setUndoing((list) => list.filter((t) => t.id !== task.id));
+        setBusy((b) => [...b, task.id]);
+        try {
+            await client.put(`${base}/followups/${task.id}`, { status: 'pending', completed_at: null });
+            setData((d) => ({
+                ...d,
+                pending: [...d.pending.filter((t) => t.id !== task.id), task],
+                pendingTotal: d.pendingTotal + 1,
+                done: d.done.filter((t) => t.id !== task.id),
+                doneTotal: Math.max(0, d.doneTotal - 1),
+            }));
+        } catch (e) {
+            // Leave it shown as done: that is what the server still says.
+            setError(apiError(e, 'Could not undo; the follow-up is still marked done'));
+        } finally {
+            setBusy((b) => b.filter((id) => id !== task.id));
+        }
     };
 
     const setFilter = (key, value) => setFilters((p) => ({ ...p, [key]: value }));
@@ -323,8 +340,8 @@ export default function FollowupsPage() {
     }, [staff, data, user]);
 
     const today = toYMD(new Date());
-    const hiddenIds = new Set(undoing.map((t) => t.id));
-    const pending = data.pending.filter((t) => !hiddenIds.has(t.id)).sort(byDue);
+    
+    const pending = [...data.pending].sort(byDue);
     const grouped = GROUPS.map((g) => ({ ...g, rows: pending.filter((t) => g.match(daysUntil(t.due_date, today))) }));
     const showPending = ['all', 'pending'].includes(filters.status);
     const showDone = ['all', 'done'].includes(filters.status);
@@ -420,7 +437,7 @@ export default function FollowupsPage() {
                                 {g.rows.length ? (
                                     <ul className="divide-y divide-slate-100">
                                         {g.rows.map((t) => (
-                                            <FollowupRow key={t.id} task={t} kind="pending" days={daysUntil(t.due_date, today)} canEdit={canEdit} onDone={markDone} />
+                                            <FollowupRow key={t.id} task={t} kind="pending" days={daysUntil(t.due_date, today)} canEdit={canEdit} onDone={markDone} busy={busy.includes(t.id)} />
                                         ))}
                                     </ul>
                                 ) : (
@@ -465,9 +482,9 @@ export default function FollowupsPage() {
                 </div>
             )}
 
-            {undoing.length ? (
+            {recent.length ? (
                 <div className="fixed bottom-4 left-1/2 z-50 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 space-y-2" role="status" aria-live="polite">
-                    {undoing.map((t) => (
+                    {recent.map((t) => (
                         <div key={t.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">
                             <span className="truncate">Marked done: {t.patient?.full_name || `Patient #${t.patient_id}`}</span>
                             <button type="button" onClick={() => undoDone(t)} className="shrink-0 font-semibold underline underline-offset-2">
