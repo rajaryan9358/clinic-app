@@ -61,6 +61,8 @@ class PermissionMatrixTest extends TestCase
             'invoice prefill' => ['GET', '/api/clinic/appointments/999/invoice-prefill', 'billing.view'],
             'invoice create' => ['POST', '/api/clinic/invoices', 'billing.create'],
             'invoice update' => ['PUT', '/api/clinic/invoices/999', 'billing.create'],
+            'invoice pdf' => ['GET', '/api/clinic/invoices/999/pdf', 'billing.view'],
+            'invoice send' => ['POST', '/api/clinic/invoices/999/send', 'billing.create'],
             'invoice issue' => ['POST', '/api/clinic/invoices/999/issue', 'billing.create'],
             'payments create' => ['POST', '/api/clinic/invoices/999/payments', 'billing.create'],
             'invoice cancel' => ['POST', '/api/clinic/invoices/999/cancel', 'billing.edit'],

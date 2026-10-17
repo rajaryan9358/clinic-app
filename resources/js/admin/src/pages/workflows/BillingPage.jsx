@@ -29,7 +29,16 @@ const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2
  * patient money and is shown as such, never clamped to zero.
  */
 export function BalanceCell({ invoice }) {
-    if (invoice.status === 'draft' || invoice.status === 'cancelled') {
+    if (invoice.status === 'cancelled') {
+        // Money can still be attached to a cancelled invoice (e.g. an online capture that landed
+        // after cancellation). Surface it so it can be found from the list.
+        const paid = Number(invoice.amount_paid);
+        if (paid > 0) {
+            return <span className="text-xs font-semibold text-rose-700">{formatRupees(paid)} paid on a cancelled invoice</span>;
+        }
+        return <span className="text-slate-400">—</span>;
+    }
+    if (invoice.status === 'draft') {
         return <span className="text-slate-400">—</span>;
     }
     const balance = Number(invoice.balance);

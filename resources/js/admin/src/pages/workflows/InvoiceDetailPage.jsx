@@ -372,9 +372,16 @@ export default function InvoiceDetailPage() {
             reference_number: payBox.reference.trim() || undefined,
             notes: payBox.notes.trim() || undefined,
         });
+        // The POST resolved, so the payment IS recorded. Close the box and clear the amount before
+        // anything else; a refresh failure below must never read as a failed payment (re-entry risk).
         setPayBox({ open: false, amount: '', method: 'cash', reference: '', notes: '' });
-        await reload();
         setNotice(res?.data?.message || 'Payment recorded.');
+        try {
+            await reload();
+        } catch (e) {
+            setNotice('');
+            setError('Payment recorded — could not refresh, reload the page to see the updated balance.');
+        }
     }, 'Failed to record payment');
 
     const refundPayment = () => run('refund', async () => {
@@ -384,8 +391,13 @@ export default function InvoiceDetailPage() {
         }
         const res = await client.post(`${base}/payments/${refundBox.paymentId}/refund`, { reason: refundBox.reason.trim() });
         setRefundBox({ paymentId: null, reason: '' });
-        await reload();
         setNotice(res?.data?.message || 'Payment refunded.');
+        try {
+            await reload();
+        } catch (e) {
+            setNotice('');
+            setError('Refund recorded — could not refresh, reload the page to see the updated balance.');
+        }
     }, 'Failed to refund payment');
 
     const downloadPdf = () => run('pdf', async () => {
@@ -544,6 +556,7 @@ export default function InvoiceDetailPage() {
                         <div>
                             <label className={labelClass}>Reference</label>
                             <input value={payBox.reference} maxLength={100} onChange={(e) => setPayBox((p) => ({ ...p, reference: e.target.value }))} className={inputClass} />
+                            <p className="mt-1 text-xs text-slate-500">Appears on the patient's copy of the invoice — keep internal remarks in Notes.</p>
                         </div>
                         <div>
                             <label className={labelClass}>Notes</label>

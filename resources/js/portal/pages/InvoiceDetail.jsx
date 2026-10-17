@@ -32,9 +32,11 @@ function paymentTime(iso) {
  * checkout changes nothing and says so; only a successful confirm (or a
  * reload showing `paid`) ever reports success.
  *
- * `paying` (a ref mirror guards the synchronous double-tap) blocks a second
- * checkout while one is open; `requestRef`/`idRef` drop responses that belong
- * to a previous invoice id or profile.
+ * `payingMap` holds the in-flight stage per invoice scope (`id:profile`), with
+ * `inflightRef` as the synchronous double-tap guard; both block a second checkout
+ * for the same scope while one is open. `requestRef` drops load responses that
+ * belong to a previous request, and `scopeRef` lets stale async payment steps
+ * detect that the invoice id or profile has changed.
  */
 export default function InvoiceDetail() {
     const { id } = useParams();
@@ -48,7 +50,9 @@ export default function InvoiceDetail() {
     scopeRef.current = `${id}:${activeProfileId}`;
 
     // In-flight payment stage per invoice scope ('starting' | 'checkout' | 'confirming'), so each
-    // invoice's flow owns its own lock and survives navigating away and back.
+    // invoice's flow owns its own lock while switching between invoices within this mount. The lock
+    // is per-mount: it does NOT survive navigating away and back. A double order is prevented
+    // server-side, which reuses/supersedes the open order for the invoice.
     const [payingMap, setPayingMap] = useState({});
     const inflightRef = useRef(new Set()); // synchronous double-tap guard, same keys as payingMap
     const paying = payingMap[scopeRef.current] ?? null;

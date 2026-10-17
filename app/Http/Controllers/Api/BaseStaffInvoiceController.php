@@ -142,7 +142,7 @@ abstract class BaseStaffInvoiceController extends Controller
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
 
         $payment = Payment::query()
-            ->when($this->clinicId($request), fn (Builder $b, int $clinic) => $b->where('clinic_id', $clinic))
+            ->when($this->clinicId($request) !== null, fn (Builder $b) => $b->where('clinic_id', $this->clinicId($request)))
             ->findOrFail($id);
 
         return $this->success('Payment refunded successfully', InvoicePresenter::payment($this->invoices->markRefunded($payment, $data['reason'])));
@@ -191,7 +191,7 @@ abstract class BaseStaffInvoiceController extends Controller
     public function prefill(Request $request, int $id)
     {
         $appointment = Appointment::query()
-            ->when($this->clinicId($request), fn (Builder $b, int $clinic) => $b->where('clinic_id', $clinic))
+            ->when($this->clinicId($request) !== null, fn (Builder $b) => $b->where('clinic_id', $this->clinicId($request)))
             ->findOrFail($id);
 
         return $this->success('Invoice prefill fetched successfully', [
@@ -205,7 +205,7 @@ abstract class BaseStaffInvoiceController extends Controller
     protected function scoped(Request $request): Builder
     {
         return Invoice::query()
-            ->when($this->clinicId($request), fn (Builder $b, int $clinic) => $b->where('clinic_id', $clinic));
+            ->when($this->clinicId($request) !== null, fn (Builder $b) => $b->where('clinic_id', $this->clinicId($request)));
     }
 
     protected function find(Request $request, int $id): Invoice
