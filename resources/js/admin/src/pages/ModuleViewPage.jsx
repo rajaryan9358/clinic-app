@@ -7,7 +7,7 @@ import { modules } from '../config/modules';
 import { canAccessModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
-import { buildSections, humanizeValue, recordTitle } from '../utils/moduleRecord';
+import { buildSections, humanizeValue, recordTitle, referenceModule } from '../utils/moduleRecord';
 import { formatDate, formatDateTime, formatTime, isDateKey, isDateTimeKey, isTimeKey } from '../utils/dateFormat';
 import { formatRupees } from '../utils/money';
 
@@ -15,8 +15,14 @@ const EMPTY_VALUE = <span className="text-slate-300">—</span>;
 
 // One field value, formatted for reading. Same conventions as the list table:
 // status-like keys become badges, date keys are formatted, booleans read Yes/No.
-function FieldValue({ field }) {
+function FieldValue({ field, href }) {
     const { key, value, format } = field;
+
+    // A reference the API gave us only as an id: "Appointment #412", linked when we can.
+    if (format === 'ref') {
+        const text = field.label + ' #' + value;
+        return href ? <Link to={href} className="font-medium text-blue-700 hover:underline">{text}</Link> : text;
+    }
 
     if (value === null || value === undefined || value === '') return EMPTY_VALUE;
 
@@ -68,8 +74,6 @@ function ModuleViewPageInner() {
     const [related, setRelated] = useState({ messages: null });
     const [actionError, setActionError] = useState('');
     const [actionSaving, setActionSaving] = useState(false);
-    const [apptStatusReason, setApptStatusReason] = useState('');
-    const [reschedule, setReschedule] = useState({ appointment_date: '', start_time: '', end_time: '', reason: '' });
 
     const [waOptions, setWaOptions] = useState({ users: null, doctors: null });
     const [waAssign, setWaAssign] = useState({ user_id: '' });
@@ -170,74 +174,18 @@ function ModuleViewPageInner() {
     // Same gate the list uses for its Edit action (and not for a soft-deleted row).
     const canEdit = canEditModule(user?.role, moduleKey, scope?.can) && !record?.deleted_at;
 
-    const lifecycleActions = useMemo(() => {
-        const s = String(record?.status || '');
-        const actions = [];
-
-        if (s === 'pending') {
-            actions.push({ label: 'Confirm', next: 'confirmed', primary: true });
-            actions.push({ label: 'Cancel', next: 'cancelled' });
-        } else if (s === 'confirmed') {
-            actions.push({ label: 'Check In', next: 'checked_in', primary: true });
-            actions.push({ label: 'Cancel', next: 'cancelled' });
-            actions.push({ label: 'No Show', next: 'no_show' });
-        } else if (s === 'checked_in') {
-            actions.push({ label: 'Start Consultation', next: 'in_consultation', primary: true });
-            actions.push({ label: 'Complete', next: 'completed', primary: true });
-            actions.push({ label: 'Cancel', next: 'cancelled' });
-        } else if (s === 'in_consultation') {
-            actions.push({ label: 'Complete', next: 'completed', primary: true });
-        } else if (s === 'completed') {
-            actions.push({ label: 'Reopen', next: 'checked_in', primary: true });
-        } else if (s === 'cancelled') {
-            actions.push({ label: 'Restore', next: 'confirmed', primary: true });
-        } else if (s === 'no_show') {
-            actions.push({ label: 'Restore', next: 'confirmed', primary: true });
-        }
-
-        if (['pending', 'confirmed', 'no_show'].includes(s)) {
-            actions.push({ label: 'Mark Rescheduled', next: 'rescheduled' });
-        }
-
-        return actions;
-    }, [record?.status]);
+    // Link a bare reference only to a record page this user can already open.
+    const hrefFor = (field) => {
+        if (field.format !== 'ref') return null;
+        const target = referenceModule(field.key);
+        if (!target) return null;
+        if (target === 'clinics') return user?.role === 'super_admin' ? `/workflows/clinics/${field.value}` : null;
+        if (target === 'patients' && scope?.roleKind === 'doctor') return null; // App.jsx blocks doctors from patient profiles
+        if (!canAccessModule(user?.role, target, scope?.can)) return null;
+        return `/modules/${target}/${field.value}`;
+    };
 
     if (!module) return <div className="rounded border bg-white p-4">Unknown module.</div>;
-
-    const runAppointmentStatusChange = async (nextStatus) => {
-        if (!nextStatus) return;
-        setActionSaving(true);
-        setActionError('');
-        try {
-            await client.post(`${base}/appointments/${id}/lifecycle`, { status: nextStatus, reason: apptStatusReason || null });
-            const { data } = await client.get(`${base}/${module.path}/${id}`);
-            setRecord(data.data);
-            setApptStatusReason('');
-        } catch (e) {
-            setActionError(e?.response?.data?.message || e?.message || 'Failed to change status');
-        } finally {
-            setActionSaving(false);
-        }
-    };
-
-    const runAppointmentReschedule = async () => {
-        setActionSaving(true);
-        setActionError('');
-        try {
-            await client.post(`${base}/appointments/${id}/reschedule`, {
-                appointment_date: reschedule.appointment_date,
-                start_time: reschedule.start_time,
-                end_time: reschedule.end_time || null,
-                reason: reschedule.reason || null,
-            });
-            const { data } = await client.get(`${base}/${module.path}/${id}`);
-            setRecord(data.data);
-        } catch (e) {
-            setActionError(e?.response?.data?.message || e?.message || 'Failed to reschedule');
-        } finally {
-            setActionSaving(false);
-        }
-    };
 
     const runAssignConversation = async () => {
         setActionSaving(true);
@@ -363,7 +311,7 @@ function ModuleViewPageInner() {
                                     <div key={field.key} className="min-w-0">
                                         <dt className="text-xs font-medium text-slate-500">{field.label}</dt>
                                         <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-900">
-                                            <FieldValue field={field} />
+                                            <FieldValue field={field} href={hrefFor(field)} />
                                         </dd>
                                     </div>
                                 ))}
@@ -372,65 +320,6 @@ function ModuleViewPageInner() {
                     ))}
                 </div>
             )}
-
-            {moduleKey === 'appointments' ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="text-base font-semibold text-slate-900">Appointment Actions</h3>
-                    <p className="mt-1 text-sm text-slate-600">Guided actions instead of raw log tables.</p>
-                    {actionError ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</div> : null}
-
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <div className="rounded-xl border border-slate-200 p-4">
-                            <p className="text-sm font-semibold text-slate-800">Change Status</p>
-                            <div className="mt-2 grid gap-2">
-                                <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={apptStatusReason} onChange={(e) => setApptStatusReason(e.target.value)} />
-
-                                <div className="flex flex-wrap gap-2">
-                                    {lifecycleActions
-                                        .filter((a) => scope?.can?.(a.next === 'cancelled' ? 'appointments.cancel' : 'appointments.check_in'))
-                                        .map((a) => (
-                                        <button
-                                            key={a.next}
-                                            type="button"
-                                            disabled={actionSaving}
-                                            onClick={() => runAppointmentStatusChange(a.next)}
-                                            className={a.primary
-                                                ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50'
-                                                : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50'
-                                            }
-                                        >
-                                            {actionSaving ? 'Working…' : a.label}
-                                        </button>
-                                    ))}
-                                    {!lifecycleActions.length ? (
-                                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">No quick actions available.</div>
-                                    ) : null}
-                                </div>
-                            </div>
-                        </div>
-
-                        {scope?.can?.('appointments.edit') ? (
-                            <div className="rounded-xl border border-slate-200 p-4">
-                                <p className="text-sm font-semibold text-slate-800">Reschedule</p>
-                                <div className="mt-2 grid gap-2">
-                                    <input type="date" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.appointment_date} onChange={(e) => setReschedule((p) => ({ ...p, appointment_date: e.target.value }))} />
-                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.start_time} onChange={(e) => setReschedule((p) => ({ ...p, start_time: e.target.value }))} />
-                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.end_time} onChange={(e) => setReschedule((p) => ({ ...p, end_time: e.target.value }))} />
-                                    <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={reschedule.reason} onChange={(e) => setReschedule((p) => ({ ...p, reason: e.target.value }))} />
-                                    <button
-                                        type="button"
-                                        disabled={!reschedule.appointment_date || !reschedule.start_time || actionSaving}
-                                        onClick={runAppointmentReschedule}
-                                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                    >
-                                        {actionSaving ? 'Working…' : 'Reschedule'}
-                                    </button>
-                                </div>
-                            </div>
-                        ) : null}
-                    </div>
-                </div>
-            ) : null}
 
             {moduleKey === 'whatsappConversations' ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

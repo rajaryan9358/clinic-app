@@ -41,6 +41,22 @@ export function recordTitle(module, record) {
     return `${module?.singular || module?.label || 'Record'} #${record.id}`;
 }
 
+// Which module's record page a bare `*_id` points at. Appointments have no
+// per-record page (they live in the appointments workflow), so they stay text.
+const REFERENCE_MODULES = {
+    patient_id: 'patients',
+    doctor_id: 'doctors',
+    conversation_id: 'whatsappConversations',
+    clinic_id: 'clinics',
+    user_id: 'users',
+    assigned_to_user_id: 'users',
+    current_owner_user_id: 'users',
+};
+
+export function referenceModule(key) {
+    return REFERENCE_MODULES[key] || null;
+}
+
 /** Display format for a field: the module's explicit one, else 'boolean' for checkbox fields (a DB 1/0 is not "1"). */
 export function formatFor(module, key) {
     if (module?.formats?.[key]) return module.formats[key];
@@ -56,10 +72,10 @@ const isEmpty = (v) => v === null || v === undefined || v === '' || (Array.isArr
 /**
  * Turn a record into display sections: [{ title, fields: [{ key, label, value, format }] }].
  *
- * Related records are shown by name only when the API response already
- * embeds the relation (`assigned_to_user_id` + `assigned_to_user: { name }`).
- * A bare `*_id` / `*_ids` with no embedded relation is omitted rather than
- * printed as a number - this never triggers a lookup request.
+ * Related records are shown by name when the API response already embeds the
+ * relation (`assigned_to_user_id` + `assigned_to_user: { name }`). Otherwise
+ * the field stays as a labelled reference ("Appointment #412"): the id is still
+ * information staff use. This never triggers a lookup request.
  */
 export function buildSections(module, record) {
     if (!record) return [];
@@ -69,12 +85,17 @@ export function buildSections(module, record) {
 
     Object.entries(record).forEach(([key, value]) => {
         if (hidden.has(key) || TIMESTAMP_KEYS.includes(key)) return;
-        if (key.endsWith('_ids')) return;
+        if (key.endsWith('_ids')) {
+            if (Array.isArray(value) && value.length) {
+                fields.set(key, { key, label: fieldLabel(module, key), value: value.map((v) => '#' + v).join(', '), format: 'text' });
+            }
+            return;
+        }
 
         if (key.endsWith('_id')) {
             const name = relationName(record[key.slice(0, -3)]);
-            if (!name) return;
-            fields.set(key, { key, label: fieldLabel(module, key), value: name, format: 'text' });
+            if (name) fields.set(key, { key, label: fieldLabel(module, key), value: name, format: 'text' });
+            else if (!isEmpty(value)) fields.set(key, { key, label: fieldLabel(module, key), value, format: 'ref' });
             return;
         }
 
@@ -108,7 +129,7 @@ export function buildSections(module, record) {
             .map((key) => {
                 placed.add(key);
                 if (fields.has(key)) return fields.get(key);
-                // A listed key the loop above skipped (absent, a bare id, a payload) stays out.
+                // A listed key the loop above skipped (absent, a null id, a payload) stays out.
                 const raw = record[key];
                 const isPlain = key in record && !key.endsWith('_id') && !key.endsWith('_ids') && (raw === null || typeof raw !== 'object');
                 return isPlain ? { key, label: fieldLabel(module, key), value: raw, format: formatFor(module, key) } : null;
