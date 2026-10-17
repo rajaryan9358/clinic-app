@@ -8,6 +8,7 @@ import DonutChart from '../components/charts/DonutChart';
 import BarListChart from '../components/charts/BarListChart';
 import AppIcon from '../components/AppIcon';
 import StatusBadge from '../components/StatusBadge';
+import Skeleton from '../components/Skeleton';
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, icon, color = 'blue', suffix = '' }) {
@@ -489,11 +490,13 @@ export default function DashboardPage() {
 
     if (!data) {
         return (
-            <div className="flex items-center justify-center py-20">
-                <div className="flex flex-col items-center gap-3">
-                    <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                    <p className="text-sm text-gray-500">Loading dashboard…</p>
+            <div className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} variant="fields" rows={2} cols={1} />
+                    ))}
                 </div>
+                <Skeleton variant="table" rows={5} cols={4} />
             </div>
         );
     }
