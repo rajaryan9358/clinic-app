@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import AppIcon from '../../components/AppIcon';
 import { TASK_TYPE_LABELS } from './FollowupsPage';
 
-// Add a follow-up: the four things staff actually decide. Status, priority and
+// Add a follow-up: the few things staff actually decide (patient, type, due date, assignee, optional doctor). Status, priority and
 // the rest take the table's defaults.
 
 const apiError = (e, fallback) => e?.response?.data?.message || e?.message || fallback;
@@ -28,6 +28,12 @@ export default function FollowupFormPage() {
     // Doctors and assistants default to themselves so the task lands in their own queue.
     const [assignee, setAssignee] = useState(() => (['doctor', 'assistant'].includes(user?.role) && user?.id ? String(user.id) : ''));
     const [staff, setStaff] = useState([]);
+    // Doctor is optional. In a doctor-scoped session it defaults to that doctor, because the API
+    // hides tasks without that doctor_id from them; it is shown and editable so nothing is hidden.
+    const [doctorId, setDoctorId] = useState(() => {
+        try { return localStorage.getItem('active_doctor_id') || ''; } catch { return ''; }
+    });
+    const [doctors, setDoctors] = useState([]);
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -37,6 +43,9 @@ export default function FollowupFormPage() {
         client.get(`${base}/users`, { params: { per_page: 200 } })
             .then((res) => { if (!cancelled) setStaff(Array.isArray(res?.data?.data) ? res.data.data : []); })
             .catch(() => { if (!cancelled) setStaff([]); });
+            client.get(`${base}/doctors`, { params: { per_page: 200 } })
+                .then((res) => { if (!cancelled) setDoctors(Array.isArray(res?.data?.data) ? res.data.data : []); })
+                .catch(() => { if (!cancelled) setDoctors([]); });
         return () => { cancelled = true; };
     }, [base]);
 
@@ -73,6 +82,7 @@ export default function FollowupFormPage() {
                 task_type: taskType,
                 due_date: dueDate,
                 assigned_to_user_id: assignee ? Number(assignee) : null,
+                doctor_id: doctorId ? Number(doctorId) : null,
                 status: 'pending',
             });
             navigate('/workflows/followups', { replace: true });
@@ -157,6 +167,16 @@ export default function FollowupFormPage() {
                         <option value="">Unassigned</option>
                         {user?.id && !staff.some((u) => String(u.id) === String(user.id)) ? <option value={String(user.id)}>{user.full_name || user.name || "Me"} (me)</option> : null}
                         {staff.map((u) => <option key={u.id} value={String(u.id)}>{u.full_name || u.name || `User #${u.id}`}</option>)}
+                    </select>
+                </div>
+
+                <div>
+                    <label htmlFor="fu-doctor" className="text-sm font-semibold text-slate-900">Doctor <span className="font-normal text-slate-500">(optional)</span></label>
+                    <select id="fu-doctor" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} className={`mt-2 ${inputClass}`}>
+                        <option value="">No doctor</option>
+                        {doctors.map((d) => (
+                            <option key={d.id} value={String(d.id)}>{[d.title, d.full_name || d.name].filter(Boolean).join(' ') || `Doctor #${d.id}`}</option>
+                        ))}
                     </select>
                 </div>
             </div>
