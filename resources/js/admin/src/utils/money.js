@@ -14,3 +14,11 @@ export const paiseToRupees = (paise) => {
     if (paise == null) return '';
     return String(paise / 100);
 };
+
+/** Format a rupee amount (invoice amounts are rupees as floats, not paise). Negative values keep their sign. */
+export const formatRupees = (rupees) => {
+    if (rupees === null || rupees === undefined || rupees === '') return '—';
+    const n = Number(rupees);
+    if (!Number.isFinite(n)) return '—';
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
+};

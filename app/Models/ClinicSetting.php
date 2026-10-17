@@ -17,6 +17,7 @@ class ClinicSetting extends Model
         'default_slot_duration_minutes', 'booking_notice_text', 'terms_text', 'privacy_policy_text',
         'walkin_enabled', 'token_system_enabled', 'max_advance_booking_days', 'min_booking_notice_minutes',
         'reminder_hours_before', 'portal_enabled', 'waitlist_enabled', 'waitlist_hold_minutes',
+        'invoicing_enabled', 'online_payment_enabled', 'invoice_prefix', 'invoice_tax_percent', 'invoice_footer_note',
     ];
 
     protected function casts(): array
@@ -35,12 +36,37 @@ class ClinicSetting extends Model
             'min_booking_notice_minutes' => 'integer',
             'reminder_hours_before' => 'integer',
             'waitlist_hold_minutes' => 'integer',
+            'invoicing_enabled' => 'boolean',
+            'online_payment_enabled' => 'boolean',
+            'invoice_tax_percent' => 'decimal:2',
         ];
     }
 
     public function clinic(): BelongsTo
     {
         return $this->belongsTo(Clinic::class);
+    }
+
+    /**
+     * Billing settings for a clinic in one query. A missing row, or a null
+     * column, falls back to: invoicing on, online payment off, prefix INV,
+     * tax 0, no footer note.
+     *
+     * @return array{invoicing_enabled: bool, online_payment_enabled: bool, invoice_prefix: string, invoice_tax_percent: float, invoice_footer_note: ?string}
+     */
+    public static function billingFor(int $clinicId): array
+    {
+        $row = static::where('clinic_id', $clinicId)->first([
+            'invoicing_enabled', 'online_payment_enabled', 'invoice_prefix', 'invoice_tax_percent', 'invoice_footer_note',
+        ]);
+
+        return [
+            'invoicing_enabled' => (bool) ($row?->invoicing_enabled ?? true),
+            'online_payment_enabled' => (bool) ($row?->online_payment_enabled ?? false),
+            'invoice_prefix' => (string) ($row?->invoice_prefix ?? 'INV'),
+            'invoice_tax_percent' => (float) ($row?->invoice_tax_percent ?? 0),
+            'invoice_footer_note' => $row?->invoice_footer_note,
+        ];
     }
 
     /**
@@ -70,6 +96,11 @@ class ClinicSetting extends Model
             'portal_enabled' => ['sometimes', 'boolean'],
             'waitlist_enabled' => ['sometimes', 'boolean'],
             'waitlist_hold_minutes' => ['sometimes', 'integer', 'min:5', 'max:240'],
+            'invoicing_enabled' => ['sometimes', 'boolean'],
+            'online_payment_enabled' => ['sometimes', 'boolean'],
+            'invoice_prefix' => ['sometimes', 'string', 'max:10'],
+            'invoice_tax_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'invoice_footer_note' => ['sometimes', 'nullable', 'string', 'max:500'],
         ];
     }
 }

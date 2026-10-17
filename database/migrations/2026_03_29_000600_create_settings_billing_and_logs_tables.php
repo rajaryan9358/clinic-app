@@ -30,6 +30,11 @@ return new class extends Migration
             $table->text('booking_notice_text')->nullable();
             $table->text('terms_text')->nullable();
             $table->text('privacy_policy_text')->nullable();
+            $table->boolean('invoicing_enabled')->default(true);
+            $table->boolean('online_payment_enabled')->default(false);
+            $table->string('invoice_prefix', 10)->default('INV');
+            $table->decimal('invoice_tax_percent', 5, 2)->default(0);
+            $table->string('invoice_footer_note', 500)->nullable();
             $table->timestamps();
         });
 
@@ -38,18 +43,24 @@ return new class extends Migration
             $table->foreignId('clinic_id')->constrained('clinics')->cascadeOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
-            $table->string('invoice_number')->unique();
+            $table->string('invoice_number')->nullable();
             $table->date('invoice_date');
             $table->decimal('subtotal', 12, 2);
             $table->decimal('discount_amount', 12, 2)->default(0);
             $table->decimal('tax_amount', 12, 2)->default(0);
+            $table->boolean('tax_is_manual')->default(false);
             $table->decimal('total_amount', 12, 2);
             $table->enum('status', ['draft', 'issued', 'paid', 'cancelled'])->default('draft');
             $table->text('notes')->nullable();
+            $table->timestamp('issued_at')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
+            $table->string('cancelled_reason')->nullable();
+            $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->index(['clinic_id', 'status']);
             $table->index(['clinic_id', 'invoice_date'], 'inv_clinic_date_idx');
+            $table->unique(['clinic_id', 'invoice_number'], 'invoices_clinic_number_unique');
         });
 
         Schema::create('payments', function (Blueprint $table) {
@@ -59,11 +70,15 @@ return new class extends Migration
             $table->foreignId('appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
             $table->foreignId('patient_id')->constrained('patients')->cascadeOnDelete();
             $table->decimal('amount', 12, 2);
-            $table->enum('payment_method', ['cash', 'upi', 'card', 'bank_transfer', 'other']);
+            $table->enum('payment_method', ['cash', 'upi', 'card', 'bank_transfer', 'online', 'other']);
             $table->string('reference_number')->nullable();
+            $table->string('razorpay_order_id')->nullable()->index();
+            $table->string('razorpay_payment_id')->nullable()->unique();
             $table->timestamp('paid_at');
             $table->enum('status', ['success', 'pending', 'failed', 'refunded'])->default('success');
             $table->foreignId('collected_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('refunded_at')->nullable();
+            $table->string('refund_reason')->nullable();
             $table->text('notes')->nullable();
             $table->timestamps();
 

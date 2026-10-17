@@ -5,10 +5,12 @@ namespace App\Services\WhatsApp;
 use App\Jobs\SendWhatsAppTemplate;
 use App\Models\Appointment;
 use App\Models\AppointmentPrescription;
+use App\Models\Invoice;
 use App\Models\Patient;
 use App\Models\ReminderLog;
 use App\Models\WaitlistEntry;
 use App\Models\WhatsappMessage;
+use App\Services\Billing\InvoiceService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\URL;
 
@@ -203,6 +205,47 @@ class PatientNotifier
                 $holdMinutes,
             ],
             preview: "A slot opened up at {$clinicName} on {$date} {$time}.",
+            buttonCode: $token,
+        );
+    }
+
+    /**
+     * Sends the "your invoice is ready" pay-link. $token is the raw redirecting login-link
+     * token (issued for the account holder); the WhatsApp goes to that holder while the row
+     * stays attributed to the invoiced patient.
+     */
+    public function invoiceReady(Invoice $invoice, string $token): WhatsappMessage
+    {
+        $invoice->loadMissing(['clinic:id,name', 'patient' => fn ($q) => $q->withTrashed()]);
+        $patient = $invoice->patient;
+        $holder = $patient?->managed_by_patient_id !== null
+            ? Patient::withTrashed()->where('clinic_id', $invoice->clinic_id)->find($patient->managed_by_patient_id)
+            : $patient;
+
+        $clinicName = (string) ($invoice->clinic?->name ?? '');
+        $total = round((float) $invoice->total_amount, 2);
+        $balance = round($total - app(InvoiceService::class)->amountPaid($invoice), 2);
+        $totalText = '₹'.number_format($total, 2);
+        $due = match (true) {
+            $balance <= 0 => 'Paid in full',
+            $balance < $total => 'Balance due: ₹'.number_format($balance, 2),
+            default => 'Amount due: ₹'.number_format($balance, 2),
+        };
+
+        return $this->send(
+            type: 'invoice_ready',
+            clinicId: $invoice->clinic_id,
+            patientId: $invoice->patient_id,
+            appointmentId: $invoice->appointment_id,
+            phone: $holder?->phone,
+            bodyParams: [
+                (string) ($patient?->full_name ?? ''),
+                $clinicName,
+                (string) $invoice->invoice_number,
+                $totalText,
+                $due,
+            ],
+            preview: "Invoice {$invoice->invoice_number} from {$clinicName}: {$totalText}. {$due}.",
             buttonCode: $token,
         );
     }

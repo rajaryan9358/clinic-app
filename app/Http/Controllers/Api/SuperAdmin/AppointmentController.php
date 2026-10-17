@@ -20,6 +20,7 @@ use App\Services\PrescriptionPdfRenderer;
 use App\Services\WhatsApp\PatientNotifier;
 use App\Services\WhatsApp\PhoneNumber;
 use App\Support\Prescriptions\PrescriptionResolver;
+use App\Support\Billing\InvoicePresenter;
 use App\Support\Waitlist\StaffWaitlistPresenter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
@@ -234,6 +235,7 @@ class AppointmentController extends BaseCrudController
                 ],
             ],
             'waitlist' => StaffWaitlistPresenter::forAppointment($appointment),
+            'invoice' => InvoicePresenter::summaryForAppointment($appointment),
         ]);
     }
 

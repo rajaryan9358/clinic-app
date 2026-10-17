@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\RazorpayWebhookEvent;
+use App\Services\Billing\PatientPaymentWebhookHandler;
 use App\Services\Billing\RazorpayGateway;
 use App\Services\Billing\RazorpayWebhookHandler;
 use Illuminate\Http\Request;
@@ -10,7 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 class RazorpayWebhookController
 {
-    public function __construct(private readonly RazorpayGateway $gateway, private readonly RazorpayWebhookHandler $handler) {}
+    public function __construct(
+        private readonly RazorpayGateway $gateway,
+        private readonly RazorpayWebhookHandler $handler,
+        private readonly PatientPaymentWebhookHandler $patientHandler,
+    ) {}
 
     public function __invoke(Request $request)
     {
@@ -30,7 +35,16 @@ class RazorpayWebhookController
             if ($record->processed_at) {
                 return;
             }
-            $this->handler->handle((string) ($payload['event'] ?? ''), $payload['payload'] ?? []);
+            // A patient-invoice order goes to its own handler; everything else
+            // (subscriptions) keeps going where it always went.
+            $event = (string) ($payload['event'] ?? '');
+            $data = is_array($payload['payload'] ?? null) ? $payload['payload'] : [];
+
+            if ($this->patientHandler->handles($data)) {
+                $this->patientHandler->handle($event, $data);
+            } else {
+                $this->handler->handle($event, $data);
+            }
             $record->update(['processed_at' => now()]);
         });
 

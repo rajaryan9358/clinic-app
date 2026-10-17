@@ -3,12 +3,13 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSession } from '../session';
 import { BottomSheet, ErrorText, Spinner } from './ui';
-import { CalendarIcon, ChevronRightIcon, HomeIcon, LogoutIcon, PillIcon, PlusIcon, SwitchIcon, UsersIcon } from './icons';
+import { CalendarIcon, ChevronRightIcon, HomeIcon, LogoutIcon, PillIcon, PlusIcon, ReceiptIcon, SwitchIcon, UsersIcon } from './icons';
 
 const NAV_ITEMS = [
     { to: '/', label: 'Home', icon: HomeIcon, end: true },
     { to: '/visits', label: 'Visits', icon: CalendarIcon },
     { to: '/prescriptions', label: 'Rx', icon: PillIcon },
+    { to: '/invoices', label: 'Bills', icon: ReceiptIcon },
     { to: '/book', label: 'Book', icon: PlusIcon },
     { to: '/family', label: 'Family', icon: UsersIcon },
 ];
@@ -109,7 +110,7 @@ export default function Shell() {
                     style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
                     aria-label="Primary"
                 >
-                    <ul className="grid grid-cols-5">
+                    <ul className="grid grid-cols-6">
                         {NAV_ITEMS.map((item) => (
                             <li key={item.to}>
                                 <NavLink

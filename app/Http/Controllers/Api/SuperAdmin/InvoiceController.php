@@ -2,12 +2,19 @@
 
 namespace App\Http\Controllers\Api\SuperAdmin;
 
-use App\Http\Controllers\Api\BaseCrudController;
-use App\Models\Invoice;
+use App\Http\Controllers\Api\BaseStaffInvoiceController;
+use Illuminate\Http\Request;
 
-class InvoiceController extends BaseCrudController
+/**
+ * Super-admin invoices across clinics: `clinic_id` filters the list and lookups,
+ * and is required to create.
+ */
+class InvoiceController extends BaseStaffInvoiceController
 {
-    protected string $modelClass = Invoice::class;
-    protected array $searchable = ['invoice_number', 'status'];
-    protected array $filterable = ['clinic_id', 'patient_id', 'status', 'invoice_date'];
+    protected function clinicId(Request $request): ?int
+    {
+        $data = $request->validate(['clinic_id' => ['nullable', 'integer']]);
+
+        return isset($data['clinic_id']) ? (int) $data['clinic_id'] : null;
+    }
 }

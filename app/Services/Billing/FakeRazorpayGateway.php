@@ -14,6 +14,8 @@ class FakeRazorpayGateway implements RazorpayGateway
 
     public array $cancelled = [];
 
+    public array $createdOrders = [];
+
     public function isConfigured(): bool
     {
         return $this->configured;
@@ -49,6 +51,18 @@ class FakeRazorpayGateway implements RazorpayGateway
     }
 
     public function verifyWebhookSignature(string $body, string $signature): bool
+    {
+        return $this->signatureValid;
+    }
+
+    public function createOrder(int $amountInPaise, string $receipt, array $notes): array
+    {
+        $this->createdOrders[] = compact('amountInPaise', 'receipt', 'notes');
+
+        return ['id' => 'order_fake_'.count($this->createdOrders)];
+    }
+
+    public function verifyOrderSignature(string $orderId, string $paymentId, string $signature): bool
     {
         return $this->signatureValid;
     }

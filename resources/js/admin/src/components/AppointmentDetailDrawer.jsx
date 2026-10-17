@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import AppIcon from './AppIcon';
 import StatusBadge from './StatusBadge';
+import { formatRupees } from '../utils/money';
 
 function prettyDateLabel(ymd) {
     try {
@@ -65,6 +67,10 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
     const canCancel = Boolean(scope?.can?.('appointments.cancel'));
     const canCheckIn = Boolean(scope?.can?.('appointments.check_in'));
     const canPrescribe = Boolean(scope?.can?.('appointments.prescribe'));
+    // Billing pages are clinic-side only; the detail payload carries `invoice` only for billing.view.
+    const isClinicUser = user?.role !== 'super_admin';
+    const canViewBilling = isClinicUser && Boolean(scope?.can?.('billing.view'));
+    const canRaiseInvoice = isClinicUser && Boolean(scope?.can?.('billing.create'));
     // Super admin has no clinic permission list to check against, so the
     // WhatsApp panel is always fetched for them; everyone else needs the
     // explicit permission.
@@ -244,6 +250,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
     const reschedules = payload?.timeline?.reschedules || [];
     const reminders = payload?.communication?.reminders;
     const waitlist = payload?.waitlist || null;
+    const invoice = payload?.invoice || null;
 
     // Compute status actions outside JSX to avoid IIFE issues
     const apptStatus = String(appt?.status || '').toLowerCase();
@@ -426,6 +433,40 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                     ) : null}
                                 </div>
                             ) : null}
+                        </div>
+                    ) : null}
+
+                    {appt && canViewBilling && (invoice || (canRaiseInvoice && apptStatus !== 'cancelled')) ? (
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <h4 className="text-sm font-semibold text-slate-900">Invoice</h4>
+                            {invoice ? (
+                                <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Link to={`/workflows/billing/${invoice.id}`} className="font-medium text-blue-700 hover:underline">
+                                            {invoice.number || 'Draft'}
+                                        </Link>
+                                        <StatusBadge status={invoice.status} />
+                                        <span>{formatRupees(invoice.total)}</span>
+                                        {invoice.status !== 'draft' ? (
+                                            Number(invoice.balance) < 0 ? (
+                                                <span className="font-semibold text-rose-700">Overpaid {formatRupees(-Number(invoice.balance))} — refund due</span>
+                                            ) : (
+                                                <span className="text-slate-500">Balance {formatRupees(invoice.balance)}</span>
+                                            )
+                                        ) : null}
+                                    </div>
+                                    <Link to={`/workflows/billing/${invoice.id}`} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                                        Open invoice
+                                    </Link>
+                                </div>
+                            ) : (
+                                <div className="mt-2 flex items-center justify-between gap-3 text-sm text-slate-600">
+                                    <span>No invoice raised for this appointment.</span>
+                                    <Link to={`/workflows/billing/new?appointment_id=${appointmentId}`} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800">
+                                        Raise invoice
+                                    </Link>
+                                </div>
+                            )}
                         </div>
                     ) : null}
 

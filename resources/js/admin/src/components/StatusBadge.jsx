@@ -28,6 +28,8 @@ const STATUS_CONFIG = {
     issued:          { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
     paid:            { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
     partial:         { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
+    success:         { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
+    superseded:      { dot: 'bg-gray-400',    text: 'text-gray-500',   bg: 'bg-gray-50',     border: 'border-gray-200' },
     refunded:        { dot: 'bg-violet-400',  text: 'text-violet-700', bg: 'bg-violet-50',   border: 'border-violet-200' },
 
     // ── Delivery / Reminder ───────────────────────────────────────────────────
