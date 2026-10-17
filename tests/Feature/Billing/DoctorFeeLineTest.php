@@ -78,8 +78,34 @@ class DoctorFeeLineTest extends TestCase
         Sanctum::actingAs($this->staffWith($clinic->id, ['doctors.view']));
 
         $row = $this->getJson('/api/clinic/doctors')->assertOk()->json('data.0');
-        $this->assertEquals(500, $row['consultation_fee']);
-        $this->assertEquals(250, $row['followup_fee']);
+        $this->assertSame('500.00', $row['consultation_fee']);
+        $this->assertSame('250.00', $row['followup_fee']);
+    }
+
+    public function test_doctors_list_carries_rendered_lines_identical_to_the_service(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $both = $this->makeBillingDoctor($clinic, ['full_name' => 'Dr Asha Rao', 'consultation_fee' => 500, 'followup_fee' => 250]);
+        $noFollowup = $this->makeBillingDoctor($clinic, ['full_name' => 'Dr Nofu', 'consultation_fee' => 300, 'followup_fee' => null]);
+        Sanctum::actingAs($this->staffWith($clinic->id, ['doctors.view']));
+
+        $rows = collect($this->getJson('/api/clinic/doctors')->assertOk()->json('data'))->keyBy('id');
+
+        // JSON cannot tell 500.0 from 500, so the amount is compared by value; everything else strictly.
+        $this->assertEquals(InvoiceService::doctorFeeLine($both, 'new'), $rows[$both->id]['consultation_line']);
+        $this->assertSame('Consultation - Dr Asha Rao', $rows[$both->id]['consultation_line']['description']);
+        $this->assertEquals(InvoiceService::doctorFeeLine($both, 'followup'), $rows[$both->id]['followup_line']);
+        $this->assertEquals(250, $rows[$both->id]['followup_line']['unit_amount']);
+        $this->assertEquals(300, $rows[$noFollowup->id]['consultation_line']['unit_amount']);
+        $this->assertNull($rows[$noFollowup->id]['followup_line']);
+        $this->assertSame('500.00', $rows[$both->id]['consultation_fee']);
+
+        $patient = $this->makeBillingPatient($clinic);
+        foreach (['new' => 'consultation_line', 'followup' => 'followup_line'] as $visit => $key) {
+            $prefill = $this->invoiceService()->prefillFor($this->makeBillingAppointment($patient, $both, null, $visit));
+            $this->assertSame($prefill[0]['description'], $rows[$both->id][$key]['description']);
+        }
     }
 
     public function test_doctor_fees_require_doctors_view(): void

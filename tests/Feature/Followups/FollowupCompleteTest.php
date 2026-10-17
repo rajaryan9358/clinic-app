@@ -73,6 +73,21 @@ class FollowupCompleteTest extends TestCase
         $this->assertTrue($first->equalTo($task->refresh()->completed_at));
     }
 
+    public function test_closed_followups_cannot_be_completed(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        Sanctum::actingAs($this->staffWith($clinic->id, ['followups.edit']));
+
+        foreach (['cancelled', 'skipped'] as $status) {
+            $task = $this->task($clinic->id, ['status' => $status]);
+            $this->postJson("/api/clinic/followups/{$task->id}/complete")
+                ->assertStatus(422)->assertJsonFragment(['message' => 'This follow-up is already closed.']);
+            $task->refresh();
+            $this->assertSame($status, $task->status);
+            $this->assertNull($task->completed_at);
+        }
+    }
+
     public function test_completing_a_followup_requires_followups_edit(): void
     {
         $clinic = $this->makeBillingClinic();

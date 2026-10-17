@@ -32,6 +32,10 @@ class FollowupTaskController extends BaseClinicCrudController
     {
         $task = $this->findModel($id);
 
+        if (in_array($task->status, ['cancelled', 'skipped'], true)) {
+            return $this->error('This follow-up is already closed.', null, 422);
+        }
+
         if ($task->status !== 'done') {
             $task->forceFill(['status' => 'done', 'completed_at' => now()])->save();
         }
