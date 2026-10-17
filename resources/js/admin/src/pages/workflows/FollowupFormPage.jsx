@@ -174,6 +174,7 @@ export default function FollowupFormPage() {
                     <label htmlFor="fu-doctor" className="text-sm font-semibold text-slate-900">Doctor <span className="font-normal text-slate-500">(optional)</span></label>
                     <select id="fu-doctor" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} className={`mt-2 ${inputClass}`}>
                         <option value="">No doctor</option>
+                        {doctorId && !doctors.some((d) => String(d.id) === String(doctorId)) ? <option value={doctorId}>{`Doctor #${doctorId}`}</option> : null}
                         {doctors.map((d) => (
                             <option key={d.id} value={String(d.id)}>{[d.title, d.full_name || d.name].filter(Boolean).join(' ') || `Doctor #${d.id}`}</option>
                         ))}
