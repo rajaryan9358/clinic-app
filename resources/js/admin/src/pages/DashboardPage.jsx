@@ -271,7 +271,7 @@ function ReceptionistDashboard({ data }) {
                                 return (
                                     <Link
                                         key={appt.id}
-                                        to={`/workflows/appointments?open=${appt.id}`}
+                                        to={`/workflows/appointments/${appt.id}`}
                                         className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition"
                                     >
                                         <div className="flex-shrink-0 w-14 text-center">
@@ -389,7 +389,7 @@ function AssistantDashboard({ data }) {
                                 return (
                                     <Link
                                         key={appt.id}
-                                        to={`/workflows/appointments?open=${appt.id}`}
+                                        to={`/workflows/appointments/${appt.id}`}
                                         className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition"
                                     >
                                         <div className="flex-shrink-0 w-14 text-center">

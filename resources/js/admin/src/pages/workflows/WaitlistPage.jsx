@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
@@ -20,31 +20,11 @@ const STATUS_OPTIONS = [
 
 const PER_PAGE = 20;
 
-const toYMD = (d) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
 const doctorLabel = (d) => [d?.title, d?.full_name || d?.name].filter(Boolean).join(' ').trim() || `Doctor #${d?.id}`;
 
 const apiError = (e, fallback) => e?.response?.data?.message || e?.message || fallback;
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200';
-
-const EMPTY_ADD = {
-    open: false,
-    busy: false,
-    error: '',
-    patientQuery: '',
-    patientResults: [],
-    patientSearching: false,
-    patient: null,
-    doctorId: '',
-    date: '',
-    startTime: '',
-};
 
 export default function WaitlistPage() {
     const { user } = useAuth();
@@ -64,19 +44,17 @@ export default function WaitlistPage() {
     const [meta, setMeta] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [notice, setNotice] = useState('');
+    // The add page returns here with its confirmation in the navigation state.
+    const [notice, setNotice] = useState(() => location.state?.notice || '');
 
     const [removeConfirm, setRemoveConfirm] = useState({ id: null, busy: false });
 
-    const [add, setAdd] = useState(EMPTY_ADD);
-    const [slots, setSlots] = useState({ loading: false, error: '', items: [] });
-    const patientQueryRef = useRef('');
 
     // Reset page state whenever the filters or the route change.
     useEffect(() => {
         setPage(1);
         setRemoveConfirm({ id: null, busy: false });
-        setNotice('');
+        setNotice(location.state?.notice || '');
     }, [filters.doctorId, filters.date, filters.status, location.key]);
 
     useEffect(() => {
@@ -119,36 +97,6 @@ export default function WaitlistPage() {
         return () => { cancelled = true; };
     }, [base, filters.doctorId, filters.date, filters.status, page, reloadKey]);
 
-    // Booked times for the add dialog's doctor + date.
-    useEffect(() => {
-        if (!add.open || !add.doctorId || !add.date) {
-            setSlots({ loading: false, error: '', items: [] });
-            return undefined;
-        }
-        let cancelled = false;
-        setSlots({ loading: true, error: '', items: [] });
-        client.get(`${base}/appointments/availability`, {
-            params: { doctor_id: add.doctorId, from_date: add.date, to_date: add.date },
-        })
-            .then((res) => {
-                if (cancelled) return;
-                const days = Array.isArray(res?.data?.data?.days) ? res.data.data.days : [];
-                const day = days.find((d) => d.date === add.date);
-                const now = Date.now();
-                const taken = (day?.slots || []).filter((s) => {
-                    if (s.available) return false;
-                    const start = new Date(`${add.date}T${String(s.start_time || '').slice(0, 5)}:00`);
-                    return !Number.isNaN(start.getTime()) && start.getTime() > now;
-                });
-                setSlots({ loading: false, error: '', items: taken });
-            })
-            .catch((e) => {
-                if (cancelled) return;
-                setSlots({ loading: false, error: apiError(e, 'Failed to load slots'), items: [] });
-            });
-        return () => { cancelled = true; };
-    }, [base, add.open, add.doctorId, add.date]);
-
     const setFilter = (key, value) => {
         setFilters((p) => ({ ...p, [key]: value }));
         setPage(1);
@@ -162,55 +110,15 @@ export default function WaitlistPage() {
         if (page > last) setPage(last);
     }, [meta, loading, page]);
 
-    const searchPatients = async (q) => {
-        patientQueryRef.current = q;
-        if (!q.trim()) {
-            setAdd((p) => ({ ...p, patientResults: [], patientSearching: false }));
-            return;
-        }
-        setAdd((p) => ({ ...p, patientSearching: true }));
-        try {
-            const { data } = await client.get(`${base}/patients`, { params: { search: q.trim(), per_page: 10 } });
-            if (patientQueryRef.current !== q) return; // a newer search superseded this response
-            setAdd((p) => ({ ...p, patientResults: Array.isArray(data?.data) ? data.data : [], patientSearching: false }));
-        } catch {
-            if (patientQueryRef.current !== q) return;
-            setAdd((p) => ({ ...p, patientResults: [], patientSearching: false }));
-        }
-    };
-
-    const openAdd = () => {
-        patientQueryRef.current = '';
-        // Past dates have no joinable slots; don't prefill one from the filter.
-        const today = new Date().toLocaleDateString('en-CA');
-        const date = filters.date && filters.date >= today ? filters.date : '';
-        // Inactive doctors are listed for filtering old entries but can't be joined.
-        const doctorId = activeDoctors.some((d) => String(d.id) === String(filters.doctorId)) ? filters.doctorId : '';
-        setAdd({ ...EMPTY_ADD, open: true, doctorId, date });
-    };
-
-    const closeAdd = () => {
-        patientQueryRef.current = '';
-        setAdd(EMPTY_ADD);
-    };
-
-    const submitAdd = async () => {
-        if (!add.patient || !add.doctorId || !add.date || !add.startTime) return;
-        setAdd((p) => ({ ...p, busy: true, error: '' }));
-        try {
-            const res = await client.post(`${base}/waitlist`, {
-                patient_id: add.patient.id,
-                doctor_id: Number(add.doctorId),
-                appointment_date: add.date,
-                start_time: add.startTime,
-            });
-            closeAdd();
-            setNotice(res?.data?.message || 'Added to the waitlist.');
-            setReloadKey((k) => k + 1);
-        } catch (e) {
-            setAdd((p) => ({ ...p, busy: false, error: apiError(e, 'Failed to add to the waitlist') }));
-        }
-    };
+    // The add page opens with the current doctor/date filter prefilled. It drops past dates and
+    // inactive doctors itself, so they are passed through as-is.
+    const addHref = (() => {
+        const q = new URLSearchParams();
+        if (filters.doctorId) q.set('doctor_id', filters.doctorId);
+        if (filters.date) q.set('date', filters.date);
+        const qs = q.toString();
+        return qs ? `/workflows/waitlist/new?${qs}` : '/workflows/waitlist/new';
+    })();
 
     const confirmRemove = async (id) => {
         setRemoveConfirm({ id, busy: true });
@@ -228,8 +136,6 @@ export default function WaitlistPage() {
 
     const lastPage = Number(meta?.last_page || 1);
     const total = Number(meta?.total ?? rows.length);
-    const todayYMD = toYMD(new Date());
-    const canSubmitAdd = Boolean(add.patient && add.doctorId && add.date && add.startTime) && !add.busy;
 
     return (
         <div className="space-y-4">
@@ -251,14 +157,13 @@ export default function WaitlistPage() {
                         {loading ? 'Refreshing…' : 'Refresh'}
                     </button>
                     {canManage ? (
-                        <button
-                            type="button"
-                            onClick={openAdd}
+                        <Link
+                            to={addHref}
                             className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
                         >
                             <AppIcon name="plus" className="h-4 w-4" />
                             Add to waitlist
-                        </button>
+                        </Link>
                     ) : null}
                 </div>
             </div>
@@ -411,165 +316,6 @@ export default function WaitlistPage() {
                     </div>
                 ) : null}
             </div>
-
-            {add.open ? (
-                <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-                    <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => !add.busy && closeAdd()} />
-
-                    <div className="relative m-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <AppIcon name="calendar-plus" className="h-5 w-5 text-slate-700" />
-                                    <h3 className="text-base font-semibold text-slate-900">Add to waitlist</h3>
-                                </div>
-                                <p className="mt-1 text-sm text-slate-600">Pick a patient and a booked slot. If the slot frees up, it is held for them.</p>
-                            </div>
-                            <button
-                                type="button"
-                                disabled={add.busy}
-                                onClick={closeAdd}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
-                                Close
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 px-5 py-4">
-                            {add.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{add.error}</div>
-                            ) : null}
-
-                            <div>
-                                <label className="text-sm font-semibold text-slate-900">Patient</label>
-                                {add.patient ? (
-                                    <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-slate-900 bg-white px-3 py-2">
-                                        <div>
-                                            <div className="text-sm font-semibold text-slate-900">{add.patient.full_name || `Patient #${add.patient.id}`}</div>
-                                            <div className="text-xs text-slate-500">{add.patient.phone || '—'}</div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setAdd((p) => ({ ...p, patient: null }))}
-                                            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                        >
-                                            Change
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <input
-                                            className={`mt-2 ${inputClass}`}
-                                            value={add.patientQuery}
-                                            onChange={(e) => {
-                                                const q = e.target.value;
-                                                setAdd((p) => ({ ...p, patientQuery: q }));
-                                                searchPatients(q);
-                                            }}
-                                            placeholder="Search by name or mobile"
-                                        />
-                                        {add.patientSearching ? <div className="mt-2 text-xs text-slate-500">Searching…</div> : null}
-                                        {!add.patientSearching && add.patientQuery.trim() && !add.patientResults.length ? (
-                                            <div className="mt-2 text-xs text-slate-500">No patients found.</div>
-                                        ) : null}
-                                        {add.patientResults.length ? (
-                                            <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                                                {add.patientResults.map((p) => (
-                                                    <button
-                                                        key={p.id}
-                                                        type="button"
-                                                        onClick={() => setAdd((s) => ({ ...s, patient: p }))}
-                                                        className="block w-full rounded-xl border border-slate-200 px-3 py-2 text-left hover:border-slate-300 hover:bg-slate-50"
-                                                    >
-                                                        <div className="text-sm font-medium text-slate-900">{p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Patient #${p.id}`}</div>
-                                                        <div className="text-xs text-slate-500">{p.phone || '—'}</div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                    </>
-                                )}
-                            </div>
-
-                            <div className="grid gap-3 md:grid-cols-2">
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-900">Doctor</label>
-                                    <select
-                                        value={add.doctorId}
-                                        onChange={(e) => setAdd((p) => ({ ...p, doctorId: e.target.value, startTime: '' }))}
-                                        className={`mt-2 ${inputClass}`}
-                                    >
-                                        <option value="">Select doctor</option>
-                                        {activeDoctors.map((d) => (
-                                            <option key={d.id} value={String(d.id)}>{doctorLabel(d)}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-900">Date</label>
-                                    <input
-                                        type="date"
-                                        min={todayYMD}
-                                        value={add.date}
-                                        onChange={(e) => setAdd((p) => ({ ...p, date: e.target.value, startTime: '' }))}
-                                        className={`mt-2 ${inputClass}`}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="text-sm font-semibold text-slate-900">Booked time</label>
-                                {!add.doctorId || !add.date ? (
-                                    <div className="mt-2 text-sm text-slate-500">Select a doctor and date to see booked times.</div>
-                                ) : slots.loading ? (
-                                    <div className="mt-2 text-sm text-slate-500">Loading booked times…</div>
-                                ) : slots.error ? (
-                                    <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{slots.error}</div>
-                                ) : !slots.items.length ? (
-                                    <div className="mt-2 text-sm text-slate-500">No booked times on this day — book the appointment directly.</div>
-                                ) : (
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {slots.items.map((s) => {
-                                            const isSelected = add.startTime === s.start_time;
-                                            return (
-                                                <button
-                                                    key={s.start_time}
-                                                    type="button"
-                                                    onClick={() => setAdd((p) => ({ ...p, startTime: s.start_time }))}
-                                                    className={isSelected
-                                                        ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white'
-                                                        : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50'}
-                                                >
-                                                    {formatTime(s.start_time)}–{formatTime(s.end_time)}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
-                            <button
-                                type="button"
-                                disabled={add.busy}
-                                onClick={closeAdd}
-                                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                disabled={!canSubmitAdd}
-                                onClick={submitAdd}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                            >
-                                {add.busy ? 'Adding…' : 'Add to waitlist'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
         </div>
     );
 }

@@ -14,6 +14,8 @@ import OnboardClinicWizardPage from './pages/workflows/OnboardClinicWizardPage';
 import SetupDoctorWizardPage from './pages/workflows/SetupDoctorWizardPage';
 import AppointmentsFlowPage from './pages/workflows/AppointmentsFlowPage';
 import WaitlistPage from './pages/workflows/WaitlistPage';
+import WaitlistAddPage from './pages/workflows/WaitlistAddPage';
+import AppointmentDetailPage from './pages/workflows/AppointmentDetailPage';
 import FollowupsPage from './pages/workflows/FollowupsPage';
 import FollowupFormPage from './pages/workflows/FollowupFormPage';
 import BillingPage from './pages/workflows/BillingPage';
@@ -138,11 +140,13 @@ function AuthenticatedShell() {
                 <Route path="/workflows/appointments" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentsFlowPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><ModuleFormPage forcedModuleKey="appointments" /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/waitlist" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><WaitlistPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/waitlist/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><RequirePerm perm="appointments.create"><WaitlistAddPage /></RequirePerm></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/followups" element={<BlockSuperAdmin><RequirePerm perm="followups.view"><FollowupsPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/followups/new" element={<BlockSuperAdmin><RequirePerm perm="followups.create"><FollowupFormPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing" element={<BlockSuperAdmin><RequirePerm perm="billing.view"><BillingPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing/new" element={<BlockSuperAdmin><RequirePerm perm="billing.create"><InvoiceDetailPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing/:id" element={<BlockSuperAdmin><RequirePerm perm="billing.view"><InvoiceDetailPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/appointments/:id" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentDetailPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/:id/prescription" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><PrescriptionPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/communication/delivery-issues" element={<BlockSuperAdmin><CommunicationDeliveryIssuesPage /></BlockSuperAdmin>} />
                 <Route path="/workflows/my-profile" element={<MyDoctorProfilePage />} />
