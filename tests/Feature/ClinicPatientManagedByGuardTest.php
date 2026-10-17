@@ -131,4 +131,56 @@ class ClinicPatientManagedByGuardTest extends TestCase
 
         $this->assertSame($holder->id, Patient::where('phone', '9811111112')->value('managed_by_patient_id'));
     }
+
+    public function test_update_with_array_payload_is_422_not_500(): void
+    {
+        $dependent = $this->patient($this->clinic);
+
+        $this->putJson("/api/clinic/patients/{$dependent->id}", ['managed_by_patient_id' => [5]])->assertStatus(422);
+        $this->postJson('/api/clinic/patients', ['first_name' => 'N', 'full_name' => 'N', 'phone' => '9811111113', 'managed_by_patient_id' => [5]])->assertStatus(422);
+    }
+
+    public function test_profile_does_not_leak_a_cross_clinic_holder(): void
+    {
+        $outsider = $this->patient($this->other, ['full_name' => 'Zed Outsider', 'phone' => '9777000111']);
+        $dependent = $this->patient($this->clinic);
+        $dependent->forceFill(['managed_by_patient_id' => $outsider->id])->save();
+
+        $body = $this->getJson("/api/clinic/patients/{$dependent->id}/profile")->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('Zed Outsider', $body);
+        $this->assertStringNotContainsString('9777000111', $body);
+    }
+
+    public function test_super_admin_generic_crud_rejects_cross_clinic_holder(): void
+    {
+        $su = User::create([
+            'clinic_id' => null,
+            'uuid' => (string) Str::uuid(),
+            'full_name' => 'Super',
+            'email' => 'su-'.Str::random(6).'@x.test',
+            'password' => 'x',
+            'role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $su->assignRole('super_admin');
+        Sanctum::actingAs($su);
+
+        $outsider = $this->patient($this->other);
+        $dependent = $this->patient($this->clinic);
+
+        $this->putJson("/api/super-admin/patients/{$dependent->id}", ['managed_by_patient_id' => $outsider->id])->assertStatus(422);
+        $this->assertNull($dependent->fresh()->managed_by_patient_id);
+
+        $before = Patient::count();
+        $this->postJson('/api/super-admin/patients', [
+            'clinic_id' => $this->clinic->id, 'first_name' => 'N', 'full_name' => 'N', 'phone' => '9811111114',
+            'managed_by_patient_id' => $outsider->id,
+        ])->assertStatus(422);
+        $this->assertSame($before, Patient::count());
+
+        $holder = $this->patient($this->clinic);
+        $this->putJson("/api/super-admin/patients/{$dependent->id}", ['managed_by_patient_id' => $holder->id])->assertOk();
+        $this->assertSame($holder->id, $dependent->fresh()->managed_by_patient_id);
+    }
 }

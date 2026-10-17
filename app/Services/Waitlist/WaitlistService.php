@@ -206,6 +206,12 @@ final class WaitlistService
                     $entry = $candidate;
                     break;
                 }
+
+                Log::warning('Waitlist entry skipped: account holder missing, deleted or outside the clinic', [
+                    'entry_id' => $candidate->id,
+                    'patient_id' => $candidate->patient_id,
+                    'managed_by_patient_id' => $candidate->patient->managed_by_patient_id,
+                ]);
             }
 
             if ($entry === null) {
