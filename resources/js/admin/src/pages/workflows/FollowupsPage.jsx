@@ -37,7 +37,9 @@ const CLOSED_LIMIT = 10; // per status (skipped, cancelled)
 // How long a Done click can be taken back before it is sent to the server.
 const UNDO_MS = 6000;
 
-const EMPTY_DATA = { pending: [], pendingTotal: 0, done: [], doneTotal: 0, closed: [] };
+const EMPTY_DATA = { pending: [], pendingTotal: 0, done: [], doneTotal: 0, closed: [], closedTotal: 0 };
+
+const STATUS_LABELS = { done: 'Done', skipped: 'Skipped', cancelled: 'Cancelled' };
 
 const apiError = (e, fallback) => e?.response?.data?.message || e?.message || fallback;
 const doctorLabel = (d) => [d?.title, d?.full_name || d?.name].filter(Boolean).join(' ').trim() || `Doctor #${d?.id}`;
@@ -91,7 +93,7 @@ function FollowupRow({ task, kind, days, canEdit, onDone, busy }) {
     } else if (task.status === 'done') {
         dueText = `done ${formatDate(task.completed_at)}`;
     } else {
-        dueText = task.status;
+        dueText = STATUS_LABELS[task.status] || task.status;
     }
 
     return (
@@ -183,6 +185,14 @@ export default function FollowupsPage() {
         assigneeId: ownQueue && user?.id ? String(user.id) : '',
         status: 'all',
     }));
+    // The preset is applied once; it also applies later if the scope (role kind) arrives after mount.
+    // Any manual filter change counts as "done" so it is never re-imposed.
+    const presetDone = useRef(ownQueue && Boolean(user?.id));
+    useEffect(() => {
+        if (presetDone.current || !ownQueue || !user?.id) return;
+        presetDone.current = true;
+        setFilters((p) => ({ ...p, assigneeId: p.assigneeId || String(user.id) }));
+    }, [ownQueue, user?.id]);
 
     const [doctors, setDoctors] = useState([]);
     const [staff, setStaff] = useState([]);
@@ -197,6 +207,9 @@ export default function FollowupsPage() {
     const [busy, setBusy] = useState([]);
     const [recent, setRecent] = useState([]);
     const timersRef = useRef(new Map()); // task id -> toast dismissal timer
+    const mountedRef = useRef(true);
+    const genRef = useRef(0); // bumped on every list load; a Done/Undo that finishes in a later generation reloads instead of patching
+    const reloadMessageRef = useRef(''); // message to keep visible across the next reload
     const statusRef = useRef(filters.status);
     statusRef.current = filters.status;
 
@@ -219,8 +232,11 @@ export default function FollowupsPage() {
 
     useEffect(() => {
         let cancelled = false;
+        genRef.current += 1;
         setLoading(true);
-        setError('');
+        // A reload triggered by a failed Done keeps the server's explanation on screen.
+        setError(reloadMessageRef.current);
+        reloadMessageRef.current = '';
 
         const scoped = {};
         if (filters.doctorId) scoped.doctor_id = filters.doctorId;
@@ -252,6 +268,7 @@ export default function FollowupsPage() {
                     done: rowsOf(done),
                     doneTotal: Number(done?.data?.meta?.total ?? rowsOf(done).length),
                     closed,
+                    closedTotal: Number(skipped?.data?.meta?.total ?? 0) + Number(cancelledRes?.data?.meta?.total ?? 0),
                 });
             })
             .catch((e) => {
@@ -264,6 +281,10 @@ export default function FollowupsPage() {
         return () => { cancelled = true; };
     }, [base, filters.doctorId, filters.assigneeId, filters.status, reloadKey]);
 
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
     useEffect(() => () => {
         timersRef.current.forEach((timer) => clearTimeout(timer));
         timersRef.current.clear();
@@ -280,8 +301,15 @@ export default function FollowupsPage() {
         if (busy.includes(task.id)) return; // prevent double-submit
         setError('');
         setBusy((b) => [...b, task.id]);
+        const gen = genRef.current;
         try {
             await client.post(`${base}/followups/${task.id}/complete`);
+            if (!mountedRef.current) return;
+            if (gen !== genRef.current) {
+                // Filters changed or a reload landed mid-request; the server has it, so re-read rather than patch stale lists.
+                setReloadKey((k) => k + 1);
+                return;
+            }
             setData((d) => {
                 const finished = { ...task, status: 'done', completed_at: new Date().toISOString() };
                 const showsDone = ['all', 'done'].includes(statusRef.current);
@@ -296,10 +324,15 @@ export default function FollowupsPage() {
             setRecent((list) => [...list.filter((t) => t.id !== task.id), task]);
             timersRef.current.set(task.id, setTimeout(() => dropToast(task.id), UNDO_MS));
         } catch (e) {
+            if (!mountedRef.current) return;
             // The row stays where it was and the server's own words explain why.
-            setError(apiError(e, 'Could not mark the follow-up as done'));
-            // A 422 means it was already closed elsewhere; refresh so the list agrees.
-            if (e?.response?.status === 422) setReloadKey((k) => k + 1);
+            const message = apiError(e, 'Could not mark the follow-up as done');
+            setError(message);
+            if (e?.response?.status === 422) {
+                // Already closed elsewhere: refresh so the list agrees, keeping the message visible.
+                reloadMessageRef.current = message;
+                setReloadKey((k) => k + 1);
+            }
         } finally {
             setBusy((b) => b.filter((id) => id !== task.id));
         }
@@ -310,8 +343,14 @@ export default function FollowupsPage() {
         dropToast(task.id);
         setError('');
         setBusy((b) => [...b, task.id]);
+        const gen = genRef.current;
         try {
             await client.put(`${base}/followups/${task.id}`, { status: 'pending', completed_at: null });
+            if (!mountedRef.current) return;
+            if (gen !== genRef.current) {
+                setReloadKey((k) => k + 1);
+                return;
+            }
             setData((d) => ({
                 ...d,
                 pending: [...d.pending.filter((t) => t.id !== task.id), task],
@@ -327,7 +366,7 @@ export default function FollowupsPage() {
         }
     };
 
-    const setFilter = (key, value) => setFilters((p) => ({ ...p, [key]: value }));
+    const setFilter = (key, value) => { presetDone.current = true; setFilters((p) => ({ ...p, [key]: value })); };
 
     const assigneeOptions = useMemo(() => {
         const seen = new Map();
@@ -340,7 +379,6 @@ export default function FollowupsPage() {
     }, [staff, data, user]);
 
     const today = toYMD(new Date());
-    
     const pending = [...data.pending].sort(byDue);
     const grouped = GROUPS.map((g) => ({ ...g, rows: pending.filter((t) => g.match(daysUntil(t.due_date, today))) }));
     const showPending = ['all', 'pending'].includes(filters.status);
@@ -412,7 +450,7 @@ export default function FollowupsPage() {
                 <div className="flex items-end">
                     <button
                         type="button"
-                        onClick={() => setFilters({ doctorId: '', assigneeId: '', status: 'all' })}
+                        onClick={() => { presetDone.current = true; setFilters({ doctorId: '', assigneeId: '', status: 'all' }); }}
                         className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
                         Show whole clinic
@@ -467,7 +505,7 @@ export default function FollowupsPage() {
                     ) : null}
 
                     {showClosed && data.closed.length ? (
-                        <Group title="Closed" hint="skipped or cancelled" count={data.closed.length}>
+                        <Group title="Closed" hint={`skipped or cancelled, latest ${data.closed.length}`} count={data.closedTotal}>
                             <ul className="divide-y divide-slate-100">
                                 {data.closed.map((t) => <FollowupRow key={t.id} task={t} kind="closed" />)}
                             </ul>

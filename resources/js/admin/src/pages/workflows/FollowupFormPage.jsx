@@ -43,9 +43,9 @@ export default function FollowupFormPage() {
         client.get(`${base}/users`, { params: { per_page: 200 } })
             .then((res) => { if (!cancelled) setStaff(Array.isArray(res?.data?.data) ? res.data.data : []); })
             .catch(() => { if (!cancelled) setStaff([]); });
-            client.get(`${base}/doctors`, { params: { per_page: 200 } })
-                .then((res) => { if (!cancelled) setDoctors(Array.isArray(res?.data?.data) ? res.data.data : []); })
-                .catch(() => { if (!cancelled) setDoctors([]); });
+        client.get(`${base}/doctors`, { params: { per_page: 200 } })
+            .then((res) => { if (!cancelled) setDoctors(Array.isArray(res?.data?.data) ? res.data.data : []); })
+            .catch(() => { if (!cancelled) setDoctors([]); });
         return () => { cancelled = true; };
     }, [base]);
 
