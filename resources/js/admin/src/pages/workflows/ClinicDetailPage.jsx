@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import ClinicStatusBadge from '../../components/billing/ClinicStatusBadge.jsx';
 import SubscriptionCard from '../../components/billing/SubscriptionCard.jsx';
@@ -53,12 +54,9 @@ function EmptyState({ icon, text }) {
     );
 }
 
-function LoadingState() {
-    return (
-        <div className="flex items-center justify-center py-14">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-        </div>
-    );
+// Page-level loading placeholder for a tab's content (table-shaped by default).
+function LoadingState({ variant = 'table', rows, cols }) {
+    return <Skeleton variant={variant} rows={rows} cols={cols} />;
 }
 
 // ── Services Tab ─────────────────────────────────────────────────────────────
@@ -465,7 +463,7 @@ function OverviewTab({ clinic, clinicId, onEditClinic, onSubscriptionLoaded }) {
     useEffect(() => { loadOverview(); }, [clinicId, clinic?.updated_at]);
 
     if (error) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>;
-    if (!overview) return <LoadingState />;
+    if (!overview) return <LoadingState variant="fields" rows={8} />;
 
     const c = overview.clinic || {};
     const s = overview.settings || {};
@@ -1097,7 +1095,7 @@ function SettingsTab({ clinicId }) {
         }
     };
 
-    if (loading) return <LoadingState />;
+    if (loading) return <LoadingState variant="fields" rows={6} cols={1} />;
 
     // Flip from the value the switch is actually showing, so the first click
     // on a defaulted-on flag turns it off rather than re-sending `true`.
@@ -1437,11 +1435,7 @@ export default function ClinicDetailPage() {
     useEffect(() => { loadClinic(); }, [id]);
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center py-20">
-                <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-            </div>
-        );
+        return <Skeleton variant="fields" rows={4} />;
     }
 
     if (error) {

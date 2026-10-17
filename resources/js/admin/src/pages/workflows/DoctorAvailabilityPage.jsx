@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import client from '../../api/client';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const inputBase = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200';
@@ -179,20 +180,29 @@ export default function DoctorAvailabilityPage() {
 
     if (!doctorId) return null;
 
+    const header = (
+        <div>
+            <h1 className="text-xl font-bold text-gray-900">Availability</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Manage your weekly schedules and one-off exceptions.</p>
+        </div>
+    );
+
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-20">
-                <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            <div className="space-y-5">
+                {header}
+                <div role="status" aria-busy="true" className="grid gap-4 xl:grid-cols-2">
+                    <span className="sr-only">Loading…</span>
+                    <Skeleton variant="fields" rows={6} announce={false} />
+                    <Skeleton variant="table" rows={5} cols={3} announce={false} />
+                </div>
             </div>
         );
     }
 
     return (
         <div className="space-y-5">
-            <div>
-                <h1 className="text-xl font-bold text-gray-900">Availability</h1>
-                <p className="mt-0.5 text-sm text-gray-500">Manage your weekly schedules and one-off exceptions.</p>
-            </div>
+            {header}
 
             {error && (
                 <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import { formatINR, toPaise } from '../../utils/money';
 import { offlineAmountForCycle, offlinePeriodMonthsForCycle } from '../../utils/planDefaults';
@@ -110,9 +111,7 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
     if (plansLoading) {
         return (
             <SectionCard title="Plan" subtitle="Choose a subscription plan for this clinic.">
-                <div className="flex justify-center py-10">
-                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                </div>
+                <Skeleton variant="fields" rows={4} card={false} />
             </SectionCard>
         );
     }
