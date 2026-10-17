@@ -17,7 +17,8 @@ const image = (key, label, module, required = false) => ({ key, label, type: 'im
 //   title     (record) => the record's own name, for the view page header
 //   labels    human field labels; anything missing falls back to the prettifier
 //   formats   per-field display: 'money' | 'percent' | 'minutes' | 'enum'
-//   hidden    fields the view page never shows
+//   hidden    fields the view page never shows (only ones nobody can act on)
+//   technical fields shown in a collapsed "Technical details" section
 //   sections  how the view page groups fields; unlisted fields land in "Other details"
 //   empty     { title, body } for the empty list; `emptyAction: false` drops the
 //             "add" button where records are created by the system, not by staff
@@ -36,13 +37,13 @@ const viewMeta = {
         icon: 'users',
         singular: 'Staff user',
         title: (r) => r.full_name,
-        labels: { clinic_id: 'Clinic', full_name: 'Name', email: 'Email', phone: 'Phone', password: 'Password', role: 'Role', doctor_ids: 'Assigned doctors', last_login_at: 'Last login' },
+        labels: { clinic_id: 'Clinic', full_name: 'Name', email: 'Email', phone: 'Phone', password: 'Password', role: 'Role', doctor_ids: 'Assigned doctors', last_login_at: 'Last login', last_login_ip: 'Last login IP' },
         formats: { role: 'enum' },
-        hidden: ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip'],
+        hidden: ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type'],
         sections: [
             { title: 'Profile', keys: ['full_name', 'role', 'status'] },
             { title: 'Contact', keys: ['email', 'phone'] },
-            { title: 'Access', keys: ['clinic_id', 'last_login_at'] },
+            { title: 'Access', keys: ['clinic_id', 'last_login_at', 'last_login_ip'] },
         ],
         empty: {
             title: 'No staff users yet',
@@ -54,10 +55,9 @@ const viewMeta = {
         singular: 'Service',
         title: (r) => r.name,
         labels: { clinic_id: 'Clinic', name: 'Service name', code: 'Code', description: 'Description', duration_minutes: 'Duration', fee: 'Fee', image_url: 'Service image' },
-        formats: { fee: 'money', duration_minutes: 'minutes' },
-        hidden: ['image_url'],
+        formats: { fee: 'money', duration_minutes: 'minutes', image_url: 'image' },
         sections: [
-            { title: 'About this service', keys: ['name', 'code', 'description'] },
+            { title: 'About this service', keys: ['name', 'code', 'description', 'image_url'] },
             { title: 'Fee and time', keys: ['fee', 'duration_minutes'] },
             { title: 'Availability', keys: ['status'] },
         ],
@@ -164,12 +164,12 @@ const viewMeta = {
         icon: 'message-circle',
         singular: 'Message',
         title: (r) => (r.direction ? `${humanizeValue(r.direction)} message` : ''),
-        labels: { clinic_id: 'Clinic', conversation_id: 'Conversation', patient_id: 'Patient', appointment_id: 'Appointment', direction: 'Direction', message_type: 'Type', notification_type: 'Notification', template_name: 'Template', content_text: 'Message', from_phone: 'From', to_phone: 'To', delivery_status: 'Delivery', error_message: 'Error', provider_message_id: 'Provider reference' },
+        labels: { clinic_id: 'Clinic', conversation_id: 'Conversation', patient_id: 'Patient', appointment_id: 'Appointment', direction: 'Direction', sent_by_user_id: 'Sent by', payload_json: 'Provider payload', message_type: 'Type', notification_type: 'Notification', template_name: 'Template', content_text: 'Message', from_phone: 'From', to_phone: 'To', delivery_status: 'Delivery', error_message: 'Error', provider_message_id: 'Provider reference' },
         formats: { direction: 'enum', message_type: 'enum', notification_type: 'enum' },
-        hidden: ['payload_json'],
+        technical: ['payload_json'],
         sections: [
             { title: 'Message', keys: ['direction', 'message_type', 'content_text', 'template_name', 'notification_type'] },
-            { title: 'Delivery', keys: ['delivery_status', 'error_message', 'from_phone', 'to_phone', 'provider_message_id'] },
+            { title: 'Delivery', keys: ['delivery_status', 'error_message', 'from_phone', 'to_phone', 'provider_message_id', 'sent_by_user_id'] },
             { title: 'Linked to', keys: ['conversation_id', 'patient_id', 'appointment_id'] },
         ],
         empty: {
@@ -182,9 +182,9 @@ const viewMeta = {
         icon: 'git-branch',
         singular: 'Flow session',
         title: (r) => (r.flow_type ? humanizeValue(r.flow_type) : ''),
-        labels: { clinic_id: 'Clinic', conversation_id: 'Conversation', patient_id: 'Patient', flow_type: 'Flow', current_step: 'Current step', started_at: 'Started', ended_at: 'Ended' },
+        labels: { clinic_id: 'Clinic', conversation_id: 'Conversation', patient_id: 'Patient', flow_type: 'Flow', current_step: 'Current step', state_json: 'Flow state', started_at: 'Started', ended_at: 'Ended' },
         formats: { flow_type: 'enum', current_step: 'enum' },
-        hidden: ['state_json'],
+        technical: ['state_json'],
         sections: [
             { title: 'Flow', keys: ['flow_type', 'current_step', 'status'] },
             { title: 'Timing', keys: ['started_at', 'ended_at'] },

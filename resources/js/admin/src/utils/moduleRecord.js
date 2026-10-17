@@ -51,6 +51,7 @@ const REFERENCE_MODULES = {
     user_id: 'users',
     assigned_to_user_id: 'users',
     current_owner_user_id: 'users',
+    sent_by_user_id: 'users',
 };
 
 export function referenceModule(key) {
@@ -82,9 +83,20 @@ export function buildSections(module, record) {
 
     const hidden = new Set([...ALWAYS_HIDDEN, ...(module?.hidden || [])]);
     const fields = new Map();
+    // Payloads and anything nested that has no readable form: kept, but in a
+    // collapsed "Technical details" section so nothing is silently dropped.
+    const technical = [];
+    const addTechnical = (key, value) => {
+        const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+        technical.push({ key, label: fieldLabel(module, key), value: text, format: 'json' });
+    };
 
     Object.entries(record).forEach(([key, value]) => {
         if (hidden.has(key) || TIMESTAMP_KEYS.includes(key)) return;
+        if ((module?.technical || []).includes(key)) {
+            if (!isEmpty(value)) addTechnical(key, value);
+            return;
+        }
         if (key.endsWith('_ids')) {
             if (Array.isArray(value) && value.length) {
                 fields.set(key, { key, label: fieldLabel(module, key), value: value.map((v) => '#' + v).join(', '), format: 'text' });
@@ -95,7 +107,12 @@ export function buildSections(module, record) {
         if (key.endsWith('_id')) {
             const name = relationName(record[key.slice(0, -3)]);
             if (name) fields.set(key, { key, label: fieldLabel(module, key), value: name, format: 'text' });
-            else if (!isEmpty(value)) fields.set(key, { key, label: fieldLabel(module, key), value, format: 'ref' });
+            else if (!isEmpty(value)) {
+                // Only ids that point at one of our records read as "Label #id".
+                // A provider's string id (wamid...) is shown as plain text.
+                const isRef = Boolean(referenceModule(key)) || typeof value === 'number' || /^\d+$/.test(String(value));
+                fields.set(key, { key, label: fieldLabel(module, key), value, format: isRef ? 'ref' : 'text' });
+            }
             return;
         }
 
@@ -103,15 +120,21 @@ export function buildSections(module, record) {
         if (value && typeof value === 'object' && !Array.isArray(value) && `${key}_id` in record) return;
 
         if (Array.isArray(value)) {
-            // Only flat lists read well; lists of objects are technical payloads.
-            if (!value.every((v) => typeof v === 'string' || typeof v === 'number')) return;
+            // Only flat lists read well; lists of objects go to Technical details.
+            if (!value.every((v) => typeof v === 'string' || typeof v === 'number')) {
+                if (value.length) addTechnical(key, value);
+                return;
+            }
             fields.set(key, { key, label: fieldLabel(module, key), value: value.join(', '), format: 'text' });
             return;
         }
 
         if (value && typeof value === 'object') {
             const name = relationName(value);
-            if (!name) return;
+            if (!name) {
+                addTechnical(key, value);
+                return;
+            }
             fields.set(key, { key, label: fieldLabel(module, key), value: name, format: 'text' });
             return;
         }
@@ -145,6 +168,8 @@ export function buildSections(module, record) {
         .filter((key) => !isEmpty(record[key]))
         .map((key) => ({ key, label: fieldLabel(module, key, key === 'created_at' ? 'Created' : 'Last updated'), value: record[key], format: undefined }));
     if (stamps.length) sections.push({ title: 'Record', fields: stamps });
+
+    if (technical.length) sections.push({ title: 'Technical details', collapsed: true, fields: technical });
 
     return sections;
 }

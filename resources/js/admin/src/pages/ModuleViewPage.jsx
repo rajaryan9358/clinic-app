@@ -38,6 +38,18 @@ function FieldValue({ field, href }) {
 
     if (String(key).includes('status')) return <StatusBadge status={String(value)} />;
 
+    if (format === 'json') {
+        return <pre className="max-h-72 overflow-auto rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700">{value}</pre>;
+    }
+
+    if (format === 'image') {
+        return (
+            <a href={String(value)} target="_blank" rel="noreferrer" title="Open full size">
+                <img src={String(value)} alt={field.label} className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
+            </a>
+        );
+    }
+
     if (format === 'money') return formatRupees(value);
     if (format === 'percent') return `${Number(value)}%`;
     if (format === 'minutes') return `${value} min`;
@@ -303,12 +315,16 @@ function ModuleViewPageInner() {
                 <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">Loading…</div>
             ) : (
                 <div className="space-y-4">
-                    {sections.map((section) => (
-                        <section key={section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <h3 className="text-sm font-semibold text-slate-900">{section.title}</h3>
+                    {sections.length === 0 ? (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">
+                            This record has no details to show yet.
+                        </div>
+                    ) : null}
+                    {sections.map((section) => {
+                        const body = (
                             <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2">
                                 {section.fields.map((field) => (
-                                    <div key={field.key} className="min-w-0">
+                                    <div key={field.key} className={`min-w-0 ${field.format === 'json' ? 'sm:col-span-2' : ''}`}>
                                         <dt className="text-xs font-medium text-slate-500">{field.label}</dt>
                                         <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-900">
                                             <FieldValue field={field} href={hrefFor(field)} />
@@ -316,8 +332,20 @@ function ModuleViewPageInner() {
                                     </div>
                                 ))}
                             </dl>
-                        </section>
-                    ))}
+                        );
+                        // Technical details stay out of the way until opened.
+                        return section.collapsed ? (
+                            <details key={section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <summary className="cursor-pointer text-sm font-semibold text-slate-900">{section.title}</summary>
+                                {body}
+                            </details>
+                        ) : (
+                            <section key={section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <h3 className="text-sm font-semibold text-slate-900">{section.title}</h3>
+                                {body}
+                            </section>
+                        );
+                    })}
                 </div>
             )}
 
