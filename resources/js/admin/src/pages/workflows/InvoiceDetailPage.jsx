@@ -86,6 +86,9 @@ const FEE_VISIT_TYPES = [
 
 const APPOINTMENT_WINDOW_DAYS = 90;
 
+// Every appointment status except cancelled; one request each (see the appointments effect).
+const BILLABLE_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_consultation', 'completed', 'no_show', 'rescheduled'];
+
 // Local calendar date (YYYY-MM-DD) N days ago; toISOString would shift it to UTC.
 const dateDaysAgo = (days) => {
     const d = new Date();
@@ -286,17 +289,19 @@ export default function InvoiceDetailPage() {
         setBillable({ loading: true, error: '', items: [] });
         (async () => {
             try {
-                const [apptRes, invRes] = await Promise.all([
-                    client.get(`${base}/appointments`, {
+                // The status filter takes a single value and, for doctor-role users, an unfiltered list is
+                // narrowed to open visits only (hiding completed ones), so ask for each status explicitly.
+                const [invRes, ...apptRes] = await Promise.all([
+                    client.get(`${base}/invoices`, { params: { patient_id: patientId, per_page: 100 } }),
+                    ...BILLABLE_APPOINTMENT_STATUSES.map((status) => client.get(`${base}/appointments`, {
                         params: {
                             patient_id: patientId,
+                            status,
                             appointment_date_from: dateDaysAgo(APPOINTMENT_WINDOW_DAYS),
-                            sort_by: 'appointment_date',
-                            sort_dir: 'desc',
+                            appointment_date_to: dateDaysAgo(0),
                             per_page: 100,
                         },
-                    }),
-                    client.get(`${base}/invoices`, { params: { patient_id: patientId, per_page: 100 } }),
+                    })),
                 ]);
                 if (cancelled) return;
                 const billed = new Set(
@@ -304,8 +309,10 @@ export default function InvoiceDetailPage() {
                         .filter((i) => i.status !== 'cancelled' && i.appointment_id)
                         .map((i) => Number(i.appointment_id)),
                 );
-                const items = (apptRes?.data?.data || [])
-                    .filter((a) => a.status !== 'cancelled' && !billed.has(Number(a.id)));
+                const items = apptRes
+                    .flatMap((r) => r?.data?.data || [])
+                    .filter((a) => a.status !== 'cancelled' && !billed.has(Number(a.id)))
+                    .sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)) || b.id - a.id);
                 setBillable({ loading: false, error: '', items });
             } catch (e) {
                 if (cancelled) return;
@@ -370,6 +377,17 @@ export default function InvoiceDetailPage() {
         // A lone untouched placeholder line gives way to the fee line rather than sitting beside it.
         setForm((p) => ({ ...p, items: p.items.length === 1 && isBlankLine(p.items[0]) ? [fresh] : [...p.items, fresh] }));
         setFeePick((p) => ({ ...p, doctorId: '' }));
+    };
+
+    // Lines belong to the patient they were built for (prefilled fees, hand-picked fees), so choosing
+    // another patient discards them, after a confirm that says so when there is anything to lose.
+    const changePatient = () => {
+        const hasWork = form.items.some((l) => !isBlankLine(l));
+        if (hasWork && !window.confirm('Changing the patient discards the lines on this invoice, including any fees prefilled from an appointment. Continue?')) return;
+        prefillSeq.current += 1;
+        setPatient(null);
+        setAppointmentId(null);
+        setForm((p) => ({ ...p, items: [newLine()] }));
     };
 
     const attachAppointment = async (apptId) => {
@@ -707,7 +725,7 @@ export default function InvoiceDetailPage() {
                                 <span><span className="font-medium text-slate-900">{patient.full_name}</span> <span className="text-slate-500">{patient.phone || ''}</span></span>
                                 <button
                                     type="button"
-                                    onClick={() => { setPatient(null); setAppointmentId(null); }}
+                                    onClick={changePatient}
                                     disabled={Boolean(busy)}
                                     className="text-xs text-blue-700 hover:underline disabled:opacity-50"
                                 >
@@ -1001,20 +1019,20 @@ export default function InvoiceDetailPage() {
                                                     <tr>
                                                         <td colSpan={canEdit ? 6 : 5} className="px-3 py-3">
                                                             <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-                                                            <label className={labelClass}>Refund reason</label>
-                                                            <input
-                                                                value={refundBox.reason}
-                                                                maxLength={500}
-                                                                onChange={(e) => setRefundBox((r) => ({ ...r, reason: e.target.value }))}
-                                                                className={inputClass}
-                                                            />
-                                                            <p className="mt-1 text-xs text-slate-600">This marks the payment refunded in the system. Return the money to the patient yourself.</p>
-                                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                                <button type="button" onClick={refundPayment} disabled={Boolean(busy)} className={btnDanger}>
-                                                                    {busy === 'refund' ? 'Refunding…' : `Refund ${formatRupees(p.amount)}`}
-                                                                </button>
-                                                                <button type="button" onClick={() => setRefundBox({ paymentId: null, reason: '' })} disabled={Boolean(busy)} className={btnOutline}>Keep payment</button>
-                                                            </div>
+                                                                <label className={labelClass}>Refund reason</label>
+                                                                <input
+                                                                    value={refundBox.reason}
+                                                                    maxLength={500}
+                                                                    onChange={(e) => setRefundBox((r) => ({ ...r, reason: e.target.value }))}
+                                                                    className={inputClass}
+                                                                />
+                                                                <p className="mt-1 text-xs text-slate-600">This marks the payment refunded in the system. Return the money to the patient yourself.</p>
+                                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                                    <button type="button" onClick={refundPayment} disabled={Boolean(busy)} className={btnDanger}>
+                                                                        {busy === 'refund' ? 'Refunding…' : `Refund ${formatRupees(p.amount)}`}
+                                                                    </button>
+                                                                    <button type="button" onClick={() => setRefundBox({ paymentId: null, reason: '' })} disabled={Boolean(busy)} className={btnOutline}>Keep payment</button>
+                                                                </div>
                                                             </div>
                                                         </td>
                                                     </tr>
