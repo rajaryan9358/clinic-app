@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import SubscriptionLockScreen from './components/billing/SubscriptionLockScreen.jsx';
 import { useAuth } from './context/AuthContext';
@@ -14,6 +14,10 @@ import OnboardClinicWizardPage from './pages/workflows/OnboardClinicWizardPage';
 import SetupDoctorWizardPage from './pages/workflows/SetupDoctorWizardPage';
 import AppointmentsFlowPage from './pages/workflows/AppointmentsFlowPage';
 import WaitlistPage from './pages/workflows/WaitlistPage';
+import WaitlistAddPage from './pages/workflows/WaitlistAddPage';
+import AppointmentDetailPage from './pages/workflows/AppointmentDetailPage';
+import FollowupsPage from './pages/workflows/FollowupsPage';
+import FollowupFormPage from './pages/workflows/FollowupFormPage';
 import BillingPage from './pages/workflows/BillingPage';
 import InvoiceDetailPage from './pages/workflows/InvoiceDetailPage';
 import PrescriptionPage from './pages/workflows/PrescriptionPage';
@@ -71,6 +75,12 @@ function FullPageLoader() {
             <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
         </div>
     );
+}
+
+// Old bookmarks and emailed links to an appointment still open the appointment they name.
+function RedirectToAppointment() {
+    const { id } = useParams();
+    return <Navigate to={`/workflows/appointments/${id}`} replace />;
 }
 
 // Wraps the authenticated routes: when the clinic's subscription is locked
@@ -136,9 +146,13 @@ function AuthenticatedShell() {
                 <Route path="/workflows/appointments" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentsFlowPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><ModuleFormPage forcedModuleKey="appointments" /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/waitlist" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><WaitlistPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/waitlist/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><RequirePerm perm="appointments.create"><WaitlistAddPage /></RequirePerm></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/followups" element={<BlockSuperAdmin><RequirePerm perm="followups.view"><FollowupsPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/followups/new" element={<BlockSuperAdmin><RequirePerm perm="followups.create"><FollowupFormPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing" element={<BlockSuperAdmin><RequirePerm perm="billing.view"><BillingPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing/new" element={<BlockSuperAdmin><RequirePerm perm="billing.create"><InvoiceDetailPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing/:id" element={<BlockSuperAdmin><RequirePerm perm="billing.view"><InvoiceDetailPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/appointments/:id" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentDetailPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/:id/prescription" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><PrescriptionPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/communication/delivery-issues" element={<BlockSuperAdmin><CommunicationDeliveryIssuesPage /></BlockSuperAdmin>} />
                 <Route path="/workflows/my-profile" element={<MyDoctorProfilePage />} />
@@ -152,7 +166,7 @@ function AuthenticatedShell() {
                 <Route path="/modules/appointments" element={<BlockSuperAdmin><Navigate to="/workflows/appointments" replace /></BlockSuperAdmin>} />
                 <Route path="/modules/appointments/new" element={<BlockSuperAdmin><Navigate to="/workflows/appointments/new" replace /></BlockSuperAdmin>} />
                 <Route path="/modules/appointments/:id/edit" element={<BlockSuperAdmin><Navigate to="/workflows/appointments" replace /></BlockSuperAdmin>} />
-                <Route path="/modules/appointments/:id" element={<BlockSuperAdmin><Navigate to="/workflows/appointments" replace /></BlockSuperAdmin>} />
+                <Route path="/modules/appointments/:id" element={<BlockSuperAdmin><RedirectToAppointment /></BlockSuperAdmin>} />
 
                 {/* ── Profile detail pages ── */}
                 <Route path="/modules/patients/:id" element={<BlockSuperAdmin><BlockDoctor><PatientProfilePage /></BlockDoctor></BlockSuperAdmin>} />

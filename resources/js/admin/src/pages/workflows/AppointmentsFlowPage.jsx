@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
-import AppointmentDetailDrawer from '../../components/AppointmentDetailDrawer';
 import StatusBadge from '../../components/StatusBadge';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
 function modeButton(active) {
@@ -14,12 +14,39 @@ function modeButton(active) {
         : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50';
 }
 
+const MODES = ['today', 'calendar', 'upcoming', 'list', 'range'];
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Shape check plus a real-calendar check, so ?day=9999-99-99 never reaches the API.
+const isRealYmd = (v) => {
+    if (!v || !YMD_RE.test(v)) return false;
+    const [y, m, d] = v.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
+
+// The queue's filters live in the URL so that opening an appointment (a separate page) and coming
+// back restores them. Parameters: mode, day (calendar mode), from + to (range mode), q (search),
+// status, visit, channel. An absent parameter falls back to the page's usual default.
 export default function AppointmentsFlowPage() {
+    const location = useLocation();
+    const epochRef = useRef(0);
+    const lastKeyRef = useRef(location.key);
+    // The queue writes its own filter changes into the URL with { replace, state.queueFilters }.
+    // Any other navigation to this route (a sidebar click, a link carrying new filters) restarts
+    // the queue so it re-reads the URL.
+    if (lastKeyRef.current !== location.key) {
+        lastKeyRef.current = location.key;
+        if (!location.state?.queueFilters) epochRef.current += 1;
+    }
+    return <AppointmentsQueue key={epochRef.current} />;
+}
+
+function AppointmentsQueue() {
     const { user } = useAuth();
     const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const canUsePrescription = Boolean(scope?.can?.('appointments.prescribe'));
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
 
     const tabsStorageKey = useMemo(() => {
@@ -68,19 +95,29 @@ export default function AppointmentsFlowPage() {
     };
 
     const [mode, setMode] = useState(() => {
+        const fromUrl = searchParams.get('mode');
+        if (MODES.includes(String(fromUrl))) return String(fromUrl);
         const saved = loadSavedTabs().mode;
-        const allowed = new Set(['today', 'calendar', 'upcoming', 'list', 'range']);
-        return allowed.has(String(saved)) ? String(saved) : 'today';
+        return MODES.includes(String(saved)) ? String(saved) : 'today';
     }); // today | calendar | upcoming | list | range
-    const [date, setDate] = useState(() => toYMD(new Date()));
-    const [range, setRange] = useState({ from: '', to: '' });
-    const [search, setSearch] = useState('');
+    const [date, setDate] = useState(() => {
+        const fromUrl = searchParams.get('day');
+        return isRealYmd(fromUrl) ? fromUrl : toYMD(new Date());
+    });
+    const [range, setRange] = useState(() => {
+        const from = searchParams.get('from');
+        const to = searchParams.get('to');
+        return { from: isRealYmd(from) ? from : '', to: isRealYmd(to) ? to : '' };
+    });
+    const [search, setSearch] = useState(() => searchParams.get('q') || '');
     const [status, setStatus] = useState(() => {
+        // status= (present but empty) means "All"; absent falls back to the last-used tab.
+        if (searchParams.has('status')) return searchParams.get('status') || '';
         const saved = loadSavedTabs().status;
         return typeof saved === 'string' ? saved : '';
     });
-    const [visitType, setVisitType] = useState('');
-    const [channel, setChannel] = useState('');
+    const [visitType, setVisitType] = useState(() => searchParams.get('visit') || '');
+    const [channel, setChannel] = useState(() => searchParams.get('channel') || '');
 
     const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -91,7 +128,6 @@ export default function AppointmentsFlowPage() {
     const [sortByToken, setSortByToken] = useState(false);
     const [tokenGenerating, setTokenGenerating] = useState(false);
 
-        const [drawer, setDrawer] = useState({ open: false, id: null });
         const [selectedId, setSelectedId] = useState(null);
     const [menu, setMenu] = useState({ open: false, id: null, top: 0, left: 0 });
     const [menuSavingId, setMenuSavingId] = useState(null);
@@ -385,13 +421,39 @@ export default function AppointmentsFlowPage() {
     };
 
 
+    // Mirror the filters into the URL (replace, so filtering does not stack history entries).
+    // Debounced like the list fetch: history.replaceState is rate-limited in some browsers (Safari
+    // throws past ~100 calls per 30s), so typing in the search box must not write per keystroke.
+    useEffect(() => {
+        const t = setTimeout(() => {
+        const next = new URLSearchParams();
+        next.set('mode', mode);
+        if (mode === 'calendar') next.set('day', date);
+        if (mode === 'range') {
+            if (range.from) next.set('from', range.from);
+            if (range.to) next.set('to', range.to);
+        }
+        if (String(search || '').trim()) next.set('q', search);
+        next.set('status', status);
+        if (visitType) next.set('visit', visitType);
+        if (channel) next.set('channel', channel);
+        if (next.toString() === searchParams.toString()) return;
+        try {
+            setSearchParams(next, { replace: true, state: { queueFilters: true } });
+        } catch {
+            // The URL is a convenience for "back"; never let a history error blank the queue.
+        }
+        }, 250);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mode, date, range.from, range.to, search, status, visitType, channel]);
+
+    // Old links used /workflows/appointments?open=<id>; the detail is a page now.
     useEffect(() => {
         const open = searchParams.get('open');
-        const id = open && String(open).match(/^\d+$/) ? Number(open) : null;
-        if (!id) return;
-        setDrawer({ open: true, id });
+        if (open && /^\d+$/.test(open)) navigate(`/workflows/appointments/${open}`, { replace: true });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]);
+    }, []);
 
     const statusTabs = [
         { value: '', label: 'All' },
@@ -861,7 +923,7 @@ export default function AppointmentsFlowPage() {
                     <AppIcon name="module" className="h-5 w-5 text-slate-700" />
                     <div>
                         <h2 className="text-xl font-semibold text-slate-900">Appointments</h2>
-                        <p className="mt-0.5 text-sm text-slate-600">Flow-based view with a detail drawer.</p>
+                        <p className="mt-0.5 text-sm text-slate-600">Flow-based view; open an appointment for its full page.</p>
                     </div>
                 </div>
 
@@ -1033,7 +1095,7 @@ export default function AppointmentsFlowPage() {
                 </div>
 
                 {loading ? (
-                    <div className="p-5 text-sm text-slate-600">Loading…</div>
+                    <Skeleton variant="table" rows={6} cols={6} card={false} />
                 ) : !rows.length ? (
                     <div className="p-5 text-sm text-slate-600">No appointments found.</div>
                 ) : (
@@ -1155,14 +1217,14 @@ export default function AppointmentsFlowPage() {
                                         </td>
                                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDrawer({ open: true, id: r.id })}
+                                                <Link
+                                                    to={`/workflows/appointments/${r.id}`}
+                                                    state={{ queueSearch: searchParams.toString() }}
                                                     className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
                                                 >
                                                     <AppIcon name="view" className="h-3.5 w-3.5" />
                                                     Details
-                                                </button>
+                                                </Link>
 
                                                 {canUsePrescription && (Number(r?.prescriptions_count || 0) > 0 ? (
                                                     <Link
@@ -2076,13 +2138,6 @@ export default function AppointmentsFlowPage() {
                     </div>
                 </div>
             ) : null}
-
-            <AppointmentDetailDrawer
-                open={drawer.open}
-                appointmentId={drawer.id}
-                onClose={() => setDrawer({ open: false, id: null })}
-                onChanged={() => fetchList()}
-            />
         </div>
     );
 }

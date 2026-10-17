@@ -1868,12 +1868,12 @@ function DoctorSetupFlowPageInner() {
                                                                         tabIndex={0}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            navigate(`/workflows/appointments?open=${a.id}`);
+                                                                            navigate(`/workflows/appointments/${a.id}`);
                                                                         }}
                                                                         onKeyDown={(e) => {
                                                                             if (e.key === 'Enter' || e.key === ' ') {
                                                                                 e.stopPropagation();
-                                                                                navigate(`/workflows/appointments?open=${a.id}`);
+                                                                                navigate(`/workflows/appointments/${a.id}`);
                                                                             }
                                                                         }}
                                                                         className={`absolute z-20 cursor-pointer overflow-hidden rounded-lg px-2 py-1 text-[11px] font-semibold text-white shadow-sm hover:brightness-110 ${statusClass}`}

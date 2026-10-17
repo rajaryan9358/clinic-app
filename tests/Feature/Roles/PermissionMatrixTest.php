@@ -56,6 +56,7 @@ class PermissionMatrixTest extends TestCase
             'whatsapp conversations' => ['GET', '/api/clinic/whatsapp/conversations', 'whatsapp.view'],
             'reminders' => ['GET', '/api/clinic/reminders', 'reminders.view'],
             'followups create' => ['POST', '/api/clinic/followups', 'followups.create'],
+            'followup complete' => ['POST', '/api/clinic/followups/999/complete', 'followups.edit'],
             'invoices' => ['GET', '/api/clinic/invoices', 'billing.view'],
             'invoice show' => ['GET', '/api/clinic/invoices/999', 'billing.view'],
             'invoice prefill' => ['GET', '/api/clinic/appointments/999/invoice-prefill', 'billing.view'],

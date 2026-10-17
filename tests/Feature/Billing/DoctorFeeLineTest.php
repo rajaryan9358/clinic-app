@@ -1,0 +1,120 @@
+<?php
+
+namespace Tests\Feature\Billing;
+
+use App\Models\Role;
+use App\Models\User;
+use App\Services\Billing\InvoiceService;
+use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class DoctorFeeLineTest extends TestCase
+{
+    use BillingTestHelpers, RefreshDatabase;
+
+    private function staffWith(int $clinicId, array $permissions): User
+    {
+        $role = Role::create(['name' => 'r'.Str::random(6), 'guard_name' => 'web', 'label' => 'R', 'kind' => 'staff']);
+        $role->syncPermissions($permissions);
+        $u = User::create(['clinic_id' => $clinicId, 'uuid' => (string) Str::uuid(), 'full_name' => 'S',
+            'email' => Str::random(6).'@x.test', 'password' => 'x', 'role' => $role->name, 'status' => 'active']);
+        $u->syncRoles([$role->name]);
+
+        return $u;
+    }
+
+    public function test_picked_and_prefilled_fee_lines_are_identical(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $doctor = $this->makeBillingDoctor($clinic, ['full_name' => 'Dr Asha Rao', 'consultation_fee' => 500, 'followup_fee' => 250]);
+        $service = $this->makeBillingService($clinic, ['fee' => 100]);
+        $patient = $this->makeBillingPatient($clinic);
+
+        foreach (['new' => 'Consultation - Dr Asha Rao', 'followup' => 'Follow-up consultation - Dr Asha Rao'] as $visit => $text) {
+            $appointment = $this->makeBillingAppointment($patient, $doctor, $service, $visit);
+            $line = InvoiceService::doctorFeeLine($doctor, $appointment->visit_type);
+            $prefill = $this->invoiceService()->prefillFor($appointment);
+
+            $this->assertSame($text, $line['description']);
+            $this->assertContains($line, $prefill);
+            $this->assertSame($line, end($prefill));
+        }
+    }
+
+    public function test_doctor_without_a_fee_offers_no_line(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $none = $this->makeBillingDoctor($clinic, ['consultation_fee' => null, 'followup_fee' => null]);
+        $zero = $this->makeBillingDoctor($clinic, ['consultation_fee' => 0, 'followup_fee' => 0]);
+
+        foreach ([$none, $zero] as $doctor) {
+            $this->assertNull(InvoiceService::doctorFeeLine($doctor, 'new'));
+            $this->assertNull(InvoiceService::doctorFeeLine($doctor, 'followup'));
+        }
+    }
+
+    public function test_followup_visit_uses_the_followup_fee(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $doctor = $this->makeBillingDoctor($clinic, ['full_name' => 'Dr Asha Rao', 'consultation_fee' => 500, 'followup_fee' => 250]);
+
+        $followup = InvoiceService::doctorFeeLine($doctor, 'followup');
+        $this->assertSame(250.0, $followup['unit_amount']);
+        $this->assertSame(['description', 'service_id', 'quantity', 'unit_amount'], array_keys($followup));
+        $this->assertNull($followup['service_id']);
+        $this->assertSame(1, $followup['quantity']);
+        $this->assertSame(500.0, InvoiceService::doctorFeeLine($doctor, 'new')['unit_amount']);
+        $this->assertSame(500.0, InvoiceService::doctorFeeLine($doctor, 'something-else')['unit_amount']);
+    }
+
+    public function test_doctors_list_carries_both_fees(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $this->makeBillingDoctor($clinic, ['consultation_fee' => 500, 'followup_fee' => 250]);
+        Sanctum::actingAs($this->staffWith($clinic->id, ['doctors.view']));
+
+        $row = $this->getJson('/api/clinic/doctors')->assertOk()->json('data.0');
+        $this->assertSame('500.00', $row['consultation_fee']);
+        $this->assertSame('250.00', $row['followup_fee']);
+    }
+
+    public function test_doctors_list_carries_rendered_lines_identical_to_the_service(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $both = $this->makeBillingDoctor($clinic, ['full_name' => 'Dr Asha Rao', 'consultation_fee' => 500, 'followup_fee' => 250]);
+        $noFollowup = $this->makeBillingDoctor($clinic, ['full_name' => 'Dr Nofu', 'consultation_fee' => 300, 'followup_fee' => null]);
+        Sanctum::actingAs($this->staffWith($clinic->id, ['doctors.view']));
+
+        $rows = collect($this->getJson('/api/clinic/doctors')->assertOk()->json('data'))->keyBy('id');
+
+        // JSON cannot tell 500.0 from 500, so the amount is compared by value; everything else strictly.
+        $this->assertEquals(InvoiceService::doctorFeeLine($both, 'new'), $rows[$both->id]['consultation_line']);
+        $this->assertSame('Consultation - Dr Asha Rao', $rows[$both->id]['consultation_line']['description']);
+        $this->assertEquals(InvoiceService::doctorFeeLine($both, 'followup'), $rows[$both->id]['followup_line']);
+        $this->assertEquals(250, $rows[$both->id]['followup_line']['unit_amount']);
+        $this->assertEquals(300, $rows[$noFollowup->id]['consultation_line']['unit_amount']);
+        $this->assertNull($rows[$noFollowup->id]['followup_line']);
+        $this->assertSame('500.00', $rows[$both->id]['consultation_fee']);
+
+        $patient = $this->makeBillingPatient($clinic);
+        foreach (['new' => 'consultation_line', 'followup' => 'followup_line'] as $visit => $key) {
+            $prefill = $this->invoiceService()->prefillFor($this->makeBillingAppointment($patient, $both, null, $visit));
+            $this->assertSame($prefill[0]['description'], $rows[$both->id][$key]['description']);
+        }
+    }
+
+    public function test_doctor_fees_require_doctors_view(): void
+    {
+        $clinic = $this->makeBillingClinic();
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $this->makeBillingDoctor($clinic, ['consultation_fee' => 500]);
+        Sanctum::actingAs($this->staffWith($clinic->id, ['billing.view']));
+
+        $this->getJson('/api/clinic/doctors')->assertStatus(403);
+    }
+}

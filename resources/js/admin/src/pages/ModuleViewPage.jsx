@@ -2,10 +2,74 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import AppIcon from '../components/AppIcon';
+import Skeleton from '../components/Skeleton';
+import StatusBadge from '../components/StatusBadge';
 import { modules } from '../config/modules';
-import { canAccessModule, isSuperAdminHiddenModuleKey } from '../config/access';
+import { canAccessModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
+import { buildSections, humanizeValue, recordTitle, referenceModule } from '../utils/moduleRecord';
+import { formatDate, formatDateTime, formatTime, isDateKey, isDateTimeKey, isTimeKey } from '../utils/dateFormat';
+import { formatRupees } from '../utils/money';
+
+const EMPTY_VALUE = <span className="text-slate-300">—</span>;
+
+// One field value, formatted for reading. Same conventions as the list table:
+// status-like keys become badges, date keys are formatted, booleans read Yes/No.
+function FieldValue({ field, href }) {
+    const { key, value, format } = field;
+
+    // A reference the API gave us only as an id: "Appointment #412", linked when we can.
+    if (format === 'ref') {
+        const text = field.label + ' #' + value;
+        return href ? <Link to={href} className="font-medium text-blue-700 hover:underline">{text}</Link> : text;
+    }
+
+    if (value === null || value === undefined || value === '') return EMPTY_VALUE;
+
+    if (format === 'boolean' || typeof value === 'boolean') {
+        const on = value === true || value === 1 || value === '1';
+        return (
+            <span className={`inline-flex items-center gap-1 text-sm font-medium ${on ? 'text-emerald-600' : 'text-slate-400'}`}>
+                <AppIcon name={on ? 'check' : 'close'} className="h-3.5 w-3.5" />
+                {on ? 'Yes' : 'No'}
+            </span>
+        );
+    }
+
+    if (String(key).includes('status')) return <StatusBadge status={String(value)} />;
+
+    if (format === 'json') {
+        return <pre className="max-h-72 overflow-auto rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700">{value}</pre>;
+    }
+
+    if (format === 'image') {
+        return (
+            <a href={String(value)} target="_blank" rel="noreferrer" title="Open full size">
+                <img src={String(value)} alt={field.label} className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
+            </a>
+        );
+    }
+
+    if (format === 'money') return formatRupees(value);
+    if (format === 'percent') return `${Number(value)}%`;
+    if (format === 'minutes') return `${value} min`;
+    if (format === 'enum') return humanizeValue(value);
+
+    if (typeof value === 'string') {
+        if (isDateTimeKey(key)) return formatDateTime(value);
+        if (isDateKey(key)) return formatDate(value);
+        if (isTimeKey(key)) return formatTime(value);
+    }
+
+    return String(value);
+}
+
+// First status-like field on the record, shown beside the title.
+function headerStatus(record) {
+    const key = ['status', 'conversation_status', 'delivery_status'].find((k) => record?.[k]);
+    return key ? record[key] : null;
+}
 
 // The permission check lives in the default-exported wrapper below, not
 // here, so this component can call every hook it needs unconditionally.
@@ -19,11 +83,10 @@ function ModuleViewPageInner() {
     const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const [record, setRecord] = useState(null);
+    const [loadError, setLoadError] = useState('');
     const [related, setRelated] = useState({ messages: null });
     const [actionError, setActionError] = useState('');
     const [actionSaving, setActionSaving] = useState(false);
-    const [apptStatusReason, setApptStatusReason] = useState('');
-    const [reschedule, setReschedule] = useState({ appointment_date: '', start_time: '', end_time: '', reason: '' });
 
     const [waOptions, setWaOptions] = useState({ users: null, doctors: null });
     const [waAssign, setWaAssign] = useState({ user_id: '' });
@@ -31,13 +94,22 @@ function ModuleViewPageInner() {
     const [waAppt, setWaAppt] = useState({ doctor_id: '', appointment_date: '', start_time: '', visit_type: 'followup', booking_channel: 'whatsapp' });
     const [waActionMsg, setWaActionMsg] = useState({ assign: '', followup: '', appointment: '' });
 
+    // The parent keys this component by module + id, so state starts fresh on
+    // every route change; `cancelled` stops a slow response from a page we have
+    // already left landing on the new one.
     useEffect(() => {
-        const fetchOne = async () => {
-            if (!module) return;
-            const { data } = await client.get(`${base}/${module.path}/${id}`);
-            setRecord(data.data);
+        if (!module) return undefined;
+        let cancelled = false;
+        client.get(`${base}/${module.path}/${id}`)
+            .then(({ data }) => {
+                if (!cancelled) setRecord(data.data);
+            })
+            .catch((e) => {
+                if (!cancelled) setLoadError(e?.response?.data?.message || e?.message || 'Failed to load record');
+            });
+        return () => {
+            cancelled = true;
         };
-        fetchOne();
     }, [moduleKey, id, base]);
 
     useEffect(() => {
@@ -88,114 +160,45 @@ function ModuleViewPageInner() {
     }, [moduleKey, record?.id]);
 
     useEffect(() => {
-        const loadRelated = async () => {
-            if (!module) return;
-            if (moduleKey === 'whatsappConversations') {
-                try {
-                    const { data } = await client.get(`${base}/whatsapp/messages`, {
-                        params: {
-                            conversation_id: id,
-                            per_page: 50,
-                            sort_by: 'id',
-                            sort_dir: 'desc',
-                        },
-                    });
-                    setRelated((p) => ({ ...p, messages: data?.data || [] }));
-                } catch {
-                    setRelated((p) => ({ ...p, messages: [] }));
-                }
-            }
+        if (!module || moduleKey !== 'whatsappConversations') return undefined;
+        let cancelled = false;
+        client.get(`${base}/whatsapp/messages`, {
+            params: {
+                conversation_id: id,
+                per_page: 50,
+                sort_by: 'id',
+                sort_dir: 'desc',
+            },
+        })
+            .then(({ data }) => {
+                if (!cancelled) setRelated((p) => ({ ...p, messages: data?.data || [] }));
+            })
+            .catch(() => {
+                if (!cancelled) setRelated((p) => ({ ...p, messages: [] }));
+            });
+        return () => {
+            cancelled = true;
         };
-        loadRelated();
     }, [moduleKey, id, base, module]);
 
-    const hiddenKeys = new Set(['password', 'remember_token', 'clinic_id', 'deleted_at']);
-    const entries = Object.entries(record || {}).filter(([key]) => !hiddenKeys.has(key));
+    const sections = useMemo(() => buildSections(module, record), [module, record]);
+    const title = recordTitle(module, record);
+    const status = headerStatus(record);
+    // Same gate the list uses for its Edit action (and not for a soft-deleted row).
+    const canEdit = canEditModule(user?.role, moduleKey, scope?.can) && !record?.deleted_at;
 
-    const renderValue = (value) => {
-        if (value === null || value === undefined || value === '') return '—';
-        if (typeof value !== 'object') return String(value);
-
-        if (Array.isArray(value)) return JSON.stringify(value, null, 2);
-
-        const labelKeys = ['name', 'full_name', 'fullName', 'title', 'label'];
-        for (const k of labelKeys) {
-            if (value && (typeof value[k] === 'string' || typeof value[k] === 'number')) {
-                return String(value[k]);
-            }
-        }
-
-        return JSON.stringify(value, null, 2);
+    // Link a bare reference only to a record page this user can already open.
+    const hrefFor = (field) => {
+        if (field.format !== 'ref') return null;
+        const target = referenceModule(field.key);
+        if (!target) return null;
+        if (target === 'clinics') return user?.role === 'super_admin' ? `/workflows/clinics/${field.value}` : null;
+        if (target === 'patients' && scope?.roleKind === 'doctor') return null; // App.jsx blocks doctors from patient profiles
+        if (!canAccessModule(user?.role, target, scope?.can)) return null;
+        return `/modules/${target}/${field.value}`;
     };
-
-    const lifecycleActions = useMemo(() => {
-        const s = String(record?.status || '');
-        const actions = [];
-
-        if (s === 'pending') {
-            actions.push({ label: 'Confirm', next: 'confirmed', primary: true });
-            actions.push({ label: 'Cancel', next: 'cancelled' });
-        } else if (s === 'confirmed') {
-            actions.push({ label: 'Check In', next: 'checked_in', primary: true });
-            actions.push({ label: 'Cancel', next: 'cancelled' });
-            actions.push({ label: 'No Show', next: 'no_show' });
-        } else if (s === 'checked_in') {
-            actions.push({ label: 'Start Consultation', next: 'in_consultation', primary: true });
-            actions.push({ label: 'Complete', next: 'completed', primary: true });
-            actions.push({ label: 'Cancel', next: 'cancelled' });
-        } else if (s === 'in_consultation') {
-            actions.push({ label: 'Complete', next: 'completed', primary: true });
-        } else if (s === 'completed') {
-            actions.push({ label: 'Reopen', next: 'checked_in', primary: true });
-        } else if (s === 'cancelled') {
-            actions.push({ label: 'Restore', next: 'confirmed', primary: true });
-        } else if (s === 'no_show') {
-            actions.push({ label: 'Restore', next: 'confirmed', primary: true });
-        }
-
-        if (['pending', 'confirmed', 'no_show'].includes(s)) {
-            actions.push({ label: 'Mark Rescheduled', next: 'rescheduled' });
-        }
-
-        return actions;
-    }, [record?.status]);
 
     if (!module) return <div className="rounded border bg-white p-4">Unknown module.</div>;
-
-    const runAppointmentStatusChange = async (nextStatus) => {
-        if (!nextStatus) return;
-        setActionSaving(true);
-        setActionError('');
-        try {
-            await client.post(`${base}/appointments/${id}/lifecycle`, { status: nextStatus, reason: apptStatusReason || null });
-            const { data } = await client.get(`${base}/${module.path}/${id}`);
-            setRecord(data.data);
-            setApptStatusReason('');
-        } catch (e) {
-            setActionError(e?.response?.data?.message || e?.message || 'Failed to change status');
-        } finally {
-            setActionSaving(false);
-        }
-    };
-
-    const runAppointmentReschedule = async () => {
-        setActionSaving(true);
-        setActionError('');
-        try {
-            await client.post(`${base}/appointments/${id}/reschedule`, {
-                appointment_date: reschedule.appointment_date,
-                start_time: reschedule.start_time,
-                end_time: reschedule.end_time || null,
-                reason: reschedule.reason || null,
-            });
-            const { data } = await client.get(`${base}/${module.path}/${id}`);
-            setRecord(data.data);
-        } catch (e) {
-            setActionError(e?.response?.data?.message || e?.message || 'Failed to reschedule');
-        } finally {
-            setActionSaving(false);
-        }
-    };
 
     const runAssignConversation = async () => {
         setActionSaving(true);
@@ -281,72 +284,71 @@ function ModuleViewPageInner() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="view" className="h-5 w-5 text-slate-700" />
-                    <h2 className="text-xl font-semibold">{module.label} Details</h2>
-                </div>
-                <Link to={`/modules/${moduleKey}`} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back</Link>
-            </div>
-
-            {moduleKey === 'appointments' ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="text-base font-semibold text-slate-900">Appointment Actions</h3>
-                    <p className="mt-1 text-sm text-slate-600">Guided actions instead of raw log tables.</p>
-                    {actionError ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</div> : null}
-
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <div className="rounded-xl border border-slate-200 p-4">
-                            <p className="text-sm font-semibold text-slate-800">Change Status</p>
-                            <div className="mt-2 grid gap-2">
-                                <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={apptStatusReason} onChange={(e) => setApptStatusReason(e.target.value)} />
-
-                                <div className="flex flex-wrap gap-2">
-                                    {lifecycleActions
-                                        .filter((a) => scope?.can?.(a.next === 'cancelled' ? 'appointments.cancel' : 'appointments.check_in'))
-                                        .map((a) => (
-                                        <button
-                                            key={a.next}
-                                            type="button"
-                                            disabled={actionSaving}
-                                            onClick={() => runAppointmentStatusChange(a.next)}
-                                            className={a.primary
-                                                ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50'
-                                                : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50'
-                                            }
-                                        >
-                                            {actionSaving ? 'Working…' : a.label}
-                                        </button>
-                                    ))}
-                                    {!lifecycleActions.length ? (
-                                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">No quick actions available.</div>
-                                    ) : null}
-                                </div>
-                            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                        <AppIcon name={module.icon || 'module'} className="h-5 w-5 text-slate-600" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module.singular || module.label}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="truncate text-xl font-semibold text-slate-900">{record ? title : '…'}</h2>
+                            {status ? <StatusBadge status={String(status)} /> : null}
                         </div>
-
-                        {scope?.can?.('appointments.edit') ? (
-                            <div className="rounded-xl border border-slate-200 p-4">
-                                <p className="text-sm font-semibold text-slate-800">Reschedule</p>
-                                <div className="mt-2 grid gap-2">
-                                    <input type="date" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.appointment_date} onChange={(e) => setReschedule((p) => ({ ...p, appointment_date: e.target.value }))} />
-                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.start_time} onChange={(e) => setReschedule((p) => ({ ...p, start_time: e.target.value }))} />
-                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.end_time} onChange={(e) => setReschedule((p) => ({ ...p, end_time: e.target.value }))} />
-                                    <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={reschedule.reason} onChange={(e) => setReschedule((p) => ({ ...p, reason: e.target.value }))} />
-                                    <button
-                                        type="button"
-                                        disabled={!reschedule.appointment_date || !reschedule.start_time || actionSaving}
-                                        onClick={runAppointmentReschedule}
-                                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                    >
-                                        {actionSaving ? 'Working…' : 'Reschedule'}
-                                    </button>
-                                </div>
-                            </div>
-                        ) : null}
                     </div>
                 </div>
-            ) : null}
+                <div className="flex items-center gap-2">
+                    <Link to={`/modules/${moduleKey}`} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                        Back to {module.label}
+                    </Link>
+                    {record && canEdit ? (
+                        <Link to={`/modules/${moduleKey}/${id}/edit`} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                            <AppIcon name="edit" className="h-4 w-4" />
+                            Edit
+                        </Link>
+                    ) : null}
+                </div>
+            </div>
+
+            {loadError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">{loadError}</div>
+            ) : !record ? (
+                <Skeleton variant="fields" rows={8} />
+            ) : (
+                <div className="space-y-4">
+                    {sections.length === 0 ? (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">
+                            This record has no details to show yet.
+                        </div>
+                    ) : null}
+                    {sections.map((section) => {
+                        const body = (
+                            <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                                {section.fields.map((field) => (
+                                    <div key={field.key} className={`min-w-0 ${field.format === 'json' ? 'sm:col-span-2' : ''}`}>
+                                        <dt className="text-xs font-medium text-slate-500">{field.label}</dt>
+                                        <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-900">
+                                            <FieldValue field={field} href={hrefFor(field)} />
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        );
+                        // Technical details stay out of the way until opened.
+                        return section.collapsed ? (
+                            <details key={section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <summary className="cursor-pointer text-sm font-semibold text-slate-900">{section.title}</summary>
+                                {body}
+                            </details>
+                        ) : (
+                            <section key={section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <h3 className="text-sm font-semibold text-slate-900">{section.title}</h3>
+                                {body}
+                            </section>
+                        );
+                    })}
+                </div>
+            )}
 
             {moduleKey === 'whatsappConversations' ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -470,20 +472,12 @@ function ModuleViewPageInner() {
                 </div>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-                {entries.map(([key, value]) => (
-                    <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{key.replaceAll('_', ' ')}</p>
-                        <p className="text-sm text-slate-800 break-words whitespace-pre-wrap">{renderValue(value)}</p>
-                    </div>
-                ))}
-            </div>
         </div>
     );
 }
 
 export default function ModuleViewPage() {
-    const { moduleKey } = useParams();
+    const { moduleKey, id } = useParams();
     const { user } = useAuth();
     const scope = useScope();
 
@@ -495,5 +489,6 @@ export default function ModuleViewPage() {
         return <Navigate to="/dashboard" replace />;
     }
 
-    return <ModuleViewPageInner />;
+    // Keyed so moving between records starts from clean state.
+    return <ModuleViewPageInner key={`${moduleKey}:${id}`} />;
 }

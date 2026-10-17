@@ -284,6 +284,7 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::get('appointments/availability', [ClinicAppointmentController::class, 'availability'])->middleware('perm:appointments.view');
     Route::post('appointments/generate-tokens', [ClinicAppointmentController::class, 'generateTokens'])->middleware('perm:appointments.edit');
     registerCrudRoutes('appointments', ClinicAppointmentController::class, 'appointments');
+    Route::post('followups/{id}/complete', [ClinicFollowupTaskController::class, 'complete'])->middleware('perm:followups.edit');
     registerCrudRoutes('followups', ClinicFollowupTaskController::class, 'followups');
     registerCrudRoutes('reminders', ClinicReminderLogController::class, 'reminders');
     registerCrudRoutes('whatsapp/conversations', ClinicWhatsappConversationController::class, 'whatsapp');

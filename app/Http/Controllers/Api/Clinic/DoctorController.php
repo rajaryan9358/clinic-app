@@ -8,6 +8,8 @@ use App\Models\Doctor;
 use App\Services\DoctorManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Services\Billing\InvoiceService;
 
 class DoctorController extends BaseClinicCrudController
 {
@@ -16,6 +18,20 @@ class DoctorController extends BaseClinicCrudController
     protected array $filterable = ['status', 'specialization'];
 
     public function __construct(private readonly DoctorManagementService $doctorManagementService) {}
+
+    /*
+     * The list carries each doctor's rendered fee lines (not just the numbers) so the invoice
+     * picker uses exactly the wording prefill uses. Always built via InvoiceService::doctorFeeLine.
+     */
+    protected function paginated(string $message, LengthAwarePaginator $paginator): JsonResponse
+    {
+        foreach ($paginator->items() as $doctor) {
+            $doctor->setAttribute('consultation_line', InvoiceService::doctorFeeLine($doctor, 'new'));
+            $doctor->setAttribute('followup_line', InvoiceService::doctorFeeLine($doctor, 'followup'));
+        }
+
+        return parent::paginated($message, $paginator);
+    }
 
     public function store(Request $request)
     {

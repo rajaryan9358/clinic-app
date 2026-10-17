@@ -2,21 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import DataTable from '../components/DataTable';
-import RecordDialog from '../components/RecordDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AppIcon from '../components/AppIcon';
+import Skeleton from '../components/Skeleton';
 import StatusBadge from '../components/StatusBadge';
 import ClinicStatusBadge from '../components/billing/ClinicStatusBadge.jsx';
 import { modules } from '../config/modules';
 import { canAccessModule, canCreateModule, canDeleteModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
-
-function prettyLabel(key) {
-    return String(key)
-        .replaceAll('_', ' ')
-        .replace(/\b\w/g, (m) => m.toUpperCase());
-}
+import { fieldLabel, prettifyKey } from '../utils/moduleRecord';
 
 function inferLabel(item) {
     if (!item || typeof item !== 'object') return '';
@@ -139,12 +134,6 @@ function ModuleListPageInner({ forcedModuleKey } = {}) {
         fetchData(1, { filters: next });
     };
 
-    const viewMode = useMemo(() => {
-        if (moduleKey === 'patients') return 'route';
-        if (moduleKey === 'doctors') return 'route';
-        return 'dialog';
-    }, [moduleKey]);
-
     const filterContext = base === '/super-admin' ? 'super_admin' : 'clinic';
     const filterKeys = useMemo(() => {
         const keys = module?.filters?.[filterContext] || [];
@@ -209,7 +198,7 @@ function ModuleListPageInner({ forcedModuleKey } = {}) {
             if (fromForm?.type === 'checkbox') {
                 return {
                     key,
-                    label: fromForm.label || prettyLabel(key),
+                    label: fieldLabel(module, key, fromForm.label),
                     type: 'select',
                     options: [
                         { label: 'Yes', value: '1' },
@@ -221,19 +210,19 @@ function ModuleListPageInner({ forcedModuleKey } = {}) {
             if (fromForm) {
                 return {
                     ...fromForm,
-                    label: fromForm.label || prettyLabel(key),
+                    label: fieldLabel(module, key, fromForm.label),
                 };
             }
 
             if (String(key).endsWith('_id')) {
-                return { key, label: prettyLabel(key), type: 'number' };
+                return { key, label: fieldLabel(module, key), type: 'number' };
             }
 
             if (String(key).endsWith('_date')) {
-                return { key, label: prettyLabel(key), type: 'date' };
+                return { key, label: fieldLabel(module, key), type: 'date' };
             }
 
-            return { key, label: prettyLabel(key), type: 'text' };
+            return { key, label: fieldLabel(module, key), type: 'text' };
         });
     }, [moduleKey, filterKeys]);
 
@@ -528,12 +517,32 @@ Write an appropriate reply.`;
     const canDelete = canDeleteModule(user?.role, moduleKey, scope?.can);
     const isReadOnly = !canEdit;
 
+    // With no search or filter active, an empty list means "nothing here yet":
+    // say what the screen is for and offer the primary action. With one
+    // active, it means "nothing matched", so keep the generic hint.
+    const hasActiveQuery = Boolean(search.trim()) || activeFilterCount > 0 || includeDeleted;
+    const emptyState = module.empty && !hasActiveQuery ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
+                <AppIcon name={module.icon || 'module'} className="h-6 w-6 text-slate-500" />
+            </div>
+            <p className="text-sm font-semibold text-slate-800">{module.empty.title}</p>
+            <p className="mt-1 max-w-md text-sm text-slate-500">{module.empty.body}</p>
+            {canCreate && module.emptyAction !== false && moduleKey !== 'reviews' ? (
+                <Link to={addHref} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                    <AppIcon name="plus" className="h-4 w-4" />
+                    {addLabel}
+                </Link>
+            ) : null}
+        </div>
+    ) : null;
+
 
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <div className="flex items-center gap-2">
-                    <AppIcon name="module" className="h-5 w-5 text-slate-700" />
+                    <AppIcon name={module.icon || 'module'} className="h-5 w-5 text-slate-700" />
                     <h2 className="text-xl font-semibold text-slate-800">{module.label}</h2>
                 </div>
                 <div className="flex items-center gap-2">
@@ -734,7 +743,7 @@ Write an appropriate reply.`;
                 </div>
             ) : null}
 
-            {loading ? <div className="rounded border bg-white p-4">Loading...</div> : (
+            {loading ? <Skeleton variant="table" rows={8} cols={5} /> : (
                 <DataTable
                     rows={rows}
                     actionMode="buttons"
@@ -790,19 +799,14 @@ Write an appropriate reply.`;
                         : moduleKey === 'clinics'
                             ? ['uuid', 'legal_name', 'subscription']
                         : moduleKey === 'doctors'
-                            ? ['user_id', 'registration_number']
+                            ? ['user_id', 'registration_number', 'consultation_line', 'followup_line']
                             : moduleKey === 'users'
                                 ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
                                 : moduleKey === 'reviews'
                                     ? ['sentiment_message', 'improvement_suggestion', 'reply_text', 'reply_meta', 'replied_at', 'reply_category', 'reply_tone_used', 'reply_needs_human_review']
                                 : []}
-                    columnLabels={moduleKey === 'doctors'
-                        ? { full_name: 'Doctor Name' }
-                        : moduleKey === 'clinicSettings'
-                            ? { clinic: 'Clinic' }
-                        : moduleKey === 'users'
-                            ? { last_login_at: 'Last Login' }
-                            : {}}
+                    columnLabels={moduleKey === 'doctors' ? { full_name: 'Doctor Name' } : (module.labels || {})}
+                    emptyState={emptyState}
                     cellRenderers={moduleKey === 'doctors'
                         ? {
                             full_name: (value, row) => {
@@ -900,10 +904,6 @@ Write an appropriate reply.`;
                             navigate(`/workflows/clinics/${row.id}`);
                             return;
                         }
-                        if (viewMode === 'route') {
-                            navigate(`/modules/${moduleKey}/${row.id}`);
-                            return;
-                        }
                         if (moduleKey === 'reviews') {
                             (async () => {
                                 setActionError('');
@@ -917,7 +917,9 @@ Write an appropriate reply.`;
                             })();
                             return;
                         }
-                        setViewRecord(row);
+                        // Patients and doctors reach their own profile pages through this same
+                        // route (see App.jsx); everything else lands on ModuleViewPage.
+                        navigate(`/modules/${moduleKey}/${row.id}`);
                     }}
                     onEdit={isReadOnly ? undefined : (row) => navigate(`/modules/${moduleKey}/${row.id}/edit`)}
                     onDelete={!canDelete || moduleKey === 'clinicSettings'
@@ -949,8 +951,7 @@ Write an appropriate reply.`;
                 </div>
             </div>
 
-            {moduleKey === 'reviews' ? (
-                viewRecord ? (
+            {moduleKey === 'reviews' && viewRecord ? (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setViewRecord(null)}>
                         <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
@@ -1020,19 +1021,7 @@ Write an appropriate reply.`;
                             </div>
                         </div>
                     </div>
-                ) : null
-            ) : (
-                <RecordDialog
-                    open={Boolean(viewRecord)}
-                    title={`${module.label} Details`}
-                    variant="sheet"
-                    record={viewRecord}
-                    hiddenKeys={moduleKey === 'users'
-                        ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
-                        : []}
-                    onClose={() => setViewRecord(null)}
-                />
-            )}
+            ) : null}
 
             {reviewCreate.open ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setReviewCreate((p) => ({ ...p, open: false }))}>

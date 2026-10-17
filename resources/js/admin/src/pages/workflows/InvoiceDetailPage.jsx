@@ -4,6 +4,7 @@ import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDate, formatDateTime } from '../../utils/dateFormat';
 import { formatRupees } from '../../utils/money';
@@ -78,6 +79,24 @@ const snapshot = (form, patientId) => JSON.stringify({
     i: form.items.map((l) => [l.service_id, l.description, l.quantity, l.unit_amount]),
 });
 
+// Visit types the doctor fee depends on, mapped to the server-rendered line on each doctor row.
+const FEE_VISIT_TYPES = [
+    { value: 'new', label: 'New consultation', lineKey: 'consultation_line' },
+    { value: 'followup', label: 'Follow-up visit', lineKey: 'followup_line' },
+];
+
+const APPOINTMENT_WINDOW_DAYS = 90;
+
+// Local calendar date (YYYY-MM-DD) N days ago; toISOString would shift it to UTC.
+const dateDaysAgo = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const isBlankLine = (l) => !l.service_id && !l.description.trim() && l.unit_amount === '';
+
 const lineAmount = (l) => {
     const q = Number(l.quantity);
     const u = Number(l.unit_amount);
@@ -132,6 +151,12 @@ export default function InvoiceDetailPage() {
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [services, setServices] = useState([]);
+    const [doctors, setDoctors] = useState([]);
+    const [feePick, setFeePick] = useState({ doctorId: '', visitType: 'new' });
+
+    // Appointments of the chosen patient that can still be billed (standalone New-invoice path only).
+    const [billable, setBillable] = useState({ loading: false, error: '', items: [] });
+    const prefillSeq = useRef(0);
 
     const [patientQuery, setPatientQuery] = useState('');
     const [patientResults, setPatientResults] = useState([]);
@@ -159,6 +184,10 @@ export default function InvoiceDetailPage() {
         setBaseline('');
         setPatientQuery('');
         setPatientResults([]);
+        setFeePick({ doctorId: '', visitType: 'new' });
+        setBillable({ loading: false, error: '', items: [] });
+        prefillSeq.current += 1; // drop any in-flight appointment prefill from the previous route
+        setBusy((b) => (b === 'prefill' ? '' : b));
         setCancelBox({ open: false, reason: '' });
         setPayBox({ open: false, amount: '', method: 'cash', reference: '', notes: '' });
         setRefundBox({ paymentId: null, reason: '' });
@@ -230,6 +259,67 @@ export default function InvoiceDetailPage() {
         return () => { cancelled = true; };
     }, [base, editable]);
 
+    // Doctors for the fee picker. Each row carries the server-rendered consultation_line / followup_line.
+    useEffect(() => {
+        if (!editable) return undefined;
+        let cancelled = false;
+        client.get(`${base}/doctors`, { params: { per_page: 200, status: 'active' } })
+            .then((res) => {
+                if (cancelled) return;
+                setDoctors(Array.isArray(res?.data?.data) ? res.data.data : []);
+            })
+            .catch(() => {
+                if (!cancelled) setDoctors([]);
+            });
+        return () => { cancelled = true; };
+    }, [base, editable]);
+
+    // Once a patient is chosen on the standalone New-invoice path, find their appointments from the
+    // last 90 days that are not cancelled and have no live (non-cancelled) invoice.
+    const patientId = patient?.id ?? null;
+    const offerAppointments = isNew && !appointmentParam && canCreate;
+    useEffect(() => {
+        if (!offerAppointments || !patientId) {
+            setBillable({ loading: false, error: '', items: [] });
+            return undefined;
+        }
+        let cancelled = false;
+        setBillable({ loading: true, error: '', items: [] });
+        (async () => {
+            try {
+                // For doctor-role users the server narrows an unfiltered list to open visits only, which
+                // would hide completed ones; the second, completed-only request covers that. Results are merged by id.
+                const window90 = {
+                    patient_id: patientId,
+                    appointment_date_from: dateDaysAgo(APPOINTMENT_WINDOW_DAYS),
+                    appointment_date_to: dateDaysAgo(0),
+                    per_page: 100,
+                };
+                const [invRes, allRes, completedRes] = await Promise.all([
+                    client.get(`${base}/invoices`, { params: { patient_id: patientId, per_page: 100 } }),
+                    client.get(`${base}/appointments`, { params: window90 }),
+                    client.get(`${base}/appointments`, { params: { ...window90, status: 'completed' } }),
+                ]);
+                if (cancelled) return;
+                const billed = new Set(
+                    (invRes?.data?.data || [])
+                        .filter((i) => i.status !== 'cancelled' && i.appointment_id)
+                        .map((i) => Number(i.appointment_id)),
+                );
+                const byId = new Map();
+                [allRes, completedRes].flatMap((r) => r?.data?.data || []).forEach((a) => byId.set(Number(a.id), a));
+                const items = [...byId.values()]
+                    .filter((a) => a.status !== 'cancelled' && !billed.has(Number(a.id)))
+                    .sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)) || b.id - a.id);
+                setBillable({ loading: false, error: '', items });
+            } catch (e) {
+                if (cancelled) return;
+                setBillable({ loading: false, error: apiError(e, "Failed to load the patient's appointments"), items: [] });
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [base, offerAppointments, patientId]);
+
     const searchPatients = async (q) => {
         setPatientQuery(q);
         patientQueryRef.current = q;
@@ -265,6 +355,61 @@ export default function InvoiceDetailPage() {
         const svc = services.find((s) => String(s.id) === String(serviceId));
         if (!svc) return;
         setLine(key, { service_id: svc.id, description: svc.name, unit_amount: svc.fee != null ? String(svc.fee) : '' });
+    };
+
+    // Doctors offered for the chosen visit type: only those whose rendered line is present.
+    const feeType = FEE_VISIT_TYPES.find((t) => t.value === feePick.visitType) || FEE_VISIT_TYPES[0];
+    const feeDoctors = doctors.filter((d) => d[feeType.lineKey]);
+    const feeDoctor = feeDoctors.find((d) => String(d.id) === String(feePick.doctorId));
+
+    // Inserts the server-rendered fee line verbatim (description and amount are never built here).
+    const addDoctorFee = () => {
+        const line = feeDoctor?.[feeType.lineKey];
+        if (!line) return;
+        const fresh = newLine({
+            service_id: line.service_id ?? null,
+            description: line.description,
+            quantity: String(line.quantity ?? 1),
+            unit_amount: String(line.unit_amount),
+        });
+        // A lone untouched placeholder line gives way to the fee line rather than sitting beside it.
+        setForm((p) => ({ ...p, items: p.items.length === 1 && isBlankLine(p.items[0]) ? [fresh] : [...p.items, fresh] }));
+        setFeePick((p) => ({ ...p, doctorId: '' }));
+    };
+
+    // Lines belong to the patient they were built for (prefilled fees, hand-picked fees), so choosing
+    // another patient discards them, after a confirm that says so when there is anything to lose.
+    const changePatient = () => {
+        const hasWork = form.items.some((l) => !isBlankLine(l))
+            || Number(form.discount) > 0 || Number(form.tax) > 0 || String(form.notes || '').trim() !== '';
+        if (hasWork && !window.confirm('Changing the patient discards the lines, discount, tax and notes on this invoice, including any fees prefilled from an appointment. Continue?')) return;
+        prefillSeq.current += 1;
+        setPatient(null);
+        setAppointmentId(null);
+        setForm((p) => ({ ...p, items: [newLine()], discount: '', tax: '', notes: '' }));
+    };
+
+    const attachAppointment = async (apptId) => {
+        if (!apptId || busy) return;
+        const hasWork = form.items.some((l) => !isBlankLine(l))
+            || Number(form.discount) > 0 || Number(form.tax) > 0 || String(form.notes || '').trim() !== '';
+        if (hasWork && !window.confirm('Attaching an appointment replaces the lines, discount, tax and notes already on this invoice. Continue?')) return;
+        const seq = ++prefillSeq.current;
+        setBusy('prefill');
+        setError('');
+        setNotice('');
+        try {
+            const res = await client.get(`${base}/appointments/${apptId}/invoice-prefill`);
+            if (seq !== prefillSeq.current) return; // route changed or a newer pick superseded this one
+            const pre = res?.data?.data || {};
+            const items = Array.isArray(pre.items) && pre.items.length ? pre.items.map(lineFromApi) : [newLine()];
+            setForm((p) => ({ ...p, items, discount: '', tax: '', notes: '' }));
+            setAppointmentId(pre.appointment_id ?? Number(apptId));
+        } catch (e) {
+            if (seq === prefillSeq.current) setError(apiError(e, 'Failed to load the appointment'));
+        } finally {
+            if (seq === prefillSeq.current) setBusy('');
+        }
     };
 
     const subtotalEstimate = useMemo(
@@ -437,7 +582,7 @@ export default function InvoiceDetailPage() {
     const openPayBox = () => setPayBox({ open: true, amount: balance > 0 ? balance.toFixed(2) : '', method: 'cash', reference: '', notes: '' });
 
     if (loading) {
-        return <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-sm text-slate-600 shadow-sm">Loading…</div>;
+        return <Skeleton variant="fields" rows={8} />;
     }
 
     if (!isNew && !invoice) {
@@ -541,7 +686,7 @@ export default function InvoiceDetailPage() {
             ) : null}
 
             {payBox.open ? (
-                <Card title="Record a payment">
+                <Card title="Record a payment" right={<span className="text-xs text-slate-500">Outstanding: <strong className="text-slate-900">{formatRupees(balance)}</strong></span>}>
                     <div className="grid gap-3 md:grid-cols-4">
                         <div>
                             <label className={labelClass}>Amount</label>
@@ -563,8 +708,7 @@ export default function InvoiceDetailPage() {
                             <input value={payBox.notes} maxLength={1000} onChange={(e) => setPayBox((p) => ({ ...p, notes: e.target.value }))} className={inputClass} />
                         </div>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">Outstanding: {formatRupees(balance)}</p>
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                         <button type="button" onClick={recordPayment} disabled={Boolean(busy)} className={btnPrimary}>
                             {busy === 'pay' ? 'Recording…' : 'Record payment'}
                         </button>
@@ -574,12 +718,19 @@ export default function InvoiceDetailPage() {
             ) : null}
 
             <Card title="Patient">
-                {isNew && !appointmentId ? (
+                {isNew && !appointmentParam ? (
                     <div className="space-y-2">
                         {patient ? (
                             <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                                 <span><span className="font-medium text-slate-900">{patient.full_name}</span> <span className="text-slate-500">{patient.phone || ''}</span></span>
-                                <button type="button" onClick={() => setPatient(null)} className="text-xs text-blue-700 hover:underline">Change</button>
+                                <button
+                                    type="button"
+                                    onClick={changePatient}
+                                    disabled={Boolean(busy)}
+                                    className="text-xs text-blue-700 hover:underline disabled:opacity-50"
+                                >
+                                    Change
+                                </button>
                             </div>
                         ) : (
                             <>
@@ -609,6 +760,38 @@ export default function InvoiceDetailPage() {
                                 ) : null}
                             </>
                         )}
+
+                        {patient && offerAppointments ? (
+                            <div className="rounded-xl border border-slate-200 p-3">
+                                <label className={labelClass}>Bill an appointment (last {APPOINTMENT_WINDOW_DAYS} days, optional)</label>
+                                {appointmentId ? (
+                                    <div className="flex items-center justify-between gap-2 text-sm text-slate-700">
+                                        <span>Linked to appointment #{appointmentId}. Its fees were added as lines.</span>
+                                        <button type="button" onClick={() => setAppointmentId(null)} disabled={Boolean(busy)} className="text-xs text-blue-700 hover:underline disabled:opacity-50">Unlink</button>
+                                    </div>
+                                ) : billable.loading ? (
+                                    <div className="text-xs text-slate-500">Loading appointments…</div>
+                                ) : billable.error ? (
+                                    <Notice tone="error">{billable.error}</Notice>
+                                ) : billable.items.length ? (
+                                    <select
+                                        value=""
+                                        onChange={(e) => attachAppointment(e.target.value)}
+                                        disabled={Boolean(busy)}
+                                        className={inputClass}
+                                    >
+                                        <option value="">Choose an appointment to prefill from…</option>
+                                        {billable.items.map((a) => (
+                                            <option key={a.id} value={a.id}>
+                                                {formatDate(a.appointment_date)}{a.doctor?.full_name ? ` · ${a.doctor.full_name}` : ''}{a.visit_type ? ` · ${a.visit_type}` : ''}{a.status ? ` · ${a.status.replace(/_/g, ' ')}` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <p className="text-xs text-slate-500">No unbilled appointments for this patient in the last {APPOINTMENT_WINDOW_DAYS} days.</p>
+                                )}
+                            </div>
+                        ) : null}
                     </div>
                 ) : (
                     <div className="text-sm text-slate-700">
@@ -625,6 +808,33 @@ export default function InvoiceDetailPage() {
             >
                 {editable ? (
                     <div className="space-y-3">
+                        <div className="grid gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 md:grid-cols-12">
+                            <div className="md:col-span-4">
+                                <label className={labelClass}>Doctor fee</label>
+                                <select
+                                    value={feeDoctor ? feePick.doctorId : ''}
+                                    onChange={(e) => setFeePick((p) => ({ ...p, doctorId: e.target.value }))}
+                                    disabled={!feeDoctors.length}
+                                    className={inputClass}
+                                >
+                                    <option value="">{feeDoctors.length ? 'Choose a doctor' : 'No doctor has this fee set'}</option>
+                                    {feeDoctors.map((d) => (
+                                        <option key={d.id} value={d.id}>{d.full_name} — {formatRupees(d[feeType.lineKey].unit_amount)}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="md:col-span-4">
+                                <label className={labelClass}>Visit type</label>
+                                <select value={feePick.visitType} onChange={(e) => setFeePick((p) => ({ ...p, visitType: e.target.value }))} className={inputClass}>
+                                    {FEE_VISIT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex items-end md:col-span-4">
+                                <button type="button" onClick={addDoctorFee} disabled={!feeDoctor} className={btnOutline}>
+                                    <AppIcon name="plus" className="h-4 w-4" />Add doctor fee
+                                </button>
+                            </div>
+                        </div>
                         {form.items.map((l) => (
                             <div key={l.key} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-12">
                                 <div className="md:col-span-3">
@@ -807,20 +1017,22 @@ export default function InvoiceDetailPage() {
                                                 </tr>
                                                 {refunding ? (
                                                     <tr>
-                                                        <td colSpan={canEdit ? 6 : 5} className="bg-rose-50 px-3 py-3">
-                                                            <label className={labelClass}>Refund reason</label>
-                                                            <input
-                                                                value={refundBox.reason}
-                                                                maxLength={500}
-                                                                onChange={(e) => setRefundBox((r) => ({ ...r, reason: e.target.value }))}
-                                                                className={inputClass}
-                                                            />
-                                                            <p className="mt-1 text-xs text-slate-600">This marks the payment refunded in the system. Return the money to the patient yourself.</p>
-                                                            <div className="mt-2 flex gap-2">
-                                                                <button type="button" onClick={refundPayment} disabled={Boolean(busy)} className={btnDanger}>
-                                                                    {busy === 'refund' ? 'Refunding…' : `Refund ${formatRupees(p.amount)}`}
-                                                                </button>
-                                                                <button type="button" onClick={() => setRefundBox({ paymentId: null, reason: '' })} disabled={Boolean(busy)} className={btnOutline}>Keep payment</button>
+                                                        <td colSpan={canEdit ? 6 : 5} className="px-3 py-3">
+                                                            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                                                                <label className={labelClass}>Refund reason</label>
+                                                                <input
+                                                                    value={refundBox.reason}
+                                                                    maxLength={500}
+                                                                    onChange={(e) => setRefundBox((r) => ({ ...r, reason: e.target.value }))}
+                                                                    className={inputClass}
+                                                                />
+                                                                <p className="mt-1 text-xs text-slate-600">This marks the payment refunded in the system. Return the money to the patient yourself.</p>
+                                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                                    <button type="button" onClick={refundPayment} disabled={Boolean(busy)} className={btnDanger}>
+                                                                        {busy === 'refund' ? 'Refunding…' : `Refund ${formatRupees(p.amount)}`}
+                                                                    </button>
+                                                                    <button type="button" onClick={() => setRefundBox({ paymentId: null, reason: '' })} disabled={Boolean(busy)} className={btnOutline}>Keep payment</button>
+                                                                </div>
                                                             </div>
                                                         </td>
                                                     </tr>

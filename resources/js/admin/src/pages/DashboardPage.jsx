@@ -8,6 +8,7 @@ import DonutChart from '../components/charts/DonutChart';
 import BarListChart from '../components/charts/BarListChart';
 import AppIcon from '../components/AppIcon';
 import StatusBadge from '../components/StatusBadge';
+import Skeleton from '../components/Skeleton';
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, icon, color = 'blue', suffix = '' }) {
@@ -270,7 +271,7 @@ function ReceptionistDashboard({ data }) {
                                 return (
                                     <Link
                                         key={appt.id}
-                                        to={`/workflows/appointments?open=${appt.id}`}
+                                        to={`/workflows/appointments/${appt.id}`}
                                         className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition"
                                     >
                                         <div className="flex-shrink-0 w-14 text-center">
@@ -388,7 +389,7 @@ function AssistantDashboard({ data }) {
                                 return (
                                     <Link
                                         key={appt.id}
-                                        to={`/workflows/appointments?open=${appt.id}`}
+                                        to={`/workflows/appointments/${appt.id}`}
                                         className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition"
                                     >
                                         <div className="flex-shrink-0 w-14 text-center">
@@ -489,11 +490,13 @@ export default function DashboardPage() {
 
     if (!data) {
         return (
-            <div className="flex items-center justify-center py-20">
-                <div className="flex flex-col items-center gap-3">
-                    <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                    <p className="text-sm text-gray-500">Loading dashboard…</p>
+            <div className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} variant="fields" rows={2} cols={1} />
+                    ))}
                 </div>
+                <Skeleton variant="table" rows={5} cols={4} />
             </div>
         );
     }
@@ -561,7 +564,7 @@ export default function DashboardPage() {
                     <Section title="Follow-up Health" subtitle="Operational follow-up metrics.">
                         <FollowupStats insights={insights} />
                         <div className="mt-4 flex flex-wrap gap-2">
-                            <Link to="/modules/followups" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                            <Link to="/workflows/followups" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                                 Open Follow-ups
                             </Link>
                             <Link to="/workflows/appointments" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -670,7 +673,7 @@ export default function DashboardPage() {
                         actions={[
                             { to: '/workflows/appointments/new', label: 'New Appointment' },
                             { to: '/workflows/appointments', label: 'Appointments' },
-                            { to: '/modules/followups', label: 'Follow-ups' },
+                            { to: '/workflows/followups', label: 'Follow-ups' },
                         ]}
                     />
                 )}
@@ -693,28 +696,28 @@ export default function DashboardPage() {
                 <div className="space-y-5">
                     <Section title="Network" subtitle="High-level platform counts.">
                         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                            <StatCard label="Total Clinics" value={data.total_clinics} />
-                            <StatCard label="Onboarded Today" value={data.today_clinic_onboarding} />
-                            <StatCard label="Total Staff" value={data.total_staff} />
-                            <StatCard label="Total Doctors" value={data.total_doctors} />
+                            <KpiCard label="Total Clinics" value={data.total_clinics} icon="hospital" color="blue" />
+                            <KpiCard label="Onboarded Today" value={data.today_clinic_onboarding} icon="plus" color="emerald" />
+                            <KpiCard label="Total Staff" value={data.total_staff} icon="users" color="violet" />
+                            <KpiCard label="Total Doctors" value={data.total_doctors} icon="stethoscope" color="sky" />
                         </div>
                     </Section>
 
                     <Section title="Patients & Appointments" subtitle="Totals and today's activity.">
                         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                            <StatCard label="Total Patients" value={data.total_patients} />
-                            <StatCard label="Patients Today" value={data.today_patients} />
-                            <StatCard label="Total Appointments" value={data.total_appointments} />
-                            <StatCard label="Appointments Today" value={data.today_appointments} />
+                            <KpiCard label="Total Patients" value={data.total_patients} icon="user-circle" color="blue" />
+                            <KpiCard label="Patients Today" value={data.today_patients} icon="user-plus" color="emerald" />
+                            <KpiCard label="Total Appointments" value={data.total_appointments} icon="calendar" color="violet" />
+                            <KpiCard label="Appointments Today" value={data.today_appointments} icon="calendar-plus" color="amber" />
                         </div>
                     </Section>
 
                     <Section title="WhatsApp" subtitle="Conversation and booking activity.">
                         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                            <StatCard label="Total Conversations" value={data.total_whatsapp_conversations} />
-                            <StatCard label="Conversations Today" value={data.today_whatsapp_conversations} />
-                            <StatCard label="Total WhatsApp Appointments" value={data.total_whatsapp_appointments} />
-                            <StatCard label="WhatsApp Appointments Today" value={data.today_whatsapp_appointments} />
+                            <KpiCard label="Total Conversations" value={data.total_whatsapp_conversations} icon="message-circle" color="emerald" />
+                            <KpiCard label="Conversations Today" value={data.today_whatsapp_conversations} icon="message-square" color="sky" />
+                            <KpiCard label="Total WhatsApp Appointments" value={data.total_whatsapp_appointments} icon="calendar" color="violet" />
+                            <KpiCard label="WhatsApp Appointments Today" value={data.today_whatsapp_appointments} icon="calendar-plus" color="amber" />
                         </div>
                     </Section>
                 </div>
