@@ -564,7 +564,7 @@ export default function DashboardPage() {
                     <Section title="Follow-up Health" subtitle="Operational follow-up metrics.">
                         <FollowupStats insights={insights} />
                         <div className="mt-4 flex flex-wrap gap-2">
-                            <Link to="/modules/followups" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                            <Link to="/workflows/followups" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                                 Open Follow-ups
                             </Link>
                             <Link to="/workflows/appointments" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -673,7 +673,7 @@ export default function DashboardPage() {
                         actions={[
                             { to: '/workflows/appointments/new', label: 'New Appointment' },
                             { to: '/workflows/appointments', label: 'Appointments' },
-                            { to: '/modules/followups', label: 'Follow-ups' },
+                            { to: '/workflows/followups', label: 'Follow-ups' },
                         ]}
                     />
                 )}

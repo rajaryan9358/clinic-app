@@ -221,9 +221,9 @@ export const modules = {
 };
 
 export const sidebarByRole = {
-    super_admin: ['clinics', 'domains', 'users', 'doctors', 'services', 'patients', 'followups', 'reminders', 'whatsappConversations', 'clinicSettings'],
+    super_admin: ['clinics', 'domains', 'users', 'doctors', 'services', 'patients', 'reminders', 'whatsappConversations', 'clinicSettings'],
     clinic_admin: ['users', 'doctors', 'services', 'patients', 'whatsappConversations', 'reminders'],
-    doctor: ['patients', 'followups', 'whatsappConversations'],
-    receptionist: ['patients', 'followups', 'reminders', 'whatsappConversations'],
-    assistant: ['patients', 'followups'],
+    doctor: ['patients', 'whatsappConversations'],
+    receptionist: ['patients', 'reminders', 'whatsappConversations'],
+    assistant: ['patients'],
 };

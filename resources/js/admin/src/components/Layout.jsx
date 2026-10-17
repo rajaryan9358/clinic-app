@@ -11,6 +11,7 @@ const ROUTE_ICONS = {
     '/workflows/appointments': 'calendar',
     '/workflows/appointments/new': 'calendar-plus',
     '/workflows/waitlist': 'users',
+    '/workflows/followups': 'clipboard-check',
     '/workflows/billing': 'file-text',
     '/workflows/onboard-clinic': 'hospital',
     '/workflows/create-staff': 'user-plus',

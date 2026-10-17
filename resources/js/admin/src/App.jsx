@@ -14,6 +14,8 @@ import OnboardClinicWizardPage from './pages/workflows/OnboardClinicWizardPage';
 import SetupDoctorWizardPage from './pages/workflows/SetupDoctorWizardPage';
 import AppointmentsFlowPage from './pages/workflows/AppointmentsFlowPage';
 import WaitlistPage from './pages/workflows/WaitlistPage';
+import FollowupsPage from './pages/workflows/FollowupsPage';
+import FollowupFormPage from './pages/workflows/FollowupFormPage';
 import BillingPage from './pages/workflows/BillingPage';
 import InvoiceDetailPage from './pages/workflows/InvoiceDetailPage';
 import PrescriptionPage from './pages/workflows/PrescriptionPage';
@@ -136,6 +138,8 @@ function AuthenticatedShell() {
                 <Route path="/workflows/appointments" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentsFlowPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><ModuleFormPage forcedModuleKey="appointments" /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/waitlist" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><WaitlistPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/followups" element={<BlockSuperAdmin><RequirePerm perm="followups.view"><FollowupsPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/followups/new" element={<BlockSuperAdmin><RequirePerm perm="followups.create"><FollowupFormPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing" element={<BlockSuperAdmin><RequirePerm perm="billing.view"><BillingPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing/new" element={<BlockSuperAdmin><RequirePerm perm="billing.create"><InvoiceDetailPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/billing/:id" element={<BlockSuperAdmin><RequirePerm perm="billing.view"><InvoiceDetailPage /></RequirePerm></BlockSuperAdmin>} />
