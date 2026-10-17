@@ -2,10 +2,55 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import AppIcon from '../components/AppIcon';
+import StatusBadge from '../components/StatusBadge';
 import { modules } from '../config/modules';
-import { canAccessModule, isSuperAdminHiddenModuleKey } from '../config/access';
+import { canAccessModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
+import { buildSections, humanizeValue, recordTitle } from '../utils/moduleRecord';
+import { formatDate, formatDateTime, formatTime, isDateKey, isDateTimeKey, isTimeKey } from '../utils/dateFormat';
+import { formatRupees } from '../utils/money';
+
+const EMPTY_VALUE = <span className="text-slate-300">—</span>;
+
+// One field value, formatted for reading. Same conventions as the list table:
+// status-like keys become badges, date keys are formatted, booleans read Yes/No.
+function FieldValue({ field }) {
+    const { key, value, format } = field;
+
+    if (value === null || value === undefined || value === '') return EMPTY_VALUE;
+
+    if (format === 'boolean' || typeof value === 'boolean') {
+        const on = value === true || value === 1 || value === '1';
+        return (
+            <span className={`inline-flex items-center gap-1 text-sm font-medium ${on ? 'text-emerald-600' : 'text-slate-400'}`}>
+                <AppIcon name={on ? 'check' : 'close'} className="h-3.5 w-3.5" />
+                {on ? 'Yes' : 'No'}
+            </span>
+        );
+    }
+
+    if (String(key).includes('status')) return <StatusBadge status={String(value)} />;
+
+    if (format === 'money') return formatRupees(value);
+    if (format === 'percent') return `${Number(value)}%`;
+    if (format === 'minutes') return `${value} min`;
+    if (format === 'enum') return humanizeValue(value);
+
+    if (typeof value === 'string') {
+        if (isDateTimeKey(key)) return formatDateTime(value);
+        if (isDateKey(key)) return formatDate(value);
+        if (isTimeKey(key)) return formatTime(value);
+    }
+
+    return String(value);
+}
+
+// First status-like field on the record, shown beside the title.
+function headerStatus(record) {
+    const key = ['status', 'conversation_status', 'delivery_status'].find((k) => record?.[k]);
+    return key ? record[key] : null;
+}
 
 // The permission check lives in the default-exported wrapper below, not
 // here, so this component can call every hook it needs unconditionally.
@@ -19,6 +64,7 @@ function ModuleViewPageInner() {
     const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const [record, setRecord] = useState(null);
+    const [loadError, setLoadError] = useState('');
     const [related, setRelated] = useState({ messages: null });
     const [actionError, setActionError] = useState('');
     const [actionSaving, setActionSaving] = useState(false);
@@ -31,13 +77,22 @@ function ModuleViewPageInner() {
     const [waAppt, setWaAppt] = useState({ doctor_id: '', appointment_date: '', start_time: '', visit_type: 'followup', booking_channel: 'whatsapp' });
     const [waActionMsg, setWaActionMsg] = useState({ assign: '', followup: '', appointment: '' });
 
+    // The parent keys this component by module + id, so state starts fresh on
+    // every route change; `cancelled` stops a slow response from a page we have
+    // already left landing on the new one.
     useEffect(() => {
-        const fetchOne = async () => {
-            if (!module) return;
-            const { data } = await client.get(`${base}/${module.path}/${id}`);
-            setRecord(data.data);
+        if (!module) return undefined;
+        let cancelled = false;
+        client.get(`${base}/${module.path}/${id}`)
+            .then(({ data }) => {
+                if (!cancelled) setRecord(data.data);
+            })
+            .catch((e) => {
+                if (!cancelled) setLoadError(e?.response?.data?.message || e?.message || 'Failed to load record');
+            });
+        return () => {
+            cancelled = true;
         };
-        fetchOne();
     }, [moduleKey, id, base]);
 
     useEffect(() => {
@@ -88,45 +143,32 @@ function ModuleViewPageInner() {
     }, [moduleKey, record?.id]);
 
     useEffect(() => {
-        const loadRelated = async () => {
-            if (!module) return;
-            if (moduleKey === 'whatsappConversations') {
-                try {
-                    const { data } = await client.get(`${base}/whatsapp/messages`, {
-                        params: {
-                            conversation_id: id,
-                            per_page: 50,
-                            sort_by: 'id',
-                            sort_dir: 'desc',
-                        },
-                    });
-                    setRelated((p) => ({ ...p, messages: data?.data || [] }));
-                } catch {
-                    setRelated((p) => ({ ...p, messages: [] }));
-                }
-            }
+        if (!module || moduleKey !== 'whatsappConversations') return undefined;
+        let cancelled = false;
+        client.get(`${base}/whatsapp/messages`, {
+            params: {
+                conversation_id: id,
+                per_page: 50,
+                sort_by: 'id',
+                sort_dir: 'desc',
+            },
+        })
+            .then(({ data }) => {
+                if (!cancelled) setRelated((p) => ({ ...p, messages: data?.data || [] }));
+            })
+            .catch(() => {
+                if (!cancelled) setRelated((p) => ({ ...p, messages: [] }));
+            });
+        return () => {
+            cancelled = true;
         };
-        loadRelated();
     }, [moduleKey, id, base, module]);
 
-    const hiddenKeys = new Set(['password', 'remember_token', 'clinic_id', 'deleted_at']);
-    const entries = Object.entries(record || {}).filter(([key]) => !hiddenKeys.has(key));
-
-    const renderValue = (value) => {
-        if (value === null || value === undefined || value === '') return '—';
-        if (typeof value !== 'object') return String(value);
-
-        if (Array.isArray(value)) return JSON.stringify(value, null, 2);
-
-        const labelKeys = ['name', 'full_name', 'fullName', 'title', 'label'];
-        for (const k of labelKeys) {
-            if (value && (typeof value[k] === 'string' || typeof value[k] === 'number')) {
-                return String(value[k]);
-            }
-        }
-
-        return JSON.stringify(value, null, 2);
-    };
+    const sections = useMemo(() => buildSections(module, record), [module, record]);
+    const title = recordTitle(module, record);
+    const status = headerStatus(record);
+    // Same gate the list uses for its Edit action (and not for a soft-deleted row).
+    const canEdit = canEditModule(user?.role, moduleKey, scope?.can) && !record?.deleted_at;
 
     const lifecycleActions = useMemo(() => {
         const s = String(record?.status || '');
@@ -281,13 +323,55 @@ function ModuleViewPageInner() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="view" className="h-5 w-5 text-slate-700" />
-                    <h2 className="text-xl font-semibold">{module.label} Details</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                        <AppIcon name={module.icon || 'module'} className="h-5 w-5 text-slate-600" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module.singular || module.label}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="truncate text-xl font-semibold text-slate-900">{record ? title : '…'}</h2>
+                            {status ? <StatusBadge status={String(status)} /> : null}
+                        </div>
+                    </div>
                 </div>
-                <Link to={`/modules/${moduleKey}`} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back</Link>
+                <div className="flex items-center gap-2">
+                    <Link to={`/modules/${moduleKey}`} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                        Back to {module.label}
+                    </Link>
+                    {record && canEdit ? (
+                        <Link to={`/modules/${moduleKey}/${id}/edit`} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                            <AppIcon name="edit" className="h-4 w-4" />
+                            Edit
+                        </Link>
+                    ) : null}
+                </div>
             </div>
+
+            {loadError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">{loadError}</div>
+            ) : !record ? (
+                <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">Loading…</div>
+            ) : (
+                <div className="space-y-4">
+                    {sections.map((section) => (
+                        <section key={section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <h3 className="text-sm font-semibold text-slate-900">{section.title}</h3>
+                            <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                                {section.fields.map((field) => (
+                                    <div key={field.key} className="min-w-0">
+                                        <dt className="text-xs font-medium text-slate-500">{field.label}</dt>
+                                        <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-900">
+                                            <FieldValue field={field} />
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </section>
+                    ))}
+                </div>
+            )}
 
             {moduleKey === 'appointments' ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -470,20 +554,12 @@ function ModuleViewPageInner() {
                 </div>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-                {entries.map(([key, value]) => (
-                    <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{key.replaceAll('_', ' ')}</p>
-                        <p className="text-sm text-slate-800 break-words whitespace-pre-wrap">{renderValue(value)}</p>
-                    </div>
-                ))}
-            </div>
         </div>
     );
 }
 
 export default function ModuleViewPage() {
-    const { moduleKey } = useParams();
+    const { moduleKey, id } = useParams();
     const { user } = useAuth();
     const scope = useScope();
 
@@ -495,5 +571,6 @@ export default function ModuleViewPage() {
         return <Navigate to="/dashboard" replace />;
     }
 
-    return <ModuleViewPageInner />;
+    // Keyed so moving between records starts from clean state.
+    return <ModuleViewPageInner key={`${moduleKey}:${id}`} />;
 }

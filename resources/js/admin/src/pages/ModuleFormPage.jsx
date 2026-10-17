@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import FormRenderer from '../components/FormRenderer';
+import { fieldLabel } from '../utils/moduleRecord';
 import { modules } from '../config/modules';
 import { canAccessModule, canCreateModule, canEditModule, isSuperAdminHiddenModuleKey, NON_CREATABLE_MODULE_KEYS } from '../config/access';
 import { useAuth } from '../context/AuthContext';
@@ -73,7 +74,11 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
     const [doctorOptions, setDoctorOptions] = useState({ loading: false, error: '', items: [] });
     const [serviceOptions, setServiceOptions] = useState({ loading: false, error: '', items: [] });
 
-    const fields = module?.formFields || [];
+    // The module's human label map wins over the form field's own label.
+    const fields = useMemo(
+        () => (module?.formFields || []).map((f) => ({ ...f, label: fieldLabel(module, f.key, f.label) })),
+        [module],
+    );
 
     // The super_admin role is deliberately excluded from GET /*/roles (it's
     // hidden from the builder entirely — spec §5), so the super admin's own

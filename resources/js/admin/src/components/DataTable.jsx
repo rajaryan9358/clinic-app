@@ -1,5 +1,6 @@
 import StatusBadge from './StatusBadge';
 import AppIcon from './AppIcon';
+import { prettifyKey } from '../utils/moduleRecord';
 import { formatDate, formatDateTime, formatTime, isDateKey, isDateTimeKey, isTimeKey } from '../utils/dateFormat';
 
 function inferObjectLabel(value) {
@@ -54,8 +55,11 @@ export default function DataTable({
     columnLabels = {},
     cellRenderers = {},
     priorityColumns = [],
+    emptyState = null,
 }) {
     if (!rows.length) {
+        // A page that knows what it is for passes its own empty state.
+        if (emptyState) return emptyState;
         return (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white py-14 text-center">
                 <AppIcon name="module" className="mb-3 h-8 w-8 text-gray-300" />
@@ -172,7 +176,7 @@ export default function DataTable({
         );
     };
 
-    const colLabel = (key) => (columnLabels?.[key] || key).replaceAll('_', ' ');
+    const colLabel = (key) => columnLabels?.[key] || prettifyKey(key);
 
     return (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">

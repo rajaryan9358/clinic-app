@@ -21,29 +21,10 @@ const ROUTE_ICONS = {
     '/workflows/roles': 'key',
 };
 
-// Map module keys → icon names
-const MODULE_ICONS = {
-    clinics: 'hospital',
-    domains: 'globe',
-    users: 'users',
-    doctors: 'stethoscope',
-    patients: 'user',
-    appointments: 'calendar',
-    services: 'briefcase',
-    followups: 'clipboard-check',
-    reviews: 'star',
-    whatsappConversations: 'message-circle',
-    whatsappMessages: 'message-circle',
-    whatsappFlowSessions: 'git-branch',
-    reminders: 'bell',
-    auditLogs: 'shield',
-    clinicSettings: 'settings',
-    bookingSources: 'share',
-};
-
+// Module icons live beside each module in config/modules.js (`icon`).
 function resolveIcon(item) {
     if (item.type === 'route') return ROUTE_ICONS[item.to] || 'arrow-right';
-    if (item.type === 'module') return MODULE_ICONS[item.moduleKey] || 'module';
+    if (item.type === 'module') return modules[item.moduleKey]?.icon || 'module';
     return 'module';
 }
 
