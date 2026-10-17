@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
-import { Btn, Card, EmptyState, ErrorText, LoadingState, SectionHeader, SuccessText } from '../../components/billing/ui.jsx';
+import Skeleton from '../../components/Skeleton';
+import { Btn, Card, EmptyState, ErrorText, SectionHeader, SuccessText } from '../../components/billing/ui.jsx';
 import { useScope } from '../../context/ScopeContext';
 import { formatDate, formatDateTime } from '../../utils/dateFormat';
 import { formatINR } from '../../utils/money';
@@ -161,14 +162,30 @@ export default function ClinicSubscriptionPage() {
         }
     };
 
-    if (loading) return <LoadingState />;
+    const header = (
+        <div>
+            <h1 className="text-xl font-bold text-gray-900">Subscription</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Plan, usage and billing for your clinic.</p>
+        </div>
+    );
+
+    if (loading) {
+        return (
+            <div className="space-y-5">
+                {header}
+                <div role="status" aria-busy="true" className="space-y-5">
+                    <span className="sr-only">Loading…</span>
+                    <Skeleton variant="fields" rows={2} announce={false} />
+                    <Skeleton variant="fields" rows={3} cols={1} announce={false} />
+                    <Skeleton variant="fields" rows={3} announce={false} />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-5">
-            <div>
-                <h1 className="text-xl font-bold text-gray-900">Subscription</h1>
-                <p className="mt-0.5 text-sm text-gray-500">Plan, usage and billing for your clinic.</p>
-            </div>
+            {header}
 
             {error && <ErrorText>{error}</ErrorText>}
             {notice && <SuccessText>{notice}</SuccessText>}

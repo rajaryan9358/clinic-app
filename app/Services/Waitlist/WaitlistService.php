@@ -206,6 +206,12 @@ final class WaitlistService
                     $entry = $candidate;
                     break;
                 }
+
+                Log::warning('Waitlist entry skipped: account holder missing, deleted or outside the clinic', [
+                    'entry_id' => $candidate->id,
+                    'patient_id' => $candidate->patient_id,
+                    'managed_by_patient_id' => $candidate->patient->managed_by_patient_id,
+                ]);
             }
 
             if ($entry === null) {
@@ -550,7 +556,8 @@ final class WaitlistService
             return $patient;
         }
 
-        return Patient::query()->find($patient->managed_by_patient_id);
+        // Same-clinic only: a holder in another clinic is bad data and must never receive a login link.
+        return Patient::query()->where('clinic_id', $patient->clinic_id)->find($patient->managed_by_patient_id);
     }
 
     private function appointmentDate(Appointment $appointment): ?string

@@ -48,7 +48,8 @@ class PatientProfileController extends Controller
             ->where('clinic_id', $clinicId)
             ->with([
                 'medicalProfile',
-                'managedBy:id,full_name,phone,managed_by_patient_id',
+                // A holder outside the viewing clinic is bad data: never render it.
+                'managedBy' => fn ($q) => $q->select('id', 'full_name', 'phone', 'managed_by_patient_id')->where('clinic_id', $clinicId),
                 'dependents:id,full_name,phone,managed_by_patient_id',
             ]);
 

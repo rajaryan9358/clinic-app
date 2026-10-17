@@ -181,7 +181,7 @@ class PatientNotifier
     {
         $entry->loadMissing(['clinic:id,name', 'doctor:id,full_name', 'patient:id,full_name,phone,managed_by_patient_id']);
         $holder = $entry->patient?->managed_by_patient_id !== null
-            ? Patient::find($entry->patient->managed_by_patient_id)
+            ? Patient::where('clinic_id', $entry->clinic_id)->find($entry->patient->managed_by_patient_id)
             : $entry->patient;
 
         $clinicName = (string) ($entry->clinic?->name ?? '');

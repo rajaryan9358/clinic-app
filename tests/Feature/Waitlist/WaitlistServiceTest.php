@@ -314,6 +314,39 @@ class WaitlistServiceTest extends TestCase
         $this->assertSame('919123456789', $message->to_phone);
     }
 
+    public function test_dependent_whose_holder_is_in_another_clinic_gets_no_login_link_or_message(): void
+    {
+        $otherClinic = $this->makeClinic();
+        $outsider = $this->consentedPatient(['phone' => '9777777777', 'full_name' => 'Outsider'], $otherClinic);
+        $dependent = $this->consentedPatient(['managed_by_patient_id' => $outsider->id]);
+        $appointment = $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $entry = $this->join($dependent, $this->tomorrow, '09:00');
+
+        app(AppointmentService::class)->changeStatus($appointment, AppointmentStatus::CANCELLED);
+
+        $this->assertSame('waiting', $entry->fresh()->status);
+        $this->assertSame(0, PatientLoginLink::count());
+        $this->assertSame(0, \App\Models\WhatsappMessage::where('to_phone', '919777777777')->count());
+        $this->assertSame(0, $this->waitlistMessages()->count());
+    }
+
+    public function test_skipping_an_entry_with_a_cross_clinic_holder_logs_a_warning(): void
+    {
+        \Illuminate\Support\Facades\Log::spy();
+        $outsider = $this->consentedPatient([], $this->makeClinic());
+        $dependent = $this->consentedPatient(['managed_by_patient_id' => $outsider->id]);
+        $appointment = $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $entry = $this->join($dependent, $this->tomorrow, '09:00');
+
+        app(AppointmentService::class)->changeStatus($appointment, AppointmentStatus::CANCELLED);
+
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')->withArgs(
+            fn ($msg, $ctx = []) => ($ctx['entry_id'] ?? null) === $entry->id
+                && ($ctx['patient_id'] ?? null) === $dependent->id
+                && ($ctx['managed_by_patient_id'] ?? null) === $outsider->id
+        )->once();
+    }
+
     public function test_cancel_with_nobody_waiting_sends_no_offer(): void
     {
         $appointment = $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
+import Skeleton from '../../components/Skeleton';
 
 const TABS = [
     { key: 'openai',    label: 'AI / OpenAI',         icon: 'activity' },
@@ -115,7 +116,14 @@ function OpenAITab() {
         }
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) {
+        return (
+            <Card>
+                <SectionTitle title="OpenAI Configuration" subtitle="Powers AI prescription generation and review reply suggestions." />
+                <Skeleton variant="fields" rows={4} card={false} />
+            </Card>
+        );
+    }
 
     return (
         <Card>
@@ -259,7 +267,14 @@ function WhatsAppTab() {
         }));
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) {
+        return (
+            <Card>
+                <SectionTitle title="WhatsApp Business API" subtitle="Meta Cloud API credentials used to send template messages and receive delivery webhooks." />
+                <Skeleton variant="fields" rows={4} card={false} />
+            </Card>
+        );
+    }
 
     return (
         <div className="space-y-5">
@@ -447,7 +462,14 @@ function TrialTab() {
         }
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) {
+        return (
+            <Card>
+                <SectionTitle title="Free Trial Settings" subtitle="Default trial configuration for newly onboarded clinics." />
+                <Skeleton variant="fields" rows={4} card={false} />
+            </Card>
+        );
+    }
 
     return (
         <Card>
@@ -556,7 +578,14 @@ function PaymentsTab() {
         }
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) {
+        return (
+            <Card>
+                <SectionTitle title="Razorpay Configuration" subtitle="Credentials and behavior for subscription billing via Razorpay." />
+                <Skeleton variant="fields" rows={4} card={false} />
+            </Card>
+        );
+    }
 
     return (
         <Card>

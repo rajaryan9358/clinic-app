@@ -490,13 +490,14 @@ export default function DashboardPage() {
 
     if (!data) {
         return (
-            <div className="space-y-5">
+            <div className="space-y-5" role="status" aria-busy="true">
+                <span className="sr-only">Loading…</span>
                 <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                     {Array.from({ length: 4 }).map((_, i) => (
-                        <Skeleton key={i} variant="fields" rows={2} cols={1} />
+                        <Skeleton key={i} variant="fields" rows={2} cols={1} announce={false} />
                     ))}
                 </div>
-                <Skeleton variant="table" rows={5} cols={4} />
+                <Skeleton variant="table" rows={5} cols={4} announce={false} />
             </div>
         );
     }

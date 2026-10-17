@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import client from '../../api/client';
 import { useScope } from '../../context/ScopeContext';
+import Skeleton from '../../components/Skeleton';
 
 const DEFAULT_PRIMARY   = '#2563EB';
 const DEFAULT_SECONDARY = '#64748B';
@@ -170,20 +171,30 @@ export default function ClinicProfilePage() {
         }
     };
 
+    const header = (
+        <div>
+            <h1 className="text-xl font-bold text-gray-900">Clinic Profile</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Your clinic details as registered during onboarding.</p>
+        </div>
+    );
+
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-20">
-                <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            <div className="mx-auto max-w-2xl space-y-6">
+                {header}
+                <div role="status" aria-busy="true" className="space-y-6">
+                    <span className="sr-only">Loading…</span>
+                    <Skeleton variant="fields" rows={4} announce={false} />
+                    <Skeleton variant="fields" rows={4} announce={false} />
+                    <Skeleton variant="fields" rows={6} announce={false} />
+                </div>
             </div>
         );
     }
 
     return (
         <div className="mx-auto max-w-2xl space-y-6">
-            <div>
-                <h1 className="text-xl font-bold text-gray-900">Clinic Profile</h1>
-                <p className="mt-0.5 text-sm text-gray-500">Your clinic details as registered during onboarding.</p>
-            </div>
+            {header}
 
             {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
             {success && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>}

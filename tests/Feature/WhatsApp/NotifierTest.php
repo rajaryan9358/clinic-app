@@ -286,6 +286,45 @@ class NotifierTest extends TestCase
         $this->assertSame('Baby Kumar', $body['parameters'][0]['text']);
     }
 
+    public function test_waitlist_offer_for_a_dependent_with_a_cross_clinic_holder_is_not_sent(): void
+    {
+        $otherClinic = \App\Models\Clinic::create(['uuid' => (string) Str::uuid(), 'name' => 'Other', 'slug' => 'other-'.Str::random(6), 'status' => 'active']);
+        $outsider = Patient::create([
+            'clinic_id' => $otherClinic->id,
+            'uuid' => (string) Str::uuid(),
+            'first_name' => 'Out',
+            'last_name' => 'Sider',
+            'phone' => '9777777777',
+        ]);
+        $dependent = Patient::create([
+            'clinic_id' => $this->clinic->id,
+            'uuid' => (string) Str::uuid(),
+            'first_name' => 'Baby',
+            'last_name' => 'Kumar',
+            'phone' => '9555555555',
+            'managed_by_patient_id' => $outsider->id,
+        ]);
+        $entry = WaitlistEntry::create([
+            'clinic_id' => $this->clinic->id,
+            'patient_id' => $dependent->id,
+            'doctor_id' => $this->doctor->id,
+            'appointment_date' => '2026-09-29',
+            'start_time' => '10:30:00',
+            'end_time' => '10:45:00',
+            'status' => 'offered',
+            'source' => 'portal',
+            'offered_at' => '2026-09-29 09:00:00',
+            'hold_expires_at' => '2026-09-29 09:30:00',
+        ]);
+        $before = count($this->fake->sent);
+
+        $row = $this->notifier->waitlistOffer($entry, 'tok');
+
+        $this->assertSame('skipped', $row->delivery_status);
+        $this->assertNull($row->to_phone);
+        $this->assertCount($before, $this->fake->sent);
+    }
+
     /**
      * Meta rejects template text parameters containing newlines/tabs or
      * runs of more than 4 consecutive spaces. buildComponents() must

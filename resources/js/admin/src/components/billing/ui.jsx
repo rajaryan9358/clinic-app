@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import AppIcon from '../AppIcon';
+import Skeleton from '../Skeleton';
 
 // ── Shared small UI helpers for the billing pages (Plans, Subscription
 // Transactions, Payments settings, Subscription card) — copied from
@@ -30,12 +31,10 @@ export function EmptyState({ icon, text }) {
     );
 }
 
-export function LoadingState() {
-    return (
-        <div className="flex items-center justify-center py-14">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-        </div>
-    );
+// Page-level loading placeholder. Defaults to a table-shaped skeleton (the
+// Plans, Transactions and Roles lists); pass variant="fields" for form-like content.
+export function LoadingState({ variant = 'table', rows, cols }) {
+    return <Skeleton variant={variant} rows={rows} cols={cols} />;
 }
 
 export function Btn({ onClick, children, variant = 'secondary', disabled, type = 'button', className = '' }) {
