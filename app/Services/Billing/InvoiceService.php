@@ -352,20 +352,35 @@ final class InvoiceService
         $doctor = $appointment->doctor_id
             ? Doctor::forClinic($clinicId)->find($appointment->doctor_id)
             : null;
-        if ($doctor) {
-            $followup = $appointment->visit_type === 'followup';
-            $fee = (float) ($followup ? $doctor->followup_fee : $doctor->consultation_fee);
-            if ($fee > 0) {
-                $lines[] = [
-                    'description' => ($followup ? 'Follow-up consultation' : 'Consultation').' - '.$doctor->full_name,
-                    'service_id' => null,
-                    'quantity' => 1,
-                    'unit_amount' => $fee,
-                ];
-            }
+        if ($doctor && ($line = self::doctorFeeLine($doctor, (string) $appointment->visit_type))) {
+            $lines[] = $line;
         }
 
         return $lines;
+    }
+
+    /**
+     * The single source of a doctor's fee line (wording and amount), shared by prefill and the
+     * hand-picked line. `$visitType` is 'new' or 'followup'; anything else counts as 'new'.
+     * Null when the relevant fee is null or zero, so a zero-rupee line never reaches an invoice.
+     *
+     * @return array{description:string, service_id:?int, quantity:int, unit_amount:float}|null
+     */
+    public static function doctorFeeLine(Doctor $doctor, string $visitType): ?array
+    {
+        $followup = $visitType === 'followup';
+        $fee = (float) ($followup ? $doctor->followup_fee : $doctor->consultation_fee);
+
+        if ($fee <= 0) {
+            return null;
+        }
+
+        return [
+            'description' => ($followup ? 'Follow-up consultation' : 'Consultation').' - '.$doctor->full_name,
+            'service_id' => null,
+            'quantity' => 1,
+            'unit_amount' => $fee,
+        ];
     }
 
     /** Indian financial year (April-March), e.g. 2026-27. */
