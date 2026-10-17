@@ -5,7 +5,6 @@ import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AppIcon from '../components/AppIcon';
 import Skeleton from '../components/Skeleton';
-import StatusBadge from '../components/StatusBadge';
 import ClinicStatusBadge from '../components/billing/ClinicStatusBadge.jsx';
 import { modules } from '../config/modules';
 import { canAccessModule, canCreateModule, canDeleteModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
@@ -98,41 +97,13 @@ function ModuleListPageInner({ forcedModuleKey } = {}) {
     const [search, setSearch] = useState('');
     const [filters, setFilters] = useState({});
     const [loading, setLoading] = useState(false);
-    const [viewRecord, setViewRecord] = useState(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [includeDeleted, setIncludeDeleted] = useState(false);
     const [actionError, setActionError] = useState('');
     const [pdfBusy, setPdfBusy] = useState(false);
     const [confirm, setConfirm] = useState({ open: false, row: null, busy: false });
 
-    const [reviewCreate, setReviewCreate] = useState({
-        open: false,
-        busy: false,
-        error: '',
-        values: { reviewer_name: '', message: '', rating: '5' },
-    });
-
-    const [replyDialog, setReplyDialog] = useState({
-        open: false,
-        row: null,
-        mode: 'generate',
-        busy: false,
-        saving: false,
-        error: '',
-        options: { reply_type: 'medium', language: 'english', tone: 'professional', case_data: '' },
-        generated: null,
-    });
-
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
-
-    const setFilterAndFetch = (key, value) => {
-        const next = { ...(filters || {}), [key]: value };
-        if (value === undefined || value === null || String(value) === '') {
-            delete next[key];
-        }
-        setFilters(next);
-        fetchData(1, { filters: next });
-    };
 
     const filterContext = base === '/super-admin' ? 'super_admin' : 'clinic';
     const filterKeys = useMemo(() => {
@@ -400,89 +371,6 @@ function ModuleListPageInner({ forcedModuleKey } = {}) {
         fetchData(1, { search: '', filters: {}, includeDeleted: false });
     }, [moduleKey, base]);
 
-    const reviewReplyPrompt = `You are an assistant that writes professional replies to Google reviews for healthcare clinics.
-
-Your goals:
-- Maintain a polite, respectful, and professional tone.
-- Match the clinic’s brand tone (warm, premium, friendly, etc.).
-- Keep replies natural and human-like (not robotic).
-- Keep replies concise (40–100 words unless specified).
-
-STRICT RULES:
-- Do NOT invent facts or events.
-- Do NOT mention any diagnosis, treatment details, or patient-specific information.
-- Do NOT provide medical advice.
-- Do NOT argue, blame, or sound defensive.
-- Do NOT make guarantees or unrealistic promises.
-- Do NOT mention pricing unless explicitly stated in the review.
-
-FOR NEGATIVE REVIEWS:
-- Acknowledge the concern empathetically.
-- Apologize without admitting fault blindly.
-- Encourage the reviewer to contact the clinic directly.
-- Move the conversation offline.
-
-FOR POSITIVE REVIEWS:
-- Thank the reviewer.
-- Reinforce their experience.
-- Invite them again.
-
-STYLE:
-- Use simple, clear language.
-- Personalize using reviewer name if available.
-- Avoid repeating the same phrases in every reply.
-
-RATING-BASED GOAL:
-
-If rating is 5:
-- Express gratitude warmly.
-- Reinforce the positive experience.
-- Invite the patient to visit again.
-
-If rating is 4:
-- Appreciate the feedback.
-- Acknowledge any minor concern (if present).
-- Maintain a positive tone.
-
-If rating is 3:
-- Maintain a balanced tone.
-- Acknowledge concerns clearly.
-- Show willingness to improve.
-- Optionally invite the patient to reconnect.
-
-If rating is 1 or 2:
-- Be empathetic and calm.
-- Apologize for the experience (without admitting fault blindly).
-- Do NOT argue or justify.
-- Move conversation offline (call/WhatsApp/visit clinic).
-- Prioritize trust recovery.
-
-Return output in JSON format:
-{
-  "reply": "final reply text",
-  "tone_used": "tone type",
-  "category": "positive/neutral/negative",
-  "needs_human_review": true/false
-}
-
-Clinic Information:
-- Clinic Name: {{clinic_name}}
-- Doctor Name: {{doctor_name}}
-- Speciality: {{speciality}}
-- Location: {{location}}
-- Tone: {{tone}} (e.g., warm, professional, friendly)
-- Services: {{services}}
-- Contact CTA: {{contact_cta}}
-
-Review Details:
-- Reviewer Name: {{reviewer_name}}
-- Rating: {{rating}} (1 to 5)
-- Review Text: {{review_text}}
-- Language: {{language}} (English/Hinglish/etc.)
-- Reply Length: {{short/medium/long}}
-
-Write an appropriate reply.`;
-
     const runAction = async (fn) => {
         setActionError('');
         try {
@@ -528,7 +416,7 @@ Write an appropriate reply.`;
             </div>
             <p className="text-sm font-semibold text-slate-800">{module.empty.title}</p>
             <p className="mt-1 max-w-md text-sm text-slate-500">{module.empty.body}</p>
-            {canCreate && module.emptyAction !== false && moduleKey !== 'reviews' ? (
+            {canCreate && module.emptyAction !== false ? (
                 <Link to={addHref} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
                     <AppIcon name="plus" className="h-4 w-4" />
                     {addLabel}
@@ -560,19 +448,9 @@ Write an appropriate reply.`;
                         </button>
                     ) : null}
 
-                    {moduleKey === 'reviews' ? (
-                        <button
-                            type="button"
-                            onClick={() => setReviewCreate((p) => ({ ...p, open: true, error: '', busy: false, values: { reviewer_name: '', message: '', rating: '5' } }))}
-                            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        >
-                            Add Review
-                        </button>
-                    ) : (
-                        canCreate ? (
-                            <Link to={addHref} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">{addLabel}</Link>
-                        ) : null
-                    )}
+                    {canCreate ? (
+                        <Link to={addHref} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">{addLabel}</Link>
+                    ) : null}
                 </div>
             </div>
 
@@ -627,53 +505,6 @@ Write an appropriate reply.`;
                     Clear
                 </button>
             </div>
-
-            {moduleKey === 'reviews' ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className="mr-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        <AppIcon name="section" className="h-4 w-4" />
-                        Quick Filters
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex flex-wrap items-center gap-1">
-                            {[{ label: 'All Ratings', value: '' }, { label: '5★', value: '5' }, { label: '4★', value: '4' }, { label: '3★', value: '3' }, { label: '2★', value: '2' }, { label: '1★', value: '1' }].map((opt) => {
-                                const active = String(filters?.rating ?? '') === String(opt.value);
-                                return (
-                                    <button
-                                        key={opt.label}
-                                        type="button"
-                                        onClick={() => setFilterAndFetch('rating', opt.value)}
-                                        className={active
-                                            ? 'rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white'
-                                            : 'rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50'}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-1">
-                            {[{ label: 'All Sentiments', value: '' }, { label: 'Positive', value: 'positive' }, { label: 'Neutral', value: 'neutral' }, { label: 'Negative', value: 'negative' }].map((opt) => {
-                                const active = String(filters?.sentiment ?? '') === String(opt.value);
-                                return (
-                                    <button
-                                        key={opt.label}
-                                        type="button"
-                                        onClick={() => setFilterAndFetch('sentiment', opt.value)}
-                                        className={active
-                                            ? 'rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white'
-                                            : 'rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50'}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            ) : null}
 
             {actionError ? (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm">
@@ -751,49 +582,8 @@ Write an appropriate reply.`;
                         ? ['view', 'edit', 'delete', 'restore', 'block', 'unblock']
                         : (moduleKey === 'doctors' || moduleKey === 'services')
                             ? ['view', 'edit', 'delete', 'block', 'unblock']
-                            : moduleKey === 'reviews'
-                                ? ['view', 'generate_reply', 'view_reply', 'edit', 'delete']
                             : undefined}
                     priorityColumns={[]}
-                    extraActionsForRow={moduleKey === 'reviews'
-                        ? (row) => {
-                            const hasReply = Boolean(String(row?.reply_text || '').trim());
-                            return hasReply
-                                ? [{ value: 'view_reply', label: 'View Reply' }]
-                                : [{ value: 'generate_reply', label: 'Generate Reply' }];
-                        }
-                        : undefined}
-                    onExtraAction={(action, row) => {
-                        if (moduleKey !== 'reviews') return;
-
-                        if (action === 'generate_reply') {
-                            setReplyDialog({
-                                open: true,
-                                row,
-                                mode: 'generate',
-                                busy: false,
-                                saving: false,
-                                error: '',
-                                options: { reply_type: 'medium', language: 'english', tone: 'professional', case_data: '' },
-                                generated: null,
-                            });
-                            return;
-                        }
-
-                        if (action === 'view_reply') {
-                            const replyText = String(row?.reply_text || '').trim();
-                            setReplyDialog({
-                                open: true,
-                                row,
-                                mode: 'view',
-                                busy: false,
-                                saving: false,
-                                error: '',
-                                options: { reply_type: 'medium', language: 'english', tone: 'professional', case_data: '' },
-                                generated: replyText ? { reply: replyText } : null,
-                            });
-                        }
-                    }}
                     hiddenColumns={moduleKey === 'patients'
                         ? ['uuid']
                         : moduleKey === 'clinics'
@@ -802,8 +592,6 @@ Write an appropriate reply.`;
                             ? ['user_id', 'registration_number', 'consultation_line', 'followup_line']
                             : moduleKey === 'users'
                                 ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
-                                : moduleKey === 'reviews'
-                                    ? ['sentiment_message', 'improvement_suggestion', 'reply_text', 'reply_meta', 'replied_at', 'reply_category', 'reply_tone_used', 'reply_needs_human_review']
                                 : []}
                     columnLabels={moduleKey === 'doctors' ? { full_name: 'Doctor Name' } : (module.labels || {})}
                     emptyState={emptyState}
@@ -845,48 +633,7 @@ Write an appropriate reply.`;
                                     }
                                 },
                             }
-                            : moduleKey === 'reviews'
-                                ? {
-                                    sentiment: (value) => {
-                                        if (!value) return '—';
-                                        return <StatusBadge status={String(value)} />;
-                                    },
-                                    review_date: (value) => {
-                                        if (!value) return '—';
-                                        const d = new Date(String(value));
-                                        if (Number.isNaN(d.getTime())) return String(value);
-                                        try {
-                                            return new Intl.DateTimeFormat(undefined, {
-                                                month: 'short',
-                                                day: '2-digit',
-                                                year: 'numeric',
-                                                hour: 'numeric',
-                                                minute: '2-digit',
-                                            }).format(d);
-                                        } catch {
-                                            return d.toLocaleString();
-                                        }
-                                    },
-                                    message: (value) => {
-                                        const text = String(value ?? '').trim();
-                                        if (!text) return '—';
-                                        return (
-                                            <div
-                                                className="max-w-xl text-slate-700"
-                                                style={{
-                                                    display: '-webkit-box',
-                                                    WebkitLineClamp: 3,
-                                                    WebkitBoxOrient: 'vertical',
-                                                    overflow: 'hidden',
-                                                }}
-                                                title={text}
-                                            >
-                                                {text}
-                                            </div>
-                                        );
-                                    },
-                                }
-                                : {}}
+                            : {}}
                     blockActionStatuses={moduleKey === 'clinics'
                         ? ['active', 'trial']
                         : moduleKey === 'doctors' || moduleKey === 'services'
@@ -902,19 +649,6 @@ Write an appropriate reply.`;
                     onView={(row) => {
                         if (moduleKey === 'clinics' && user?.role === 'super_admin') {
                             navigate(`/workflows/clinics/${row.id}`);
-                            return;
-                        }
-                        if (moduleKey === 'reviews') {
-                            (async () => {
-                                setActionError('');
-                                try {
-                                    const res = await client.get(`${base}/${module.path}/${row.id}`);
-                                    setViewRecord(res?.data?.data || row);
-                                } catch (e) {
-                                    setActionError(e?.response?.data?.message || e?.message || 'Failed to load record');
-                                    setViewRecord(row);
-                                }
-                            })();
                             return;
                         }
                         // Patients and doctors reach their own profile pages through this same
@@ -950,331 +684,6 @@ Write an appropriate reply.`;
                     <button disabled={meta.current_page >= Math.ceil(meta.total / meta.per_page)} onClick={() => fetchData(meta.current_page + 1)} className="rounded-xl border border-slate-300 px-3 py-1 disabled:opacity-50">Next</button>
                 </div>
             </div>
-
-            {moduleKey === 'reviews' && viewRecord ? (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setViewRecord(null)}>
-                        <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                                <div className="flex items-center gap-2">
-                                    <AppIcon name="view" className="h-5 w-5" />
-                                    <h3 className="text-lg font-semibold">Review Details</h3>
-                                </div>
-                                <button onClick={() => setViewRecord(null)} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">Close</button>
-                            </div>
-
-                            <div className="max-h-[72vh] space-y-4 overflow-y-auto p-5">
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reviewer</div>
-                                        <div className="mt-1 text-sm text-slate-800">{viewRecord.reviewer_name || '—'}</div>
-                                    </div>
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rating</div>
-                                        <div className="mt-1 text-sm text-slate-800">{viewRecord.rating ?? '—'}</div>
-                                    </div>
-                                </div>
-
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Review Message</div>
-                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{viewRecord.message || '—'}</div>
-                                </div>
-
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sentiment</div>
-                                        <div className="mt-2">{viewRecord.sentiment ? <StatusBadge status={String(viewRecord.sentiment)} /> : '—'}</div>
-                                        {viewRecord.sentiment_message ? (
-                                            <div className="mt-2 text-sm text-slate-700">{viewRecord.sentiment_message}</div>
-                                        ) : null}
-                                    </div>
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Improvement</div>
-                                        <div className="mt-2 text-sm text-slate-700">{viewRecord.improvement_suggestion || '—'}</div>
-                                    </div>
-                                </div>
-
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div>
-                                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Saved Reply</div>
-                                            <div className="mt-1 text-xs text-slate-500">{viewRecord.replied_at ? `Replied at: ${String(viewRecord.replied_at)}` : 'No reply saved yet.'}</div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            disabled={!String(viewRecord.reply_text || '').trim()}
-                                            onClick={async () => {
-                                                const text = String(viewRecord.reply_text || '').trim();
-                                                if (!text) return;
-                                                try {
-                                                    await navigator.clipboard.writeText(text);
-                                                } catch {
-                                                    // ignore
-                                                }
-                                            }}
-                                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                        >
-                                            Copy Reply
-                                        </button>
-                                    </div>
-                                    <div className="mt-3 whitespace-pre-wrap text-sm text-slate-800">{viewRecord.reply_text || '—'}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-            ) : null}
-
-            {reviewCreate.open ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setReviewCreate((p) => ({ ...p, open: false }))}>
-                    <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="module" className="h-5 w-5" />
-                                <h3 className="text-lg font-semibold">Add Review</h3>
-                            </div>
-                            <button onClick={() => setReviewCreate((p) => ({ ...p, open: false }))} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">Close</button>
-                        </div>
-
-                        <div className="space-y-4 p-5">
-                            {reviewCreate.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {reviewCreate.error}
-                                </div>
-                            ) : null}
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reviewer Name</label>
-                                    <input
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                        value={reviewCreate.values.reviewer_name}
-                                        onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, reviewer_name: e.target.value } }))}
-                                        placeholder="e.g. Rahul"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Rating</label>
-                                    <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                        value={reviewCreate.values.rating}
-                                        onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, rating: e.target.value } }))}
-                                    >
-                                        {['5', '4', '3', '2', '1'].map((r) => (
-                                            <option key={r} value={r}>{r} Star{r === '1' ? '' : 's'}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Review Message</label>
-                                <textarea
-                                    className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                    value={reviewCreate.values.message}
-                                    onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, message: e.target.value } }))}
-                                    placeholder="Write the review text here"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
-                            <button
-                                type="button"
-                                onClick={() => setReviewCreate((p) => ({ ...p, open: false }))}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                disabled={reviewCreate.busy}
-                                onClick={async () => {
-                                    const v = reviewCreate.values;
-                                    if (!String(v.message || '').trim()) {
-                                        setReviewCreate((p) => ({ ...p, error: 'Review message is required' }));
-                                        return;
-                                    }
-
-                                    setReviewCreate((p) => ({ ...p, busy: true, error: '' }));
-                                    try {
-                                        await client.post(`${base}/reviews`, {
-                                            reviewer_name: String(v.reviewer_name || '').trim() || null,
-                                            message: String(v.message || '').trim(),
-                                            rating: Number(v.rating || 5),
-                                        });
-                                        setReviewCreate((p) => ({ ...p, open: false, busy: false }));
-                                        await fetchData(1);
-                                    } catch (e) {
-                                        setReviewCreate((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Create failed' }));
-                                    }
-                                }}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-                            >
-                                {reviewCreate.busy ? 'Creating…' : 'Create'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-
-            {replyDialog.open ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setReplyDialog((p) => ({ ...p, open: false }))}>
-                    <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="section" className="h-5 w-5" />
-                                <h3 className="text-lg font-semibold">Generate Reply</h3>
-                            </div>
-                            <button onClick={() => setReplyDialog((p) => ({ ...p, open: false }))} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">Close</button>
-                        </div>
-
-                        <div className="space-y-4 p-5">
-                            {replyDialog.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {replyDialog.error}
-                                </div>
-                            ) : null}
-
-                            {replyDialog.mode === 'generate' ? (
-                                <>
-                                    <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reply Type</label>
-                                    <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                        value={replyDialog.options.reply_type}
-                                        onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, reply_type: e.target.value } }))}
-                                    >
-                                        <option value="short">Short</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="detailed">Detailed</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Language</label>
-                                    <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                        value={replyDialog.options.language}
-                                        onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, language: e.target.value } }))}
-                                    >
-                                        <option value="english">English</option>
-                                        <option value="hindi">Hindi</option>
-                                        <option value="hinglish">Hinglish</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tone</label>
-                                    <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                        value={replyDialog.options.tone}
-                                        onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, tone: e.target.value } }))}
-                                    >
-                                        <option value="professional">Professional</option>
-                                        <option value="warm">Warm</option>
-                                        <option value="reassuring">Reassuring</option>
-                                        <option value="friendly">Friendly</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                                    <div>
-                                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Case Data / Context (optional)</label>
-                                        <textarea
-                                            className="min-h-[90px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                            value={replyDialog.options.case_data}
-                                            onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, case_data: e.target.value } }))}
-                                            placeholder="For low ratings/complaints, add context here (no medical advice)."
-                                        />
-                                    </div>
-
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm text-slate-600">
-                                    Generates a suggested reply using the review text + rating.
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={replyDialog.busy}
-                                    onClick={async () => {
-                                        if (!replyDialog.row?.id) return;
-                                        setReplyDialog((p) => ({ ...p, busy: true, error: '' }));
-                                        try {
-                                            const res = await client.post(`${base}/reviews/${replyDialog.row.id}/generate-reply`, {
-                                                ...replyDialog.options,
-                                                prompt: reviewReplyPrompt,
-                                            });
-                                            setReplyDialog((p) => ({ ...p, busy: false, generated: res?.data?.data || null }));
-                                        } catch (e) {
-                                            setReplyDialog((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Generate failed' }));
-                                        }
-                                    }}
-                                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-                                >
-                                    {replyDialog.busy ? 'Generating…' : 'Generate Reply'}
-                                </button>
-                            </div>
-
-                                </>
-                            ) : (
-                                <div className="text-sm text-slate-600">
-                                    Saved reply preview.
-                                </div>
-                            )}
-
-                            {replyDialog.generated?.reply ? (
-                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Generated Reply</div>
-                                    <div className="whitespace-pre-wrap text-sm text-slate-800">{replyDialog.generated.reply}</div>
-                                </div>
-                            ) : null}
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
-                            <button
-                                type="button"
-                                onClick={() => setReplyDialog((p) => ({ ...p, open: false }))}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                disabled={!replyDialog.generated?.reply}
-                                onClick={async () => {
-                                    const text = String(replyDialog.generated?.reply || '').trim();
-                                    if (!text) return;
-                                    try {
-                                        await navigator.clipboard.writeText(text);
-                                    } catch {
-                                        // ignore
-                                    }
-                                }}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
-                                Copy Reply
-                            </button>
-                            {replyDialog.mode === 'generate' ? (
-                                <button
-                                    type="button"
-                                    disabled={replyDialog.saving || !replyDialog.generated?.reply}
-                                    onClick={async () => {
-                                        if (!replyDialog.row?.id || !replyDialog.generated) return;
-                                        setReplyDialog((p) => ({ ...p, saving: true, error: '' }));
-                                        try {
-                                            await client.post(`${base}/reviews/${replyDialog.row.id}/reply`, replyDialog.generated);
-                                            setReplyDialog((p) => ({ ...p, saving: false, open: false }));
-                                            await fetchData(meta.current_page);
-                                        } catch (e) {
-                                            setReplyDialog((p) => ({ ...p, saving: false, error: e?.response?.data?.message || e?.message || 'Save failed' }));
-                                        }
-                                    }}
-                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-                                >
-                                    {replyDialog.saving ? 'Saving…' : 'Save'}
-                                </button>
-                            ) : null}
-                        </div>
-                    </div>
-                </div>
-            ) : null}
 
             <ConfirmDialog
                 open={confirm.open}

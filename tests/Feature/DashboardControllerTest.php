@@ -34,6 +34,8 @@ class DashboardControllerTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
+        // Freeze mid-day: now+1h must not wrap past midnight (dashboard filters start_time >= now).
+        $this->travelTo(Carbon::parse('2026-10-16 10:00:00'));
     }
 
     private function makeClinicWithUpcomingAppointment(): array

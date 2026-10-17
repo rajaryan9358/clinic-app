@@ -2123,13 +2123,11 @@ function DoctorSetupFlowPageInner() {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    const params = new URLSearchParams({
-                                        doctor_id: String(id),
-                                        date: apptConfirm.date,
-                                        time: apptConfirm.time,
-                                    });
+                                    // The create page honours doctor_id only: it clears any date/time
+                                    // pre-fill when the doctor is set, so the slot is picked there.
+                                    const params = new URLSearchParams({ doctor_id: String(id) });
                                     setApptConfirm({ open: false, date: '', time: '', endTime: '' });
-                                    navigate(`/workflows/appointments?${params.toString()}`);
+                                    navigate(`/workflows/appointments/new?${params.toString()}`);
                                 }}
                                 className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
                             >

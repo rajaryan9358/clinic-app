@@ -351,6 +351,16 @@ export default function FollowupsPage() {
         setBusy((b) => [...b, task.id]);
         const gen = genRef.current;
         try {
+            // Someone else may have cancelled or skipped it inside the undo window. The complete
+            // endpoint refuses those, so Undo must not walk them back to pending either.
+            const current = await client.get(`${base}/followups/${task.id}`);
+            const status = current?.data?.data?.status;
+            if (status !== 'done') {
+                if (!mountedRef.current) return;
+                reloadMessageRef.current = `Not undone: this follow-up is now ${status || 'no longer done'}, so it can't be set back to pending.`;
+                setReloadKey((k) => k + 1);
+                return;
+            }
             await client.put(`${base}/followups/${task.id}`, { status: 'pending', completed_at: null });
             if (!mountedRef.current) return;
             if (gen !== genRef.current) {
@@ -501,7 +511,7 @@ export default function FollowupsPage() {
                     {showDone && data.done.length ? (
                         <Group
                             title="Done"
-                            hint={`latest ${data.done.length}`}
+                            hint={data.doneTotal > data.done.length ? `latest ${data.done.length}` : undefined}
                             count={data.doneTotal}
                             footer={data.doneTotal > data.done.length ? (
                                 <div className="border-t border-slate-100 px-4 py-2.5 text-sm">
@@ -518,7 +528,7 @@ export default function FollowupsPage() {
                     ) : null}
 
                     {showClosed && data.closed.length ? (
-                        <Group title="Closed" hint={`skipped or cancelled, latest ${data.closed.length}`} count={data.closedTotal}>
+                        <Group title="Closed" hint={data.closedTotal > data.closed.length ? `skipped or cancelled, latest ${data.closed.length}` : 'skipped or cancelled'} count={data.closedTotal}>
                             <ul className="divide-y divide-slate-100">
                                 {data.closed.map((t) => <FollowupRow key={t.id} task={t} kind="closed" />)}
                             </ul>

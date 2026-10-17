@@ -54,8 +54,10 @@ function FieldsBody({ rows, cols }) {
  * variant="table"  -> header bar + `rows` rows of `cols` cells, in a card
  * variant="fields" -> `rows` label/value pairs in a card (2 columns by default)
  * card={false} drops the surrounding card (use inside an existing one).
+ * announce={false} drops this skeleton's own status region, for a group of skeletons
+ * that sit inside one shared role="status" wrapper.
  */
-export default function Skeleton({ variant = 'table', rows, cols, delay = 150, card = true, className = '' }) {
+export default function Skeleton({ variant = 'table', rows, cols, delay = 150, card = true, className = '', announce = true }) {
     const visible = useDelayedVisible(delay);
     const r = rows ?? (variant === 'table' ? 6 : 6);
     const c = cols ?? (variant === 'table' ? 5 : 2);
@@ -76,8 +78,8 @@ export default function Skeleton({ variant = 'table', rows, cols, delay = 150, c
         : '';
 
     return (
-        <div role="status" aria-busy="true" className={`${wrapper} ${className}`}>
-            <span className="sr-only">Loading…</span>
+        <div {...(announce ? { role: 'status', 'aria-busy': 'true' } : {})} className={`${wrapper} ${className}`}>
+            {announce ? <span className="sr-only">Loading…</span> : null}
             {visible ? <div aria-hidden="true">{body}</div> : null}
         </div>
     );
