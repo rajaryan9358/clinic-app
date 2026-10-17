@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
 import { TASK_TYPE_LABELS } from './FollowupsPage';
 
@@ -15,6 +16,7 @@ const todayYMD = () => new Date().toLocaleDateString('en-CA');
 export default function FollowupFormPage() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
 
     const [patient, setPatient] = useState(null);
@@ -30,9 +32,13 @@ export default function FollowupFormPage() {
     const [staff, setStaff] = useState([]);
     // Doctor is optional. In a doctor-scoped session it defaults to that doctor, because the API
     // hides tasks without that doctor_id from them; it is shown and editable so nothing is hidden.
-    const [doctorId, setDoctorId] = useState(() => {
-        try { return localStorage.getItem('active_doctor_id') || ''; } catch { return ''; }
-    });
+    const scopeDoctorId = scope?.context?.active_doctor_id ? String(scope.context.active_doctor_id) : '';
+    const [doctorId, setDoctorId] = useState(scopeDoctorId);
+    // The scope context can arrive after mount; apply its doctor once, unless staff already chose.
+    const doctorTouched = useRef(false);
+    useEffect(() => {
+        if (!doctorTouched.current && scopeDoctorId) setDoctorId(scopeDoctorId);
+    }, [scopeDoctorId]);
     const [doctors, setDoctors] = useState([]);
 
     const [busy, setBusy] = useState(false);
@@ -85,7 +91,7 @@ export default function FollowupFormPage() {
                 doctor_id: doctorId ? Number(doctorId) : null,
                 status: 'pending',
             });
-            navigate('/workflows/followups', { replace: true });
+            navigate('/workflows/followups', { replace: true, state: { notice: 'Follow-up added.' } });
         } catch (err) {
             setBusy(false);
             setError(apiError(err, 'Failed to add the follow-up'));
@@ -172,7 +178,7 @@ export default function FollowupFormPage() {
 
                 <div>
                     <label htmlFor="fu-doctor" className="text-sm font-semibold text-slate-900">Doctor <span className="font-normal text-slate-500">(optional)</span></label>
-                    <select id="fu-doctor" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} className={`mt-2 ${inputClass}`}>
+                    <select id="fu-doctor" value={doctorId} onChange={(e) => { doctorTouched.current = true; setDoctorId(e.target.value); }} className={`mt-2 ${inputClass}`}>
                         <option value="">No doctor</option>
                         {doctorId && !doctors.some((d) => String(d.id) === String(doctorId)) ? <option value={doctorId}>{`Doctor #${doctorId}`}</option> : null}
                         {doctors.map((d) => (

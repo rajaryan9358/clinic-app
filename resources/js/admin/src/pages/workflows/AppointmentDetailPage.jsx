@@ -251,6 +251,7 @@ export default function AppointmentDetailPage() {
         setError('');
         setPayload(null);
         setSummary(null);
+        setSummaryLoading(true);
         setSummaryError('');
         setSummaryRecording(false);
         setSummaryUploading(false);
@@ -268,8 +269,9 @@ export default function AppointmentDetailPage() {
                 if (detailRes.status === 'fulfilled') setPayload(detailRes.value.data.data);
                 else setError(detailRes.reason?.response?.data?.message || detailRes.reason?.message || 'Failed to load appointment');
                 if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.data.data?.summary || null);
+                else setSummaryError(summaryRes.reason?.response?.data?.message || summaryRes.reason?.message || 'Failed to load summary');
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) { setLoading(false); setSummaryLoading(false); }
             }
         })();
         return () => { cancelled = true; };
@@ -330,7 +332,7 @@ export default function AppointmentDetailPage() {
     // its filters travel in the link state and are restored through the URL.
     const goBack = () => {
         const search = location.state?.queueSearch;
-        navigate({ pathname: '/workflows/appointments', search: search ? `?${search}` : '' });
+        navigate({ pathname: '/workflows/appointments', search: search ? `?${search}` : '' }, { replace: true });
     };
 
     return (
@@ -517,6 +519,7 @@ export default function AppointmentDetailPage() {
                     </div>
                 ) : null}
 
+                {payload ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <h4 className="text-sm font-semibold text-slate-900">Timeline</h4>
                     <p className="mt-1 text-sm text-slate-600">Status changes and reschedules.</p>
@@ -550,6 +553,9 @@ export default function AppointmentDetailPage() {
                     </div>
                 </div>
 
+                ) : null}
+
+                {payload ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <h4 className="text-sm font-semibold text-slate-900">Communication / Reminders</h4>
                     <p className="mt-1 text-sm text-slate-600">Reminders and WhatsApp message summary for this appointment.</p>
@@ -612,7 +618,10 @@ export default function AppointmentDetailPage() {
                     </div>
                 </div>
 
-                {/* AI Summary Section */}
+                ) : null}
+
+                {/* AI Summary Section: only once the appointment (or its summary) has loaded, so it never claims "No summary yet" from nothing */}
+                {payload || summaryLoading ? (
                 <div className="rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-4">
                         <div>
@@ -638,7 +647,17 @@ export default function AppointmentDetailPage() {
                         <div className="mt-3 text-sm text-slate-500">Loading summary…</div>
                     ) : null}
 
-                    {!summaryLoading && !summary ? (
+                    {!summaryLoading && summaryError && !summary ? (
+                        <button
+                            type="button"
+                            onClick={fetchSummary}
+                            className="mt-3 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                            Try again
+                        </button>
+                    ) : null}
+
+                    {!summaryLoading && !summaryError && !summary ? (
                         <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 text-center">
                             <p className="text-sm text-slate-600">No summary yet. Record the consultation to generate one.</p>
                             {summaryUploading ? (
@@ -724,6 +743,7 @@ export default function AppointmentDetailPage() {
                         </div>
                     ) : null}
                 </div>
+                ) : null}
             </div>
         </div>
     );

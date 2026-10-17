@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
@@ -27,7 +27,7 @@ const STATUS_OPTIONS = [
 ];
 
 // Roles that work their own queue by default; everyone else sees the clinic.
-const OWN_QUEUE_ROLES = ['doctor', 'assistant'];
+const OWN_QUEUE_ROLES = ['doctor'];
 
 // Pending tasks are fetched in one request so no group is ever truncated.
 const PENDING_LIMIT = 500;
@@ -174,6 +174,7 @@ export default function FollowupsPage() {
     const { user } = useAuth();
     const scope = useScope();
     const location = useLocation();
+    const navigate = useNavigate();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const canEdit = Boolean(scope?.can?.('followups.edit'));
     const canCreate = Boolean(scope?.can?.('followups.create'));
@@ -201,6 +202,11 @@ export default function FollowupsPage() {
     const [data, setData] = useState(EMPTY_DATA);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    // The add page returns here with its confirmation in the navigation state; consume it once.
+    const [notice, setNotice] = useState(() => location.state?.notice || '');
+    useEffect(() => {
+        if (location.state?.notice) navigate(location.pathname, { replace: true, state: null });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Done is sent immediately. `busy` holds ids with a request in flight;
     // `recent` holds just-completed tasks whose Undo is still on offer.
@@ -424,6 +430,13 @@ export default function FollowupsPage() {
                 </div>
             </div>
 
+            {notice ? (
+                <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                    <span>{notice}</span>
+                    <button type="button" onClick={() => setNotice('')} className="text-xs font-medium underline">Dismiss</button>
+                </div>
+            ) : null}
+
             <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-4">
                 <div>
                     <label htmlFor="fu-doctor" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Doctor</label>
@@ -493,7 +506,7 @@ export default function FollowupsPage() {
                             footer={data.doneTotal > data.done.length ? (
                                 <div className="border-t border-slate-100 px-4 py-2.5 text-sm">
                                     <Link to="/modules/followups" className="font-medium text-slate-700 underline">
-                                        See all {data.doneTotal} done follow-ups
+                                        Open the full follow-up list ({data.doneTotal} done)
                                     </Link>
                                 </div>
                             ) : null}

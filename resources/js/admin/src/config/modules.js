@@ -39,11 +39,11 @@ const viewMeta = {
         title: (r) => r.full_name,
         labels: { clinic_id: 'Clinic', full_name: 'Name', email: 'Email', phone: 'Phone', password: 'Password', role: 'Role', doctor_ids: 'Assigned doctors', last_login_at: 'Last login', last_login_ip: 'Last login IP' },
         formats: { role: 'enum' },
-        hidden: ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type'],
+        hidden: ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip'],
         sections: [
             { title: 'Profile', keys: ['full_name', 'role', 'status'] },
             { title: 'Contact', keys: ['email', 'phone'] },
-            { title: 'Access', keys: ['clinic_id', 'last_login_at', 'last_login_ip'] },
+            { title: 'Access', keys: ['clinic_id', 'last_login_at'] },
         ],
         empty: {
             title: 'No staff users yet',

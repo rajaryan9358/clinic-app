@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import SubscriptionLockScreen from './components/billing/SubscriptionLockScreen.jsx';
 import { useAuth } from './context/AuthContext';
@@ -75,6 +75,12 @@ function FullPageLoader() {
             <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
         </div>
     );
+}
+
+// Old bookmarks and emailed links to an appointment still open the appointment they name.
+function RedirectToAppointment() {
+    const { id } = useParams();
+    return <Navigate to={`/workflows/appointments/${id}`} replace />;
 }
 
 // Wraps the authenticated routes: when the clinic's subscription is locked
@@ -160,7 +166,7 @@ function AuthenticatedShell() {
                 <Route path="/modules/appointments" element={<BlockSuperAdmin><Navigate to="/workflows/appointments" replace /></BlockSuperAdmin>} />
                 <Route path="/modules/appointments/new" element={<BlockSuperAdmin><Navigate to="/workflows/appointments/new" replace /></BlockSuperAdmin>} />
                 <Route path="/modules/appointments/:id/edit" element={<BlockSuperAdmin><Navigate to="/workflows/appointments" replace /></BlockSuperAdmin>} />
-                <Route path="/modules/appointments/:id" element={<BlockSuperAdmin><Navigate to="/workflows/appointments" replace /></BlockSuperAdmin>} />
+                <Route path="/modules/appointments/:id" element={<BlockSuperAdmin><RedirectToAppointment /></BlockSuperAdmin>} />
 
                 {/* ── Profile detail pages ── */}
                 <Route path="/modules/patients/:id" element={<BlockSuperAdmin><BlockDoctor><PatientProfilePage /></BlockDoctor></BlockSuperAdmin>} />

@@ -799,7 +799,7 @@ Write an appropriate reply.`;
                         : moduleKey === 'clinics'
                             ? ['uuid', 'legal_name', 'subscription']
                         : moduleKey === 'doctors'
-                            ? ['user_id', 'registration_number']
+                            ? ['user_id', 'registration_number', 'consultation_line', 'followup_line']
                             : moduleKey === 'users'
                                 ? ['uuid', 'email_verified_at', 'phone_verified_at', 'login_type', 'last_login_ip']
                                 : moduleKey === 'reviews'

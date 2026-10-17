@@ -380,18 +380,20 @@ export default function InvoiceDetailPage() {
     // Lines belong to the patient they were built for (prefilled fees, hand-picked fees), so choosing
     // another patient discards them, after a confirm that says so when there is anything to lose.
     const changePatient = () => {
-        const hasWork = form.items.some((l) => !isBlankLine(l));
-        if (hasWork && !window.confirm('Changing the patient discards the lines on this invoice, including any fees prefilled from an appointment. Continue?')) return;
+        const hasWork = form.items.some((l) => !isBlankLine(l))
+            || Number(form.discount) > 0 || Number(form.tax) > 0 || String(form.notes || '').trim() !== '';
+        if (hasWork && !window.confirm('Changing the patient discards the lines, discount, tax and notes on this invoice, including any fees prefilled from an appointment. Continue?')) return;
         prefillSeq.current += 1;
         setPatient(null);
         setAppointmentId(null);
-        setForm((p) => ({ ...p, items: [newLine()] }));
+        setForm((p) => ({ ...p, items: [newLine()], discount: '', tax: '', notes: '' }));
     };
 
     const attachAppointment = async (apptId) => {
         if (!apptId || busy) return;
-        const hasWork = form.items.some((l) => !isBlankLine(l));
-        if (hasWork && !window.confirm('Attaching an appointment replaces the lines already on this invoice. Continue?')) return;
+        const hasWork = form.items.some((l) => !isBlankLine(l))
+            || Number(form.discount) > 0 || Number(form.tax) > 0 || String(form.notes || '').trim() !== '';
+        if (hasWork && !window.confirm('Attaching an appointment replaces the lines, discount, tax and notes already on this invoice. Continue?')) return;
         const seq = ++prefillSeq.current;
         setBusy('prefill');
         setError('');
@@ -401,7 +403,7 @@ export default function InvoiceDetailPage() {
             if (seq !== prefillSeq.current) return; // route changed or a newer pick superseded this one
             const pre = res?.data?.data || {};
             const items = Array.isArray(pre.items) && pre.items.length ? pre.items.map(lineFromApi) : [newLine()];
-            setForm((p) => ({ ...p, items }));
+            setForm((p) => ({ ...p, items, discount: '', tax: '', notes: '' }));
             setAppointmentId(pre.appointment_id ?? Number(apptId));
         } catch (e) {
             if (seq === prefillSeq.current) setError(apiError(e, 'Failed to load the appointment'));
