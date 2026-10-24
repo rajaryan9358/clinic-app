@@ -69,6 +69,19 @@ class WaitlistServiceTest extends TestCase
         $this->assertFalse($this->service()->isSlotOccupied($this->clinic->id, $this->doctor->id, $this->tomorrow, '09:30', '10:00'));
     }
 
+    public function test_no_offer_is_made_while_the_portal_is_disabled(): void
+    {
+        $booked = $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $entry = $this->join($this->consentedPatient(), $this->tomorrow, '09:00');
+        ClinicSetting::updateOrCreate(['clinic_id' => $this->clinic->id], ['portal_enabled' => false]);
+        // Free the slot directly, so only the portal setting stands in the way.
+        $booked->update(['status' => AppointmentStatus::CANCELLED->value]);
+
+        $this->assertNull($this->service()->slotFreed($this->clinic->id, $this->doctor->id, $this->tomorrow, '09:00'));
+        $this->assertSame('waiting', $entry->fresh()->status);
+        $this->assertSame(0, $this->waitlistMessages()->count());
+    }
+
     public function test_join_requires_waitlist_enabled(): void
     {
         $clinic = $this->makeClinic(['waitlist_enabled' => false]);

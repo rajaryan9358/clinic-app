@@ -13,6 +13,7 @@ use App\Services\AppointmentService;
 use App\Services\Portal\PortalBookingPolicy;
 use App\Services\Portal\PortalLinkService;
 use App\Services\WhatsApp\PatientNotifier;
+use App\Support\Portal\PortalProfiles;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -165,7 +166,9 @@ final class WaitlistService
         $startTime = $this->normaliseTime($start);
         $settings = $this->settings($clinicId);
 
-        if (! $settings['enabled']) {
+        // The offer is a portal login link; with the portal off it could
+        // never be used, so don't hold the slot — staff see who's waiting.
+        if (! $settings['enabled'] || ! PortalProfiles::portalEnabled($clinicId)) {
             return null;
         }
 
