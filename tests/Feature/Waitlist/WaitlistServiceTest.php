@@ -57,6 +57,18 @@ class WaitlistServiceTest extends TestCase
         $this->assertSame('09:30:00', $entry->end_time);
     }
 
+    public function test_back_to_back_slots_with_hh_mm_times_are_not_conflicts(): void
+    {
+        // Stored as 'H:i:s'; requests send 'H:i'. TIME(col) vs a string is a
+        // string comparison ('09:30:00' > '09:30'), which made the next slot
+        // look booked and the freed one look occupied.
+        $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $next = $this->consentedPatient();
+
+        app(AppointmentService::class)->assertSlotFree($this->clinic->id, $this->doctor->id, $this->tomorrow, '09:30', '10:00', null, $next->id);
+        $this->assertFalse($this->service()->isSlotOccupied($this->clinic->id, $this->doctor->id, $this->tomorrow, '09:30', '10:00'));
+    }
+
     public function test_join_requires_waitlist_enabled(): void
     {
         $clinic = $this->makeClinic(['waitlist_enabled' => false]);
