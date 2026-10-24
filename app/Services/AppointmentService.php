@@ -55,6 +55,20 @@ class AppointmentService
         });
     }
 
+    /**
+     * 'H:i' / 'H:i:s' → 'H:i:s'. whereTime() compiles to TIME(col) <op> ?,
+     * which MySQL and SQLite compare as strings, so an 'H:i' binding makes
+     * '10:30:00' > '10:30' true and back-to-back slots look like conflicts.
+     */
+    private function toHis(string $value): string
+    {
+        try {
+            return Carbon::parse($value)->format('H:i:s');
+        } catch (\Throwable) {
+            return $value;
+        }
+    }
+
     private function toYmd(mixed $value): ?string
     {
         if ($value === null || $value === '') {
@@ -352,6 +366,9 @@ class AppointmentService
     public function assertSlotFree(int $clinicId, int $doctorId, string $date, string $start, ?string $end, ?int $excludeAppointmentId = null, ?int $forPatientId = null): void
     {
         Doctor::query()->whereKey($doctorId)->lockForUpdate()->first();
+
+        $start = $this->toHis($start);
+        $end = $end ? $this->toHis($end) : null;
 
         $conflictQuery = Appointment::query()
             ->forClinic($clinicId)

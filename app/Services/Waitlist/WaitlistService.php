@@ -13,6 +13,7 @@ use App\Services\AppointmentService;
 use App\Services\Portal\PortalBookingPolicy;
 use App\Services\Portal\PortalLinkService;
 use App\Services\WhatsApp\PatientNotifier;
+use App\Support\Portal\PortalProfiles;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -165,7 +166,9 @@ final class WaitlistService
         $startTime = $this->normaliseTime($start);
         $settings = $this->settings($clinicId);
 
-        if (! $settings['enabled']) {
+        // The offer is a portal login link; with the portal off it could
+        // never be used, so don't hold the slot — staff see who's waiting.
+        if (! $settings['enabled'] || ! PortalProfiles::portalEnabled($clinicId)) {
             return null;
         }
 
@@ -520,6 +523,7 @@ final class WaitlistService
             ->whereNotIn('status', [AppointmentStatus::CANCELLED->value, AppointmentStatus::RESCHEDULED->value])
             ->whereTime('start_time', '<', $this->normaliseTime($end))
             ->where(function ($q) use ($start) {
+                $start = $this->normaliseTime($start);
                 $q->whereNull('end_time')->orWhereTime('end_time', '>', $start);
             })
             ->exists();
@@ -581,7 +585,7 @@ final class WaitlistService
             ->forClinic($clinicId)
             ->where('doctor_id', $doctorId)
             ->whereDate('appointment_date', $date)
-            ->whereTime('start_time', '=', $startTime);
+            ->whereTime('start_time', '=', $this->normaliseTime($startTime));
     }
 
     private function appointmentsAt(int $clinicId, int $doctorId, string $date, string $startTime)
@@ -590,7 +594,7 @@ final class WaitlistService
             ->forClinic($clinicId)
             ->where('doctor_id', $doctorId)
             ->whereDate('appointment_date', $date)
-            ->whereTime('start_time', '=', $startTime)
+            ->whereTime('start_time', '=', $this->normaliseTime($startTime))
             ->whereNotIn('status', [AppointmentStatus::CANCELLED->value, AppointmentStatus::RESCHEDULED->value]);
     }
 
