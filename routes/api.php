@@ -200,6 +200,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->
     Route::post('reviews/{id}/generate-reply', [SuperAdminReviewController::class, 'generateReply']);
     Route::post('reviews/{id}/reply', [SuperAdminReviewController::class, 'saveReply']);
     Route::post('appointments/{id}/lifecycle', [SuperAdminAppointmentController::class, 'lifecycle']);
+    Route::post('appointments/{id}/undo-status', [SuperAdminAppointmentController::class, 'undoStatus']);
     Route::post('appointments/{id}/reschedule', [SuperAdminAppointmentController::class, 'reschedule']);
     Route::get('appointments/{id}/detail', [SuperAdminAppointmentController::class, 'detail']);
 
@@ -295,6 +296,7 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     registerCrudRoutes('reviews', ClinicReviewController::class, 'reviews');
 
     Route::post('appointments/{id}/lifecycle', [ClinicAppointmentController::class, 'lifecycle'])->middleware('perm:appointments.view');
+    Route::post('appointments/{id}/undo-status', [ClinicAppointmentController::class, 'undoStatus'])->middleware('perm:appointments.view');
     Route::post('reviews/{id}/generate-reply', [ClinicReviewController::class, 'generateReply'])->middleware('perm:reviews.edit');
     Route::post('reviews/{id}/reply', [ClinicReviewController::class, 'saveReply'])->middleware('perm:reviews.edit');
     Route::post('appointments/{id}/reschedule', [ClinicAppointmentController::class, 'reschedule'])->middleware('perm:appointments.edit');

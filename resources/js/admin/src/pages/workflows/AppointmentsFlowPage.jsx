@@ -488,7 +488,7 @@ export default function AppointmentsFlowPage() {
         return 'bg-slate-400';
     };
 
-    const rowLifecycleActions = (current) => {
+    const rowLifecycleActions = (current, row = null) => {
         const s = String(current || '');
         const actions = [];
 
@@ -512,6 +512,13 @@ export default function AppointmentsFlowPage() {
             actions.push({ label: 'Mark Rescheduled', kind: 'reschedule' });
         }
 
+        // Undo a mistaken cancel / no-show / completion; the server flags
+        // whether its date window is still open.
+        if (row?.can_undo_status) {
+            const what = { cancelled: 'Cancellation', no_show: 'No-show', completed: 'Completion' }[s];
+            if (what) actions.push({ label: `Undo ${what}`, kind: 'undo' });
+        }
+
         return actions
             .map((a) => ({
                 kind: a.kind || 'lifecycle',
@@ -521,6 +528,8 @@ export default function AppointmentsFlowPage() {
             .filter((a) => {
                 if (a.kind === 'cancel') return Boolean(scope?.can?.('appointments.cancel'));
                 if (a.kind === 'reschedule') return Boolean(scope?.can?.('appointments.edit'));
+                // Same permission the original transition needed.
+                if (a.kind === 'undo') return Boolean(scope?.can?.(s === 'cancelled' ? 'appointments.cancel' : 'appointments.check_in'));
                 // lifecycle / complete: confirm, check-in, start, complete, no-show, restore, reopen
                 return Boolean(scope?.can?.('appointments.check_in'));
             });
@@ -829,6 +838,23 @@ export default function AppointmentsFlowPage() {
             openComplete(appointmentId);
             return;
         }
+        if (action.kind === 'undo') {
+            const row = rowById.get(String(appointmentId));
+            const wasCancelled = String(row?.status || '') === 'cancelled';
+            setConfirm({
+                open: true,
+                appointmentId,
+                nextStatus: '',
+                mode: 'undo',
+                title: `${action.label}?`,
+                message: `The appointment goes back to its previous status${wasCancelled ? ' and the patient is sent the booking confirmation again' : ''}.`,
+                danger: false,
+                busy: false,
+                confirmDisabled: false,
+                showForce: false,
+            });
+            return;
+        }
         if (action.kind === 'lifecycle' && action.next) {
             openConfirmLifecycle(appointmentId, action.next, action.label, rowById.get(String(appointmentId)));
         }
@@ -1047,7 +1073,7 @@ export default function AppointmentsFlowPage() {
                             <tbody>
                                 {displayRows.map((r) => (
                                     (() => {
-                                        const actions = rowLifecycleActions(r.status);
+                                        const actions = rowLifecycleActions(r.status, r);
                                         const hasMoreActions = actions.length > 0;
                                         return (
                                     <tr
@@ -1234,7 +1260,7 @@ export default function AppointmentsFlowPage() {
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="p-2">
-                        {rowLifecycleActions(rows.find((r) => String(r.id) === String(menu.id))?.status).map((a) => (
+                        {(() => { const menuRow = rows.find((r) => String(r.id) === String(menu.id)); return rowLifecycleActions(menuRow?.status, menuRow); })().map((a) => (
                             <button
                                 key={`${a.kind}:${a.next || a.label}`}
                                 type="button"
@@ -1277,6 +1303,19 @@ export default function AppointmentsFlowPage() {
                 }}
                 onClose={() => setConfirm({ open: false, appointmentId: null, title: '', message: '', nextStatus: '', danger: false, busy: false, confirmDisabled: false, showForce: false })}
                 onConfirm={async () => {
+                    if (confirm.mode === 'undo' && confirm.appointmentId) {
+                        setConfirm((p) => ({ ...p, busy: true }));
+                        setError('');
+                        try {
+                            await client.post(`${base}/appointments/${confirm.appointmentId}/undo-status`);
+                            setConfirm({ open: false, appointmentId: null, title: '', message: '', nextStatus: '', danger: false, busy: false, confirmDisabled: false, showForce: false });
+                            await fetchList();
+                        } catch (e) {
+                            setError(e?.response?.data?.message || e?.message || 'Failed to undo');
+                            setConfirm({ open: false, appointmentId: null, title: '', message: '', nextStatus: '', danger: false, busy: false, confirmDisabled: false, showForce: false });
+                        }
+                        return;
+                    }
                     if (!confirm.appointmentId || !confirm.nextStatus) return;
                     setConfirm((p) => ({ ...p, busy: true }));
                     setError('');

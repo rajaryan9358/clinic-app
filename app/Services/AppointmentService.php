@@ -373,6 +373,32 @@ class AppointmentService
         $start = $this->toHis($start);
         $end = $end ? $this->toHis($end) : null;
 
+        if ($this->slotConflictQuery($clinicId, $doctorId, $date, $start, $end, $excludeAppointmentId)->exists()) {
+            throw ValidationException::withMessages([
+                'start_time' => 'Selected slot is already booked.',
+            ]);
+        }
+
+        if ($forPatientId !== null) {
+            $hold = app(WaitlistService::class)->heldFor($clinicId, $doctorId, $date, $start);
+            if ($hold !== null && (int) $hold->patient_id !== $forPatientId) {
+                throw ValidationException::withMessages([
+                    'start_time' => 'That slot was just taken. Please pick another.',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * The doctor's live (not cancelled/rescheduled) appointments overlapping
+     * [start, end) on $date, or starting exactly at $start when there's no
+     * $end. Shared by assertSlotFree() and undoStatus().
+     */
+    private function slotConflictQuery(int $clinicId, int $doctorId, string $date, string $start, ?string $end, ?int $excludeAppointmentId = null): \Illuminate\Database\Eloquent\Builder
+    {
+        $start = $this->toHis($start);
+        $end = $end ? $this->toHis($end) : null;
+
         $conflictQuery = Appointment::query()
             ->forClinic($clinicId)
             ->where('doctor_id', $doctorId)
@@ -392,20 +418,7 @@ class AppointmentService
             $conflictQuery->whereTime('start_time', '=', $start);
         }
 
-        if ($conflictQuery->exists()) {
-            throw ValidationException::withMessages([
-                'start_time' => 'Selected slot is already booked.',
-            ]);
-        }
-
-        if ($forPatientId !== null) {
-            $hold = app(WaitlistService::class)->heldFor($clinicId, $doctorId, $date, $start);
-            if ($hold !== null && (int) $hold->patient_id !== $forPatientId) {
-                throw ValidationException::withMessages([
-                    'start_time' => 'That slot was just taken. Please pick another.',
-                ]);
-            }
-        }
+        return $conflictQuery;
     }
 
     /**
@@ -594,6 +607,154 @@ class AppointmentService
 
             return $appointment->refresh();
         });
+    }
+
+    /** Marks an undo on its status log row (the log has no dedicated flag column). */
+    public const UNDO_REASON_PREFIX = 'Undo:';
+
+    /** Statuses undoStatus() can revert. */
+    public const UNDOABLE_STATUSES = [
+        AppointmentStatus::CANCELLED,
+        AppointmentStatus::NO_SHOW,
+        AppointmentStatus::COMPLETED,
+    ];
+
+    /**
+     * Staff "undo" for a mistaken cancel / no-show / complete. Separate
+     * from changeStatus() so the lifecycle transition map stays strict.
+     *
+     * Reverts to the status the appointment had just before its last change
+     * (the old_status of the latest log row that moved it into its current
+     * status), provided that status could legitimately have led to the
+     * current one; otherwise falls back to confirmed (cancelled/no-show) or
+     * in_consultation (completed). Only allowed up to and including the
+     * appointment day (clinic-local). Undoing a cancel or no-show re-takes
+     * the slot: it must not overlap another live appointment or a live
+     * waitlist hold for another patient.
+     */
+    public function undoStatus(Appointment $appointment, ?int $actorUserId = null): Appointment
+    {
+        // The caller authorised the undo for the status it read; if that
+        // changed before we got the lock, make the user look again.
+        $expected = (string) $appointment->status;
+
+        return DB::transaction(function () use ($appointment, $actorUserId, $expected) {
+            $appointment = $this->lockAppointment($appointment);
+
+            if ((string) $appointment->status !== $expected) {
+                throw ValidationException::withMessages([
+                    'status' => 'This appointment changed in the meantime. Refresh and try again.',
+                ]);
+            }
+
+            $current = AppointmentStatus::tryFrom((string) $appointment->status);
+            if (! in_array($current, self::UNDOABLE_STATUSES, true)) {
+                $label = $current?->label() ?? (string) $appointment->status;
+                throw ValidationException::withMessages([
+                    'status' => "Only cancelled, no-show or completed appointments can be undone (this one is {$label}).",
+                ]);
+            }
+
+            $date = $this->toYmd($appointment->appointment_date);
+            $today = Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'))->toDateString();
+            if ($date === null || $today > $date) {
+                throw ValidationException::withMessages([
+                    'status' => 'Can only undo on or before the appointment day.',
+                ]);
+            }
+
+            $target = $this->undoTarget($appointment, $current);
+
+            if ($current === AppointmentStatus::CANCELLED || $current === AppointmentStatus::NO_SHOW) {
+                $this->assertSlotFreeForUndo($appointment, $date);
+            }
+
+            $appointment->status = $target->value;
+            if ($current === AppointmentStatus::CANCELLED) {
+                $appointment->cancelled_at = null;
+                $appointment->cancellation_reason = null;
+            }
+            if ($current === AppointmentStatus::COMPLETED) {
+                $appointment->completed_at = null;
+            }
+            $appointment->save();
+
+            AppointmentStatusLog::create([
+                'clinic_id' => $appointment->clinic_id,
+                'appointment_id' => $appointment->id,
+                'old_status' => $current->value,
+                'new_status' => $target->value,
+                'changed_by_user_id' => $actorUserId,
+                'source' => 'staff',
+                'reason' => self::UNDO_REASON_PREFIX." reverted {$current->label()} to {$target->label()}",
+                'created_at' => now(),
+            ]);
+
+            if ($current === AppointmentStatus::CANCELLED) {
+                // The slot is ours again: lapsed offers on it are expired,
+                // and the patient's own waitlist entry (if any) is booked.
+                $this->slotTakenSafely($appointment);
+
+                // A portal booking still pending never got a confirmation
+                // (see create()); don't send one for it now either.
+                if (! ($target === AppointmentStatus::PENDING && $appointment->booking_channel === 'portal')) {
+                    $this->notifyAfterCommit(fn () => app(PatientNotifier::class)->bookingConfirmed($appointment));
+                }
+            }
+
+            return $appointment->refresh();
+        });
+    }
+
+    private function undoTarget(Appointment $appointment, AppointmentStatus $current): AppointmentStatus
+    {
+        $previous = AppointmentStatusLog::query()
+            ->where('clinic_id', $appointment->clinic_id)
+            ->where('appointment_id', $appointment->id)
+            ->where('new_status', $current->value)
+            ->orderByDesc('id')
+            ->value('old_status');
+
+        $previous = AppointmentStatus::tryFrom((string) $previous);
+
+        // Only a status that can actually lead to the current one counts;
+        // for completed that is checked_in or in_consultation, never later.
+        if ($previous !== null && $previous->canTransitionTo($current)) {
+            return $previous;
+        }
+
+        return $current === AppointmentStatus::COMPLETED
+            ? AppointmentStatus::IN_CONSULTATION
+            : AppointmentStatus::CONFIRMED;
+    }
+
+    /** Must run inside undoStatus()'s transaction, after lockAppointment(). */
+    private function assertSlotFreeForUndo(Appointment $appointment, string $date): void
+    {
+        $tz = config('app.clinic_timezone', 'Asia/Kolkata');
+        $start = (string) $appointment->start_time;
+        $end = $appointment->end_time ? (string) $appointment->end_time : null;
+
+        $conflict = $this->slotConflictQuery((int) $appointment->clinic_id, (int) $appointment->doctor_id, $date, $start, $end, $appointment->id)
+            ->with('patient:id,full_name')
+            ->orderBy('start_time')
+            ->first();
+
+        if ($conflict !== null) {
+            $who = $conflict->patient?->full_name ? "{$conflict->patient->full_name}'s" : 'another';
+            $at = Carbon::parse($this->toHis((string) $conflict->start_time))->format('H:i');
+            throw ValidationException::withMessages([
+                'status' => "Cannot undo: the slot is now taken by {$who} appointment at {$at} (#{$conflict->id}).",
+            ]);
+        }
+
+        $hold = app(WaitlistService::class)->heldFor((int) $appointment->clinic_id, (int) $appointment->doctor_id, $date, $start);
+        if ($hold !== null && (int) $hold->patient_id !== (int) $appointment->patient_id) {
+            $until = $hold->hold_expires_at->copy()->setTimezone($tz)->format('H:i');
+            throw ValidationException::withMessages([
+                'status' => "This slot is currently offered to a waitlist patient until {$until}.",
+            ]);
+        }
     }
 
     public function reschedule(Appointment $appointment, array $newData, ?int $actorUserId = null, ?string $reason = null, string $source = 'staff', ?string $newStatus = null): Appointment

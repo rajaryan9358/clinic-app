@@ -190,6 +190,25 @@ class AppointmentController extends BaseClinicCrudController
         return $this->success('Appointment status changed successfully', $updated);
     }
 
+    /**
+     * POST /appointments/{id}/undo-status: reverts a mistaken cancel,
+     * no-show or complete (AppointmentService::undoStatus). Needs the same
+     * permission the original transition needed in lifecycle(); doctor /
+     * assistant scoping comes from findModel().
+     */
+    public function undoStatus(Request $request, int $id)
+    {
+        $appointment = $this->findModel($id);
+        $needed = $appointment->status === AppointmentStatus::CANCELLED->value ? 'appointments.cancel' : 'appointments.check_in';
+        if (! $request->user()->can($needed)) {
+            return response()->json(['success' => false, 'message' => "You don't have permission to ".PermissionCatalogue::label($needed).'.'], 403);
+        }
+
+        $updated = $this->appointmentService->undoStatus($appointment, $request->user()?->id);
+
+        return $this->success('Appointment status change undone', $updated);
+    }
+
     public function reschedule(Request $request, int $id)
     {
         $request->validate([
