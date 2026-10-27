@@ -8,6 +8,7 @@ use App\Models\WhatsappFlowSession;
 class WhatsappFlowSessionController extends BaseCrudController
 {
     protected string $modelClass = WhatsappFlowSession::class;
+    protected bool $readOnly = true;
     protected array $searchable = ['flow_type', 'current_step', 'status'];
     protected array $filterable = ['clinic_id', 'conversation_id', 'status'];
 }

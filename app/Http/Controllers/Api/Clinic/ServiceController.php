@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Clinic;
 
 use App\Models\Service;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 
 class ServiceController extends BaseClinicCrudController
@@ -12,13 +13,18 @@ class ServiceController extends BaseClinicCrudController
     protected array $filterable = ['status'];
     protected array $statuses = ['active', 'inactive'];
 
-    public function store(Request $request)
+    protected function rules(Request $request, ?Model $model = null): array
     {
-        $data = $request->all();
-        $data['clinic_id'] = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
+        $required = $model ? ['sometimes', 'required'] : ['required'];
 
-        $service = Service::create($data);
-
-        return $this->success('Record created successfully', $service, 201);
+        return [
+            'name' => [...$required, 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'duration_minutes' => ['nullable', 'integer', 'min:0', 'max:1440'],
+            'fee' => ['nullable', 'numeric', 'min:0'],
+            'image_url' => ['nullable', 'string', 'max:2048'],
+            'status' => ['sometimes', 'in:active,inactive'],
+        ];
     }
 }

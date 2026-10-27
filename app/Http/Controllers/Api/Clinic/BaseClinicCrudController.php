@@ -42,6 +42,8 @@ abstract class BaseClinicCrudController extends BaseCrudController
 
     public function update(Request $request, int $id)
     {
+        $this->abortIfReadOnly();
+
         $model = $this->findModel($id);
         $model->update(Arr::except($this->validatedPayload($request, $model), ['clinic_id']));
 
@@ -50,6 +52,8 @@ abstract class BaseClinicCrudController extends BaseCrudController
 
     public function restore(int $id)
     {
+        $this->abortIfReadOnly();
+
         if (! $this->supportsSoftDeletes()) {
             return $this->error('Restore is not supported for this module', null, 422);
         }
@@ -67,6 +71,8 @@ abstract class BaseClinicCrudController extends BaseCrudController
 
     public function store(Request $request)
     {
+        $this->abortIfReadOnly();
+
         $data = $this->validatedPayload($request);
         $data['clinic_id'] = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
 
