@@ -50,6 +50,11 @@ const TEMPLATE_INFO = {
         category: 'Utility',
         params: 'body: 1 patient, 2 clinic, 3 doctor, 4 date, 5 time, 6 hold minutes · URL button {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}',
     },
+    waitlist_slot_taken: {
+        label: 'Waitlist Held Slot Booked',
+        category: 'Utility',
+        params: 'Body: 1 patient, 2 clinic, 3 doctor, 4 date, 5 time. No button. Sent when the clinic books a slot held for a waitlisted patient; they stay on the waitlist.',
+    },
 };
 
 function Card({ children, className = '' }) {

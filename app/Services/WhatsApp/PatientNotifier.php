@@ -207,6 +207,42 @@ class PatientNotifier
         );
     }
 
+    /**
+     * Tells a waitlisted patient that the slot held for them was booked by
+     * the clinic (staff booked or rescheduled over a live hold) and that
+     * they're back on the waitlist. Like waitlistOffer(), the WhatsApp goes
+     * to the account holder while the row is attributed to the entry's
+     * patient. No button: there's nothing to act on.
+     */
+    public function waitlistSlotTaken(WaitlistEntry $entry): WhatsappMessage
+    {
+        $entry->loadMissing(['clinic:id,name', 'doctor:id,full_name', 'patient:id,full_name,phone,managed_by_patient_id']);
+        $holder = $entry->patient?->managed_by_patient_id !== null
+            ? Patient::find($entry->patient->managed_by_patient_id)
+            : $entry->patient;
+
+        $clinicName = (string) ($entry->clinic?->name ?? '');
+        $doctorName = (string) ($entry->doctor?->full_name ?? '');
+        [$date, $time] = $this->formatDateTime($entry->appointment_date, $entry->start_time);
+
+        return $this->send(
+            type: 'waitlist_slot_taken',
+            clinicId: $entry->clinic_id,
+            patientId: $entry->patient_id,
+            appointmentId: null,
+            phone: $holder?->phone,
+            bodyParams: [
+                (string) ($entry->patient?->full_name ?? ''),
+                $clinicName,
+                $doctorName,
+                $date,
+                $time,
+            ],
+            preview: "Sorry, the slot held for you on {$date} at {$time} with {$doctorName} has been booked by the clinic. "
+                .'You remain on the waitlist and we will let you know if another slot opens.',
+        );
+    }
+
     /** @return array{0: string, 1: string} [date, time] */
     private function formatDateTime(Carbon $date, string $startTime): array
     {
