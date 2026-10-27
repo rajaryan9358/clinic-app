@@ -247,7 +247,6 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
 
     // Compute status actions outside JSX to avoid IIFE issues
     const apptStatus = String(appt?.status || '').toLowerCase();
-    const isTerminal = ['completed', 'cancelled', 'no_show', 'rescheduled'].includes(apptStatus);
     const statusActions = (() => {
         if (!appt) return [];
         const acts = [];
@@ -259,10 +258,11 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
             acts.push({ label: 'Start Consultation', status: 'in_consultation', style: 'violet' });
         if (['checked_in', 'in_consultation'].includes(apptStatus))
             acts.push({ label: 'Complete', status: 'completed', style: 'emerald' });
-        if (['confirmed', 'checked_in', 'in_consultation'].includes(apptStatus))
+        // Mirrors AppointmentStatus::allowedTransitions(); in_consultation can only complete.
+        if (['pending', 'confirmed', 'checked_in'].includes(apptStatus)) {
             acts.push({ label: 'No Show', status: 'no_show', style: 'orange' });
-        if (!isTerminal)
             acts.push({ label: 'Cancel', status: 'cancelled', style: 'rose' });
+        }
         return acts.filter((a) => (a.status === 'cancelled' ? canCancel : canCheckIn));
     })();
     const actionStyleMap = {

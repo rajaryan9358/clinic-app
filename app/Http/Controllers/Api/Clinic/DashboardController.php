@@ -27,7 +27,7 @@ class DashboardController extends Controller
             'total_doctors' => Doctor::where('clinic_id', $clinicId)->count(),
             'total_patients' => Patient::where('clinic_id', $clinicId)->count(),
             'total_appointments' => Appointment::where('clinic_id', $clinicId)->count(),
-            'today_appointments' => Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', now()->toDateString())->count(),
+            'today_appointments' => Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', $this->clinicNow()->toDateString())->count(),
             'pending_followups' => FollowupTask::where('clinic_id', $clinicId)->where('status', 'pending')->count(),
             'recent_activity' => AuditLog::where('clinic_id', $clinicId)->latest('created_at')->limit(10)->get(),
         ]);
@@ -37,9 +37,10 @@ class DashboardController extends Controller
     {
         $clinicId = (int) $request->attributes->get('clinic_id');
 
-        $today = Carbon::now()->toDateString();
-        $from30 = Carbon::now()->subDays(29)->toDateString();
-        $from7 = Carbon::now()->subDays(6)->toDateString();
+        $now = $this->clinicNow();
+        $today = $now->toDateString();
+        $from30 = $now->copy()->subDays(29)->toDateString();
+        $from7 = $now->copy()->subDays(6)->toDateString();
         $to = $today;
 
         $todayStatus = Appointment::query()
@@ -54,7 +55,8 @@ class DashboardController extends Controller
 
         $appointmentsTrend30 = Appointment::query()
             ->where('clinic_id', $clinicId)
-            ->whereBetween('appointment_date', [$from30, $to])
+            ->whereDate('appointment_date', '>=', $from30)
+            ->whereDate('appointment_date', '<=', $to)
             ->select(DB::raw('date(appointment_date) as date'), DB::raw('count(*) as count'))
             ->groupBy(DB::raw('date(appointment_date)'))
             ->orderBy('date')
@@ -72,7 +74,8 @@ class DashboardController extends Controller
 
         $visitType30 = Appointment::query()
             ->where('clinic_id', $clinicId)
-            ->whereBetween('appointment_date', [$from30, $to])
+            ->whereDate('appointment_date', '>=', $from30)
+            ->whereDate('appointment_date', '<=', $to)
             ->select('visit_type', DB::raw('count(*) as count'))
             ->groupBy('visit_type')
             ->get();
@@ -82,7 +85,8 @@ class DashboardController extends Controller
 
         $bookingChannels30 = Appointment::query()
             ->where('clinic_id', $clinicId)
-            ->whereBetween('appointment_date', [$from30, $to])
+            ->whereDate('appointment_date', '>=', $from30)
+            ->whereDate('appointment_date', '<=', $to)
             ->select('booking_channel', DB::raw('count(*) as count'))
             ->groupBy('booking_channel')
             ->orderByDesc('count')
@@ -92,7 +96,8 @@ class DashboardController extends Controller
 
         $doctorPerf30 = Appointment::query()
             ->where('appointments.clinic_id', $clinicId)
-            ->whereBetween('appointments.appointment_date', [$from30, $to])
+            ->whereDate('appointments.appointment_date', '>=', $from30)
+            ->whereDate('appointments.appointment_date', '<=', $to)
             ->leftJoin('doctors', function ($join) {
                 $join->on('appointments.doctor_id', '=', 'doctors.id');
             })
@@ -132,32 +137,36 @@ class DashboardController extends Controller
 
         $followupsDone7 = FollowupTask::query()
             ->where('clinic_id', $clinicId)
-            ->whereBetween('due_date', [$from7, $to])
+            ->whereDate('due_date', '>=', $from7)
+            ->whereDate('due_date', '<=', $to)
             ->where('status', 'done')
             ->count();
 
         $followupsTotal7 = FollowupTask::query()
             ->where('clinic_id', $clinicId)
-            ->whereBetween('due_date', [$from7, $to])
+            ->whereDate('due_date', '>=', $from7)
+            ->whereDate('due_date', '<=', $to)
             ->count();
 
         $followupCompletionRate7 = $followupsTotal7 > 0 ? round(($followupsDone7 / $followupsTotal7) * 100, 1) : null;
 
-        $appointments30Total = Appointment::where('clinic_id', $clinicId)->whereBetween('appointment_date', [$from30, $to])->count();
-        $appointments30NoShow = Appointment::where('clinic_id', $clinicId)->whereBetween('appointment_date', [$from30, $to])->where('status', 'no_show')->count();
-        $appointments30Cancelled = Appointment::where('clinic_id', $clinicId)->whereBetween('appointment_date', [$from30, $to])->where('status', 'cancelled')->count();
+        $appointments30 = Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', '>=', $from30)->whereDate('appointment_date', '<=', $to);
+        $appointments30Total = (clone $appointments30)->count();
+        $appointments30NoShow = (clone $appointments30)->where('status', 'no_show')->count();
+        $appointments30Cancelled = (clone $appointments30)->where('status', 'cancelled')->count();
 
         $noShowRate30 = $appointments30Total > 0 ? round(($appointments30NoShow / $appointments30Total) * 100, 1) : null;
         $cancelRate30 = $appointments30Total > 0 ? round(($appointments30Cancelled / $appointments30Total) * 100, 1) : null;
 
         $newPatients30 = Patient::query()
             ->where('clinic_id', $clinicId)
-            ->whereBetween(DB::raw('date(created_at)'), [$from30, $to])
+            ->whereBetween('created_at', $this->clinicDayBounds($from30, $to))
             ->count();
 
         $upcoming7Appointments = Appointment::query()
             ->where('clinic_id', $clinicId)
-            ->whereBetween('appointment_date', [$today, Carbon::now()->addDays(6)->toDateString()])
+            ->whereDate('appointment_date', '>=', $today)
+            ->whereDate('appointment_date', '<=', $now->copy()->addDays(6)->toDateString())
             ->count();
 
         $alerts = [];
@@ -227,8 +236,9 @@ class DashboardController extends Controller
     public function receptionist(Request $request)
     {
         $clinicId  = (int) $request->attributes->get('clinic_id');
-        $today     = Carbon::now()->toDateString();
-        $nowTime   = Carbon::now()->format('H:i:s');
+        $now       = $this->clinicNow();
+        $today     = $now->toDateString();
+        $nowTime   = $now->format('H:i:s');
 
         $base = Appointment::query()
             ->where('appointments.clinic_id', $clinicId)
@@ -245,7 +255,7 @@ class DashboardController extends Controller
 
         $newPatientsToday = Patient::query()
             ->where('clinic_id', $clinicId)
-            ->whereDate('created_at', $today)
+            ->whereBetween('created_at', $this->clinicDayBounds($today, $today))
             ->count();
 
         // Status breakdown for donut
@@ -307,8 +317,9 @@ class DashboardController extends Controller
     public function assistant(Request $request)
     {
         $clinicId  = (int) $request->attributes->get('clinic_id');
-        $today     = Carbon::now()->toDateString();
-        $nowTime   = Carbon::now()->format('H:i:s');
+        $now       = $this->clinicNow();
+        $today     = $now->toDateString();
+        $nowTime   = $now->format('H:i:s');
 
         // Scope to doctors this assistant is assigned to
         $assignedDoctorIds = $request->user()
@@ -334,7 +345,7 @@ class DashboardController extends Controller
 
         $newPatientsToday = Patient::query()
             ->where('clinic_id', $clinicId)
-            ->whereDate('created_at', $today)
+            ->whereBetween('created_at', $this->clinicDayBounds($today, $today))
             ->count();
 
         $statusBreakdown = (clone $base)
@@ -385,5 +396,25 @@ class DashboardController extends Controller
             'status_breakdown' => $statusBreakdown,
             'upcoming'         => $upcoming,
         ]);
+    }
+
+    private function clinicNow(): Carbon
+    {
+        return Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'));
+    }
+
+    /**
+     * App-timezone timestamp bounds for whole clinic-local days, for
+     * filtering created_at-style columns by clinic date.
+     */
+    private function clinicDayBounds(string $fromDate, string $toDate): array
+    {
+        $tz = config('app.clinic_timezone', 'Asia/Kolkata');
+        $appTz = config('app.timezone');
+
+        return [
+            Carbon::parse($fromDate, $tz)->startOfDay()->setTimezone($appTz),
+            Carbon::parse($toDate, $tz)->endOfDay()->setTimezone($appTz),
+        ];
     }
 }

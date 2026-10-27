@@ -205,6 +205,11 @@ function ModuleListPageInner({ forcedModuleKey } = {}) {
             }
 
             const fromForm = formFields.find((f) => f.key === key);
+            const filterOptions = module?.filterOptions?.[key];
+
+            if (filterOptions) {
+                return { key, label: fromForm?.label || prettyLabel(key), type: 'select', options: filterOptions };
+            }
 
             if (fromForm?.type === 'checkbox') {
                 return {

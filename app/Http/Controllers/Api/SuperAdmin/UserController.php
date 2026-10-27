@@ -17,6 +17,8 @@ class UserController extends BaseCrudController
 
     protected array $filterable = ['clinic_id', 'role', 'status'];
 
+    protected array $statuses = ['active', 'inactive', 'blocked'];
+
     public function __construct(private readonly UserManagementService $userManagementService) {}
 
     public function store(Request $request)

@@ -97,7 +97,9 @@ class AppointmentService
             if (! $ymd) {
                 return null;
             }
-            return Carbon::parse("{$ymd} {$time}");
+            // Slot times are clinic-local; compare as an app-timezone instant.
+            return Carbon::parse("{$ymd} {$time}", config('app.clinic_timezone', 'Asia/Kolkata'))
+                ->setTimezone(config('app.timezone'));
         } catch (\Throwable) {
             return null;
         }
@@ -135,7 +137,8 @@ class AppointmentService
         $exceptions = DoctorScheduleException::query()
             ->forClinic($clinicId)
             ->where('doctor_id', $doctorId)
-            ->whereBetween('exception_date', [$from->toDateString(), $to->toDateString()])
+            ->whereDate('exception_date', '>=', $from->toDateString())
+            ->whereDate('exception_date', '<=', $to->toDateString())
             ->get()
             ->groupBy(fn ($e) => Carbon::parse($e->exception_date)->toDateString());
 
@@ -498,7 +501,23 @@ class AppointmentService
     public function changeStatus(Appointment $appointment, AppointmentStatus $status, ?int $actorUserId = null, ?string $reason = null, bool $force = false, string $source = 'staff'): Appointment
     {
         return DB::transaction(function () use ($appointment, $status, $actorUserId, $reason, $force, $source) {
+            $appointment = $this->lockAppointment($appointment);
             $oldStatus = $appointment->status;
+
+            // Repeating the current status is a no-op (e.g. the UI confirming
+            // an already-confirmed appointment after a reschedule).
+            if ($oldStatus === $status->value) {
+                return $appointment->refresh();
+            }
+
+            // $force only bypasses the timing windows below, never the
+            // transition rules.
+            $current = AppointmentStatus::tryFrom((string) $oldStatus);
+            if ($current && ! $current->canTransitionTo($status)) {
+                throw ValidationException::withMessages([
+                    'status' => "Cannot change an appointment from {$current->label()} to {$status->label()}.",
+                ]);
+            }
 
             if (! $force) {
                 $startAt = $this->appointmentStartDateTime($appointment);
@@ -580,10 +599,16 @@ class AppointmentService
     public function reschedule(Appointment $appointment, array $newData, ?int $actorUserId = null, ?string $reason = null, string $source = 'staff', ?string $newStatus = null): Appointment
     {
         return DB::transaction(function () use ($appointment, $newData, $actorUserId, $reason, $source, $newStatus) {
-            $currentStatus = (string) ($appointment->status ?? '');
-            if (in_array($currentStatus, [AppointmentStatus::CANCELLED->value, AppointmentStatus::COMPLETED->value], true)) {
+            // Carry over unsaved edits (updateDetails() fills non-slot fields first).
+            $pending = $appointment->getDirty();
+            $appointment = $this->lockAppointment($appointment, [(int) ($newData['doctor_id'] ?? 0)]);
+            $appointment->forceFill($pending);
+
+            $current = AppointmentStatus::tryFrom((string) ($appointment->status ?? ''));
+            if (! in_array($current, [AppointmentStatus::PENDING, AppointmentStatus::CONFIRMED, AppointmentStatus::CHECKED_IN], true)) {
+                $label = $current?->label() ?? (string) $appointment->status;
                 throw ValidationException::withMessages([
-                    'status' => 'Cannot reschedule a cancelled/completed appointment.',
+                    'status' => "Cannot reschedule an appointment that is {$label}. Only pending, confirmed or checked-in appointments can be moved.",
                 ]);
             }
 
@@ -591,15 +616,17 @@ class AppointmentService
             $oldStart = (string) $appointment->start_time;
             $oldEnd = (string) ($appointment->end_time ?? '');
 
+            $oldDoctorId = (int) $appointment->doctor_id;
+            $targetDoctorId = (int) ($newData['doctor_id'] ?? $oldDoctorId);
             $targetDate = (string) ($newData['appointment_date'] ?? ($appointment->appointment_date?->toDateString() ?: $appointment->appointment_date));
             $targetStart = (string) ($newData['start_time'] ?? $appointment->start_time);
-            $targetEnd = array_key_exists('end_time', $newData)
-                ? ($newData['end_time'] !== null ? (string) $newData['end_time'] : null)
-                : ($appointment->end_time ? (string) $appointment->end_time : null);
+            $targetEnd = ($newData['end_time'] ?? null) !== null
+                ? (string) $newData['end_time']
+                : $this->endForStart($appointment, $targetStart, $targetDoctorId);
 
             $this->assertSlotFree(
                 (int) $appointment->clinic_id,
-                (int) $appointment->doctor_id,
+                $targetDoctorId,
                 $targetDate,
                 $targetStart,
                 $targetEnd,
@@ -609,6 +636,7 @@ class AppointmentService
 
             $oldStatusForLog = $appointment->status;
 
+            $appointment->doctor_id = $targetDoctorId;
             $appointment->appointment_date = $targetDate;
             $appointment->start_time = $targetStart;
             $appointment->end_time = $targetEnd;
@@ -664,10 +692,81 @@ class AppointmentService
             // The old slot is free now (slotFreed itself no-ops if the move
             // stayed on the same start).
             if ($oldDate && $oldStart) {
-                $this->slotFreedAfterCommit((int) $appointment->clinic_id, (int) $appointment->doctor_id, $oldDate, $oldStart);
+                $this->slotFreedAfterCommit((int) $appointment->clinic_id, $oldDoctorId, $oldDate, $oldStart);
             }
 
             return $appointment->refresh();
+        });
+    }
+
+    /**
+     * Re-reads the appointment under a row lock so status checks run on the
+     * committed state. Doctor rows are locked first (ascending id), keeping
+     * the doctor-then-other-rows order used by create()/assertSlotFree().
+     */
+    private function lockAppointment(Appointment $appointment, array $extraDoctorIds = []): Appointment
+    {
+        $doctorIds = array_values(array_unique(array_filter([(int) $appointment->doctor_id, ...$extraDoctorIds])));
+        if ($doctorIds !== []) {
+            Doctor::query()->whereKey($doctorIds)->orderBy('id')->lockForUpdate()->get();
+        }
+
+        return $appointment->newQueryWithoutScopes()
+            ->whereKey($appointment->getKey())
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
+    /**
+     * End time for a move to $start that keeps the appointment's current
+     * length, or the doctor's slot length when it has no stored end.
+     */
+    private function endForStart(Appointment $appointment, string $start, int $doctorId): string
+    {
+        $duration = 0;
+        if ($appointment->start_time && $appointment->end_time) {
+            $duration = $this->timeToMinutes((string) $appointment->end_time) - $this->timeToMinutes((string) $appointment->start_time);
+        }
+        if ($duration <= 0) {
+            $duration = (int) (Doctor::query()->whereKey($doctorId)->value('slot_duration_minutes') ?: 15);
+        }
+
+        return Carbon::parse($this->toHis($start))->addMinutes($duration)->format('H:i:s');
+    }
+
+    /**
+     * Staff edit of an appointment's details. A change of doctor, date or
+     * time goes through reschedule() (conflict check, logs, notification,
+     * waitlist); everything else is a plain save. Status may only be
+     * echoed back unchanged — changes go through changeStatus().
+     */
+    public function updateDetails(Appointment $appointment, array $data, ?int $actorUserId = null): Appointment
+    {
+        if (($data['status'] ?? null) !== null && $data['status'] !== $appointment->status) {
+            throw ValidationException::withMessages([
+                'status' => 'Use the appointment status actions to change the status.',
+            ]);
+        }
+        unset($data['status']);
+
+        return DB::transaction(function () use ($appointment, $data, $actorUserId) {
+            $slotKeys = ['doctor_id', 'appointment_date', 'start_time', 'end_time'];
+
+            $slotChanged = (array_key_exists('doctor_id', $data) && (int) $data['doctor_id'] !== (int) $appointment->doctor_id)
+                || (array_key_exists('appointment_date', $data) && $this->toYmd($data['appointment_date']) !== $this->toYmd($appointment->appointment_date))
+                || (array_key_exists('start_time', $data) && $this->toHis((string) $data['start_time']) !== $this->toHis((string) $appointment->start_time))
+                || (array_key_exists('end_time', $data) && ($data['end_time'] !== null ? $this->toHis((string) $data['end_time']) : null)
+                    !== ($appointment->end_time ? $this->toHis((string) $appointment->end_time) : null));
+
+            $appointment->fill(array_diff_key($data, array_flip($slotKeys)));
+
+            if (! $slotChanged) {
+                $appointment->save();
+
+                return $appointment->refresh();
+            }
+
+            return $this->reschedule($appointment, array_intersect_key($data, array_flip($slotKeys)), $actorUserId);
         });
     }
 }

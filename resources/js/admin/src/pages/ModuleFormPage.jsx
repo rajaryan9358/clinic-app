@@ -122,6 +122,10 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                     })
                     .filter((f) => !f?.hidden);
             }
+            // Staff can't pick 'portal', but an existing portal booking keeps showing it.
+            if (moduleKey === 'appointments' && values?.booking_channel === 'portal') {
+                return fields.map((f) => (f.key === 'booking_channel' ? { ...f, options: [...f.options, 'portal'] } : f));
+            }
             return fields;
         }
         const alwaysHidden = new Set(['patient_id', 'appointment_date', 'start_time', 'end_time']);
@@ -144,7 +148,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         // Step 4: rest of selections
         const step4Hidden = new Set([...alwaysHidden, 'clinic_id', 'doctor_id', 'service_id']);
         return fields.filter((f) => !step4Hidden.has(f.key));
-    }, [fields, isAppointmentCreate, appointmentStep, user?.role, isUserModule, isEdit, values?.role, roleOptions]);
+    }, [fields, isAppointmentCreate, appointmentStep, user?.role, isUserModule, isEdit, values?.role, roleOptions, moduleKey, values?.booking_channel]);
 
     const selectedPatient = useMemo(() => {
         const pid = values?.patient_id;
@@ -328,7 +332,6 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         setValues((prev) => ({
             consultation_mode: prev.consultation_mode || 'in_person',
             booking_channel: prev.booking_channel || 'walk_in',
-            status: prev.status || 'confirmed',
         }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAppointmentCreate]);

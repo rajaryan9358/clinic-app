@@ -9,6 +9,7 @@ use App\Models\Doctor;
 use App\Models\Patient;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReportController extends Controller
@@ -46,7 +47,7 @@ class ReportController extends Controller
         }
 
         if ($request->boolean('upcoming_only')) {
-            $now = now();
+            $now = Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'));
             $today = $now->toDateString();
             $time = $now->format('H:i:s');
             $query->where(function (Builder $b) use ($today, $time) {

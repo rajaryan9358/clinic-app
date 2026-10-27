@@ -25,6 +25,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AppointmentController extends BaseCrudController
 {
@@ -86,9 +87,7 @@ class AppointmentController extends BaseCrudController
             }
         }
 
-        $sortBy = $request->input('sort_by', $this->defaultSort);
-        $sortDir = $request->input('sort_dir', 'desc');
-        $query->orderBy($sortBy, $sortDir);
+        $this->applySort($query, $request);
 
         $result = $query->paginate((int) $request->input('per_page', 15));
 
@@ -97,15 +96,44 @@ class AppointmentController extends BaseCrudController
 
     public function store(Request $request)
     {
-        $data = validator($request->all(), (new StoreAppointmentRequest())->rules())->validate();
+        $data = validator($request->all(), (new StoreAppointmentRequest())->rules((int) $request->input('clinic_id')))->validate();
         $appointment = $this->appointmentService->create($data);
 
         return $this->success('Appointment created successfully', $appointment, 201);
     }
 
+    public function update(Request $request, int $id)
+    {
+        $appointment = $this->findModel($id);
+        $data = $request->validate(StoreAppointmentRequest::updateRules((int) $appointment->clinic_id));
+
+        $updated = $this->appointmentService->updateDetails($appointment, $data, $request->user()?->id);
+
+        return $this->success('Record updated successfully', $updated);
+    }
+
+    /** POST /appointments/{id}/status runs the same lifecycle path. */
+    public function changeStatus(StatusChangeRequest $request, int $id)
+    {
+        return $this->lifecycle($request, $id);
+    }
+
+    public function block(int $id)
+    {
+        $this->findModel($id);
+
+        return $this->error('Appointments cannot be blocked; use the status actions instead.', null, 422);
+    }
+
+    public function unblock(int $id)
+    {
+        return $this->block($id);
+    }
+
     public function lifecycle(StatusChangeRequest $request, int $id)
     {
         $appointment = $this->findModel($id);
+        $request->validate(['status' => [Rule::enum(AppointmentStatus::class)]]);
         $status = AppointmentStatus::from($request->validated('status'));
         $force = $request->validated('force') ?? false;
         $forceAllowed = (bool) $force && (string) ($request->user()?->role ?? '') === 'super_admin';
@@ -125,7 +153,7 @@ class AppointmentController extends BaseCrudController
         $request->validate([
             'appointment_date' => ['required', 'date'],
             'start_time' => ['required'],
-            'end_time' => ['nullable'],
+            'end_time' => ['nullable', 'after:start_time'],
             'reason' => ['nullable', 'string'],
         ]);
 

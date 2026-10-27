@@ -37,6 +37,15 @@ class StoreDoctorRequest extends FormRequest
             'photo_url' => ['nullable', 'string', 'max:2048'],
             'status' => ['nullable', 'in:active,inactive'],
             'schedules' => ['nullable', 'array'],
+            'schedules.*' => ['array'],
+            'schedules.*.day_of_week' => ['required', 'integer', 'min:0', 'max:6'],
+            'schedules.*.start_time' => ['required', 'date_format:H:i,H:i:s'],
+            'schedules.*.end_time' => ['required', 'date_format:H:i,H:i:s', 'after:schedules.*.start_time'],
+            'schedules.*.consultation_mode' => ['required', 'in:in_person,video,both'],
+            'schedules.*.max_patients' => ['nullable', 'integer', 'min:1'],
+            'schedules.*.slot_duration_minutes' => ['nullable', 'integer', 'min:5', 'max:240'],
+            'schedules.*.buffer_time_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],
+            'schedules.*.is_active' => ['sometimes', 'boolean'],
         ];
     }
 }
