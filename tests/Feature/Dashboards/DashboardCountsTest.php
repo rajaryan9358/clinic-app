@@ -434,6 +434,30 @@ class DashboardCountsTest extends TestCase
         $this->assertSame(1, $res->json('data.kpis.new_patients_today'));
     }
 
+    #[Test]
+    public function admin_dashboard_is_scoped_for_a_doctor_limited_role_but_not_for_clinic_admin(): void
+    {
+        $drB = $this->makeDoctor($this->clinic, 'Dr B');
+        $this->makeAppointment($this->clinic, $this->doctor, $this->patient, self::TODAY);
+        $this->makeAppointment($this->clinic, $drB, $this->patient, self::TODAY);
+        $this->makePatient($this->clinic, 'Mine', 'New', ['preferred_doctor_id' => $drB->id]);
+
+        $user = $this->staffWith($this->clinic, ['dashboard.admin']);
+        $user->roleModel()->update(['limit_to_assigned_doctors' => true]);
+        $user->assignedDoctors()->attach($drB->id, ['clinic_id' => $this->clinic->id]);
+        Sanctum::actingAs($user->fresh());
+
+        $res = $this->getJson('/api/clinic/dashboard/clinic-admin')->assertOk();
+        $this->assertSame(1, $res->json('data.kpis.today_appointments'));
+        $this->assertSame(1, $res->json('data.kpis.new_patients_30d'));
+        $this->assertSame([$drB->id], array_column($res->json('data.insights.doctor_performance_30d'), 'doctor_id'));
+
+        Sanctum::actingAs($this->makeUser($this->clinic, 'clinic_admin'));
+        $res = $this->getJson('/api/clinic/dashboard/clinic-admin')->assertOk();
+        $this->assertSame(2, $res->json('data.kpis.today_appointments'));
+        $this->assertCount(2, $res->json('data.insights.doctor_performance_30d'));
+    }
+
     // ---------------------------------------------------------------
     // Timezone: the clinic runs on Asia/Kolkata (UTC+05:30) while the
     // app timezone is UTC. Appointment dates/times are clinic-local.
