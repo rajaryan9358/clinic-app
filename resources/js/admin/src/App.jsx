@@ -12,7 +12,8 @@ import ModuleViewPage from './pages/ModuleViewPage';
 import CreateStaffWizardPage from './pages/workflows/CreateStaffWizardPage';
 import OnboardClinicWizardPage from './pages/workflows/OnboardClinicWizardPage';
 import SetupDoctorWizardPage from './pages/workflows/SetupDoctorWizardPage';
-import AppointmentsFlowPage from './pages/workflows/AppointmentsFlowPage';
+import SchedulePage from './pages/workflows/SchedulePage';
+import SettingsHubPage from './pages/workflows/SettingsHubPage';
 import WaitlistPage from './pages/workflows/WaitlistPage';
 import PrescriptionPage from './pages/workflows/PrescriptionPage';
 import PatientProfilePage from './pages/workflows/PatientProfilePage';
@@ -125,13 +126,14 @@ function AuthenticatedShell() {
                 <Route path="/billing/subscription-transactions" element={<OnlySuperAdmin><SubscriptionTransactionsPage /></OnlySuperAdmin>} />
 
                 {/* ── Clinic Admin Workflows ── */}
+                <Route path="/settings" element={<BlockSuperAdmin><SettingsHubPage /></BlockSuperAdmin>} />
                 <Route path="/workflows/clinic-profile" element={<BlockSuperAdmin><RequirePerm perm="clinic_profile.view"><ClinicProfilePage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/subscription" element={<BlockSuperAdmin><RequirePerm perm="subscription.view"><ClinicSubscriptionPage /></RequirePerm></BlockSuperAdmin>} />
 
                 {/* ── Shared Workflows ── */}
                 <Route path="/workflows/create-staff" element={<RequirePerm perm="staff.create"><CreateStaffWizardPage /></RequirePerm>} />
                 <Route path="/workflows/setup-doctor" element={<RequirePerm perm="doctors.create"><SetupDoctorWizardPage /></RequirePerm>} />
-                <Route path="/workflows/appointments" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><AppointmentsFlowPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/workflows/appointments" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><SchedulePage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/new" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><ModuleFormPage forcedModuleKey="appointments" /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/waitlist" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><WaitlistPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/appointments/:id/prescription" element={<BlockSuperAdmin><RequirePerm perm="appointments.view"><PrescriptionPage /></RequirePerm></BlockSuperAdmin>} />
