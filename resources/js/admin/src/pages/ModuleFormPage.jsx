@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import FormRenderer from '../components/FormRenderer';
@@ -45,6 +45,8 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         if (qDoctor) pre.doctor_id = qDoctor;
         if (qDate)   pre.appointment_date = qDate;
         if (qTime)   pre.start_time = qTime;
+        const qPatient = searchParams.get('patient_id');
+        if (qPatient && /^\d+$/.test(qPatient)) pre.patient_id = qPatient;
         return pre;
     });
     const [error, setError] = useState('');
@@ -62,6 +64,24 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         dob: '',
         age: '',
     });
+
+    // A patient pre-filled from the URL (e.g. "Book" on a patient profile) is
+    // loaded once so the form shows them as the selected patient.
+    useEffect(() => {
+        const qPatient = searchParams.get('patient_id');
+        if (!isAppointmentCreate || !qPatient || !/^\d+$/.test(qPatient)) return;
+        let cancelled = false;
+        client.get(`${base}/patients/${qPatient}`)
+            .then(({ data }) => {
+                const p = data?.data;
+                if (cancelled || !p) return;
+                setPatientMobile(p.phone || '');
+                setPatientLookup({ loading: false, error: '', results: [p] });
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // If doctor is pre-filled, skip straight to the slot-picker step.
     const [appointmentStep, setAppointmentStep] = useState(() => {
@@ -329,7 +349,9 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
 
     useEffect(() => {
         if (!isAppointmentCreate) return;
+        // Keep anything pre-filled from the URL (patient, doctor, date, time).
         setValues((prev) => ({
+            ...prev,
             consultation_mode: prev.consultation_mode || 'in_person',
             booking_channel: prev.booking_channel || 'walk_in',
         }));
@@ -345,9 +367,14 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAppointmentCreate, createPatientInline]);
 
+    // Selecting a different doctor should reset the chosen slot — but not on
+    // first render, where a slot pre-filled from the URL belongs to the
+    // pre-filled doctor.
+    const slotDoctorRef = useRef(values?.doctor_id);
     useEffect(() => {
         if (!isAppointmentCreate) return;
-        // Selecting a different doctor should reset the chosen slot.
+        if (slotDoctorRef.current === values?.doctor_id) return;
+        slotDoctorRef.current = values?.doctor_id;
         setValues((prev) => ({ ...prev, appointment_date: '', start_time: '', end_time: '' }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAppointmentCreate, values?.doctor_id]);
@@ -369,7 +396,9 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
 
         let cancelled = false;
         setAvailability({ loading: true, error: '', days: [] });
-        setSlotDate(availabilityRange.from);
+        // Open on the already-chosen day (e.g. pre-filled from the schedule).
+        const chosen = String(values?.appointment_date || '');
+        setSlotDate(chosen && chosen >= availabilityRange.from ? chosen : availabilityRange.from);
 
         (async () => {
             try {
