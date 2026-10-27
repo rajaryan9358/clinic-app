@@ -505,16 +505,10 @@ export default function AppointmentsFlowPage() {
             actions.push({ label: 'Cancel', kind: 'cancel' });
         } else if (s === 'in_consultation') {
             actions.push({ label: 'Complete', kind: 'complete' });
-        } else if (s === 'completed') {
-            actions.push({ label: 'Reopen', next: 'checked_in' });
-        } else if (s === 'cancelled') {
-            actions.push({ label: 'Restore', next: 'confirmed' });
-        } else if (s === 'no_show') {
-            actions.push({ label: 'Restore', next: 'confirmed' });
         }
 
         // Mark Rescheduled = pick a new slot (reschedule) and set status back to confirmed.
-        if (['pending', 'confirmed', 'no_show'].includes(s)) {
+        if (['pending', 'confirmed'].includes(s)) {
             actions.push({ label: 'Mark Rescheduled', kind: 'reschedule' });
         }
 

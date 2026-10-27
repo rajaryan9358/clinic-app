@@ -145,16 +145,6 @@ function ModuleViewPageInner() {
             actions.push({ label: 'Cancel', next: 'cancelled' });
         } else if (s === 'in_consultation') {
             actions.push({ label: 'Complete', next: 'completed', primary: true });
-        } else if (s === 'completed') {
-            actions.push({ label: 'Reopen', next: 'checked_in', primary: true });
-        } else if (s === 'cancelled') {
-            actions.push({ label: 'Restore', next: 'confirmed', primary: true });
-        } else if (s === 'no_show') {
-            actions.push({ label: 'Restore', next: 'confirmed', primary: true });
-        }
-
-        if (['pending', 'confirmed', 'no_show'].includes(s)) {
-            actions.push({ label: 'Mark Rescheduled', next: 'rescheduled' });
         }
 
         return actions;

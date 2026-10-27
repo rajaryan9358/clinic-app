@@ -23,8 +23,10 @@ use App\Support\Waitlist\StaffWaitlistPresenter;
 use App\Support\Prescriptions\PrescriptionResolver;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AppointmentController extends BaseClinicCrudController
 {
@@ -63,7 +65,7 @@ class AppointmentController extends BaseClinicCrudController
 
         if ($request->user()?->roleKind() === 'doctor') {
             if (! $request->filled('appointment_date') && ! $request->filled('appointment_date_from') && ! $request->filled('appointment_date_to')) {
-                $query->whereDate('appointment_date', now()->toDateString());
+                $query->whereDate('appointment_date', Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'))->toDateString());
             }
 
             if (! $request->filled('status')) {
@@ -109,9 +111,7 @@ class AppointmentController extends BaseClinicCrudController
             }
         }
 
-        $sortBy = $request->input('sort_by', $this->defaultSort);
-        $sortDir = $request->input('sort_dir', 'desc');
-        $query->orderBy($sortBy, $sortDir);
+        $this->applySort($query, $request);
 
         $result = $query->paginate((int) $request->input('per_page', 15));
 
@@ -122,7 +122,7 @@ class AppointmentController extends BaseClinicCrudController
     {
         $payload = $request->all();
         $payload['clinic_id'] = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
-        $data = validator($payload, (new StoreAppointmentRequest())->rules())->validate();
+        $data = validator($payload, (new StoreAppointmentRequest())->rules((int) $payload['clinic_id']))->validate();
 
         $activeDoctorId = $request->attributes->get('active_doctor_id');
         if ($activeDoctorId && (int) $data['doctor_id'] !== (int) $activeDoctorId) {
@@ -135,8 +135,42 @@ class AppointmentController extends BaseClinicCrudController
         return $this->success('Appointment created successfully', $appointment, 201);
     }
 
+    public function update(Request $request, int $id)
+    {
+        $appointment = $this->findModel($id);
+        $data = $request->validate(StoreAppointmentRequest::updateRules((int) $appointment->clinic_id));
+
+        $activeDoctorId = $request->attributes->get('active_doctor_id');
+        if ($activeDoctorId && isset($data['doctor_id']) && (int) $data['doctor_id'] !== (int) $activeDoctorId) {
+            abort(403, 'Doctor not allowed.');
+        }
+
+        $updated = $this->appointmentService->updateDetails($appointment, $data, $request->user()?->id);
+
+        return $this->success('Record updated successfully', $updated);
+    }
+
+    /** POST /appointments/{id}/status runs the same lifecycle path. */
+    public function changeStatus(StatusChangeRequest $request, int $id)
+    {
+        return $this->lifecycle($request, $id);
+    }
+
+    public function block(int $id)
+    {
+        $this->findModel($id);
+
+        return $this->error('Appointments cannot be blocked; use the status actions instead.', null, 422);
+    }
+
+    public function unblock(int $id)
+    {
+        return $this->block($id);
+    }
+
     public function lifecycle(StatusChangeRequest $request, int $id)
     {
+        $request->validate(['status' => [Rule::enum(AppointmentStatus::class)]]);
         $status = AppointmentStatus::from($request->validated('status'));
         $needed = $status === AppointmentStatus::CANCELLED ? 'appointments.cancel' : 'appointments.check_in';
         if (! $request->user()->can($needed)) {
@@ -161,7 +195,7 @@ class AppointmentController extends BaseClinicCrudController
         $request->validate([
             'appointment_date' => ['required', 'date'],
             'start_time' => ['required'],
-            'end_time' => ['nullable'],
+            'end_time' => ['nullable', 'after:start_time'],
             'reason' => ['nullable', 'string'],
         ]);
 
