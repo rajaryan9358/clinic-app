@@ -11,6 +11,7 @@ use App\Models\Patient;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WhatsappConversation;
+use Illuminate\Support\Carbon;
 
 class DashboardController extends BaseCrudController
 {
@@ -19,6 +20,7 @@ class DashboardController extends BaseCrudController
     public function summary()
     {
         $today = now()->toDateString();
+        $clinicToday = Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'))->toDateString();
 
         return $this->success('Dashboard summary fetched successfully', [
             'total_clinics' => Clinic::count(),
@@ -30,13 +32,13 @@ class DashboardController extends BaseCrudController
             'total_patients' => Patient::count(),
             'today_patients' => Patient::whereDate('created_at', $today)->count(),
             'total_appointments' => Appointment::count(),
-            'today_appointments' => Appointment::whereDate('appointment_date', $today)->count(),
+            'today_appointments' => Appointment::whereDate('appointment_date', $clinicToday)->count(),
 
             'total_whatsapp_conversations' => WhatsappConversation::count(),
             'today_whatsapp_conversations' => WhatsappConversation::whereDate('last_message_at', $today)->count(),
             'total_whatsapp_appointments' => Appointment::where('booking_channel', 'whatsapp')->count(),
             'today_whatsapp_appointments' => Appointment::where('booking_channel', 'whatsapp')
-                ->whereDate('appointment_date', $today)
+                ->whereDate('appointment_date', $clinicToday)
                 ->count(),
 
             'pending_followups' => FollowupTask::where('status', 'pending')->count(),

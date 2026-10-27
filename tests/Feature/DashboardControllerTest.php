@@ -48,14 +48,19 @@ class DashboardControllerTest extends TestCase
             'phone' => '9000000002',
         ]);
 
+        // Dashboards read the clinic-local clock; pin it mid-morning so the
+        // appointment is always later on the same clinic day.
+        $clinicNow = Carbon::now(config('app.clinic_timezone'))->setTime(10, 0);
+        Carbon::setTestNow($clinicNow);
+
         $appointment = Appointment::create([
             'clinic_id' => $clinic->id,
             'uuid' => (string) Str::uuid(),
             'patient_id' => $patient->id,
             'doctor_id' => $doctor->id,
-            'appointment_date' => Carbon::now()->toDateString(),
-            'start_time' => Carbon::now()->addHour()->format('H:i:s'),
-            'end_time' => Carbon::now()->addHour()->addMinutes(30)->format('H:i:s'),
+            'appointment_date' => $clinicNow->toDateString(),
+            'start_time' => $clinicNow->copy()->addHour()->format('H:i:s'),
+            'end_time' => $clinicNow->copy()->addHour()->addMinutes(30)->format('H:i:s'),
             'visit_type' => 'new',
             'booking_channel' => 'walk_in',
             'status' => 'confirmed',

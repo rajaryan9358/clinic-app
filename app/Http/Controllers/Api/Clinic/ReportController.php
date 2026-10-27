@@ -9,6 +9,7 @@ use App\Models\Doctor;
 use App\Models\Patient;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReportController extends Controller
@@ -20,12 +21,22 @@ class ReportController extends Controller
         return (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
     }
 
+    // Mirrors BaseClinicCrudController::applyAccessScopes for doctor-limited roles.
+    private function scopeToActiveDoctor(Request $request, Builder $query, string $column): void
+    {
+        $activeDoctorId = $request->attributes->get('active_doctor_id');
+        if ($activeDoctorId) {
+            $query->where($column, (int) $activeDoctorId);
+        }
+    }
+
     public function appointmentsPdf(Request $request)
     {
         $clinicId = $this->clinicId($request);
 
         $query = Appointment::query()
             ->where('clinic_id', $clinicId)
+            ->tap(fn (Builder $q) => $this->scopeToActiveDoctor($request, $q, 'doctor_id'))
             ->with([
                 'patient:id,full_name',
                 'doctor:id,full_name',
@@ -50,7 +61,7 @@ class ReportController extends Controller
         }
 
         if ($request->boolean('upcoming_only')) {
-            $now = now();
+            $now = Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'));
             $today = $now->toDateString();
             $time = $now->format('H:i:s');
             $query->where(function (Builder $b) use ($today, $time) {
@@ -102,7 +113,8 @@ class ReportController extends Controller
         $clinicId = $this->clinicId($request);
 
         $query = Patient::query()
-            ->where('clinic_id', $clinicId);
+            ->where('clinic_id', $clinicId)
+            ->tap(fn (Builder $q) => $this->scopeToActiveDoctor($request, $q, 'preferred_doctor_id'));
 
         $search = trim($request->string('search')->toString());
         if ($search !== '') {
@@ -133,6 +145,7 @@ class ReportController extends Controller
             $rows = Appointment::query()
                 ->where('clinic_id', $clinicId)
                 ->whereIn('patient_id', $patientIds)
+                ->tap(fn (Builder $q) => $this->scopeToActiveDoctor($request, $q, 'doctor_id'))
                 ->selectRaw('patient_id, status, count(*) as c')
                 ->groupBy('patient_id', 'status')
                 ->get();
@@ -172,6 +185,11 @@ class ReportController extends Controller
 
         $query = Doctor::query()
             ->where('clinic_id', $clinicId);
+
+        $activeDoctorId = $request->attributes->get('active_doctor_id');
+        if ($request->user()?->roleKind() === 'doctor' && $activeDoctorId) {
+            $query->where('id', (int) $activeDoctorId);
+        }
 
         $search = trim($request->string('search')->toString());
         if ($search !== '') {
