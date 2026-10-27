@@ -13,6 +13,7 @@ const routeItem = (to, label, overrides = {}) => ({
     to,
     label,
     perm: overrides.perm,
+    anyPerm: overrides.anyPerm,
     doctorOnly: Boolean(overrides.doctorOnly),
 });
 
@@ -62,6 +63,14 @@ export const navigationByRole = {
 
 };
 
+// The Settings hub shows a card per permission below; its nav item appears
+// for anyone holding at least one of them.
+const SETTINGS_PERMS = [
+    'clinic_profile.view', 'clinic_settings.view', 'services.view', 'doctors.view', 'staff.view',
+    'reminders.view', 'whatsapp.view', 'followups.view', 'reviews.view', 'billing.view',
+    'subscription.view', 'audit_logs.view',
+];
+
 // ── Clinic users (clinic_admin, doctor, and every staff role) ───────────────
 // A single permission-driven list: every item declares the permission it
 // needs (via `perm`) or is unconditional (no `perm`). The Doctor-practice
@@ -70,17 +79,22 @@ export const navigationByRole = {
 // determines what any clinic user sees.
 const clinicNavigation = [
     {
-        section: 'Overview',
+        section: '',
         items: [
-            routeItem('/dashboard', 'Overview'),
+            routeItem('/dashboard', 'Today'),
+            routeItem('/workflows/appointments', 'Schedule', { perm: 'appointments.view' }),
+            routeItem('/workflows/waitlist', 'Waitlist', { perm: 'appointments.view' }),
+            moduleItem('patients', { perm: 'patients.view' }),
+            moduleItem('whatsappConversations', { label: 'Messages', perm: 'whatsapp.view' }),
+            moduleItem('reminders', { perm: 'reminders.view' }),
         ],
     },
     {
-        section: 'Operations',
+        section: 'My practice',
         items: [
-            routeItem('/workflows/appointments', 'Appointments', { perm: 'appointments.view' }),
-            routeItem('/workflows/waitlist', 'Waitlist', { perm: 'appointments.view' }),
-            moduleItem('patients', { perm: 'patients.view' }),
+            routeItem('/workflows/my-profile?tab=calendar', 'Calendar', { doctorOnly: true }),
+            routeItem('/workflows/my-availability', 'Availability', { doctorOnly: true }),
+            routeItem('/workflows/my-profile', 'Doctor profile', { doctorOnly: true }),
         ],
     },
     {
@@ -88,29 +102,13 @@ const clinicNavigation = [
         items: [
             moduleItem('doctors', { perm: 'doctors.view' }),
             moduleItem('services', { perm: 'services.view' }),
-            moduleItem('users', { label: 'Staff Users', perm: 'staff.view' }),
+            moduleItem('users', { label: 'Team', perm: 'staff.view' }),
         ],
     },
     {
-        section: 'Doctor Practice',
+        section: '',
         items: [
-            routeItem('/workflows/my-profile?tab=calendar', 'Calendar', { doctorOnly: true }),
-            routeItem('/workflows/my-availability', 'Availability', { doctorOnly: true }),
-            routeItem('/workflows/my-profile', 'Doctor Profile', { doctorOnly: true }),
-        ],
-    },
-    {
-        section: 'Communication',
-        items: [
-            moduleItem('whatsappConversations', { label: 'WhatsApp', perm: 'whatsapp.view' }),
-            moduleItem('reminders', { perm: 'reminders.view' }),
-        ],
-    },
-    {
-        section: 'Settings',
-        items: [
-            routeItem('/workflows/clinic-profile', 'Clinic Profile', { perm: 'clinic_profile.view' }),
-            routeItem('/workflows/subscription', 'Subscription', { perm: 'subscription.view' }),
+            routeItem('/settings', 'Settings', { anyPerm: SETTINGS_PERMS }),
         ],
     },
 ];
@@ -133,6 +131,7 @@ export function navigationFor(user, scope) {
             items: (section.items || []).filter((item) => {
                 if (item.doctorOnly && roleKind !== 'doctor') return false;
                 if (item.perm && !can(item.perm)) return false;
+                if (item.anyPerm && !item.anyPerm.some((p) => can(p))) return false;
                 return true;
             }),
         }))
