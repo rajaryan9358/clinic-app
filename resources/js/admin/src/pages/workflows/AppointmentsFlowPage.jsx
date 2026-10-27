@@ -14,7 +14,7 @@ function modeButton(active) {
         : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50';
 }
 
-export default function AppointmentsFlowPage() {
+export default function AppointmentsFlowPage({ embedded = false }) {
     const { user } = useAuth();
     const scope = useScope();
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
@@ -876,6 +876,18 @@ export default function AppointmentsFlowPage() {
             <style>{`
                 @keyframes rxbar { 0%, 100% { transform: scaleY(0.35); opacity: .55; } 50% { transform: scaleY(1); opacity: 1; } }
             `}</style>
+            {embedded ? (
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={downloadAppointmentsPdf}
+                        disabled={pdfBusy}
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-500"
+                    >
+                        Download PDF report
+                    </button>
+                </div>
+            ) : (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <div className="flex items-center gap-2">
                     <AppIcon name="module" className="h-5 w-5 text-slate-700" />
@@ -907,6 +919,7 @@ export default function AppointmentsFlowPage() {
                     ) : null}
                 </div>
             </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">

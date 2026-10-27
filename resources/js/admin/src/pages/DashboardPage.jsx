@@ -8,33 +8,28 @@ import DonutChart from '../components/charts/DonutChart';
 import BarListChart from '../components/charts/BarListChart';
 import AppIcon from '../components/AppIcon';
 import StatusBadge from '../components/StatusBadge';
+import DoctorToday from './dashboards/DoctorToday';
+import FrontDeskToday from './dashboards/FrontDeskToday';
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, icon, color = 'blue', suffix = '' }) {
-    const colorMap = {
-        blue:    { bg: 'bg-blue-50',    icon: 'text-blue-600',    val: 'text-blue-700' },
-        emerald: { bg: 'bg-emerald-50', icon: 'text-emerald-600', val: 'text-emerald-700' },
-        amber:   { bg: 'bg-amber-50',   icon: 'text-amber-600',   val: 'text-amber-700' },
-        red:     { bg: 'bg-red-50',     icon: 'text-red-600',     val: 'text-red-700' },
-        violet:  { bg: 'bg-violet-50',  icon: 'text-violet-600',  val: 'text-violet-700' },
-        sky:     { bg: 'bg-sky-50',     icon: 'text-sky-600',     val: 'text-sky-700' },
-    };
-    const c = colorMap[color] || colorMap.blue;
+    const tone = {
+        blue: 'text-blue-600', emerald: 'text-emerald-600', amber: 'text-amber-600',
+        red: 'text-rose-600', violet: 'text-violet-600', sky: 'text-sky-600',
+    }[color] || 'text-blue-600';
 
     return (
-        <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${c.bg}`}>
-                <AppIcon name={icon} className={`h-5 w-5 ${c.icon}`} />
-            </div>
-            <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-                <p className={`mt-0.5 text-2xl font-bold ${c.val}`}>
-                    {value ?? <span className="text-gray-300">—</span>}
-                    {suffix && value !== null && value !== undefined ? (
-                        <span className="ml-0.5 text-sm font-medium text-gray-400">{suffix}</span>
-                    ) : null}
-                </p>
-            </div>
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+            <p className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <AppIcon name={icon} className={`h-4 w-4 ${tone}`} />
+                <span className="truncate">{label}</span>
+            </p>
+            <p className="mt-1.5 text-2xl font-bold text-slate-900 tabular-nums">
+                {value ?? <span className="text-slate-300">—</span>}
+                {suffix && value !== null && value !== undefined ? (
+                    <span className="ml-0.5 text-sm font-medium text-slate-500">{suffix}</span>
+                ) : null}
+            </p>
         </div>
     );
 }
@@ -187,124 +182,6 @@ function FollowupStats({ insights }) {
     );
 }
 
-// ── Receptionist dashboard ────────────────────────────────────────────────────
-function ReceptionistDashboard({ data }) {
-    const kpis = data?.kpis || {};
-    const upcoming = data?.upcoming || [];
-    const statusBreakdown = data?.status_breakdown || [];
-
-    const statusCfg = {
-        pending:         { label: 'Pending',         bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400' },
-        confirmed:       { label: 'Confirmed',        bg: 'bg-blue-50',    text: 'text-blue-700',    dot: 'bg-blue-500' },
-        checked_in:      { label: 'Checked In',       bg: 'bg-violet-50',  text: 'text-violet-700',  dot: 'bg-violet-500' },
-        in_consultation: { label: 'In Consultation',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  dot: 'bg-indigo-500' },
-        completed:       { label: 'Completed',        bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-        no_show:         { label: 'No Show',          bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-400' },
-        cancelled:       { label: 'Cancelled',        bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400' },
-    };
-
-    const fmtTime = (t) => {
-        if (!t) return '—';
-        try {
-            const [h, m] = String(t).split(':');
-            const d = new Date();
-            d.setHours(+h, +m, 0);
-            return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-        } catch { return t; }
-    };
-
-    const dateLabel = (() => {
-        try {
-            return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
-        } catch { return new Date().toLocaleDateString(); }
-    })();
-
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900">Front Desk</h1>
-                    <p className="mt-0.5 text-sm text-gray-500">{dateLabel}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Link to="/modules/patients/new" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                        + New Patient
-                    </Link>
-                    <Link to="/workflows/appointments/new" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                        + New Appointment
-                    </Link>
-                </div>
-            </div>
-
-            {/* KPI row */}
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-4">
-                <KpiCard label="Total Today"      value={kpis.total_today}     icon="calendar"        color="blue" />
-                <KpiCard label="Waiting"          value={kpis.waiting}         icon="clock"           color="amber" />
-                <KpiCard label="Checked In"       value={kpis.checked_in}      icon="user-check"      color="violet" />
-                <KpiCard label="In Consultation"  value={kpis.in_consultation} icon="activity"        color="sky" />
-                <KpiCard label="Completed"        value={kpis.completed}       icon="check"           color="emerald" />
-                <KpiCard label="No Show"          value={kpis.no_show}         icon="user-x"          color="red" />
-                <KpiCard label="Cancelled"        value={kpis.cancelled}       icon="close"           color="red" />
-                <KpiCard label="New Patients"     value={kpis.new_patients_today} icon="user-plus"    color="sky" />
-            </div>
-
-            <div className="grid gap-5 lg:grid-cols-5">
-                {/* Upcoming appointments */}
-                <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                    <div className="border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-900">Up Next Today</h3>
-                            <p className="mt-0.5 text-xs text-gray-400">Upcoming appointments — pending, confirmed, or checked in</p>
-                        </div>
-                        <Link to="/workflows/appointments" className="text-xs font-semibold text-blue-600 hover:underline">
-                            View all
-                        </Link>
-                    </div>
-                    {upcoming.length === 0 ? (
-                        <div className="px-5 py-10 text-center text-sm text-gray-400">No upcoming appointments for today.</div>
-                    ) : (
-                        <div className="divide-y divide-gray-100">
-                            {upcoming.map((appt) => {
-                                const cfg = statusCfg[appt.status] || statusCfg.pending;
-                                return (
-                                    <Link
-                                        key={appt.id}
-                                        to={`/workflows/appointments?open=${appt.id}`}
-                                        className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition"
-                                    >
-                                        <div className="flex-shrink-0 w-14 text-center">
-                                            <span className="text-sm font-bold text-gray-800">{fmtTime(appt.start_time)}</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-gray-900 truncate">{appt.patient_name || '—'}</p>
-                                            <p className="text-xs text-gray-400 truncate">{appt.doctor_name}</p>
-                                        </div>
-                                        <div className={`flex-shrink-0 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
-                                            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
-                                            {cfg.label}
-                                        </div>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Status breakdown */}
-                <div className="lg:col-span-2">
-                    <DonutChart
-                        title="Today's Status"
-                        subtitle="Appointment breakdown by status."
-                        items={statusBreakdown}
-                        valueKey="count"
-                    />
-                </div>
-            </div>
-        </div>
-    );
-}
-
 // ── Assistant dashboard ───────────────────────────────────────────────────────
 function AssistantDashboard({ data }) {
     const kpis = data?.kpis || {};
@@ -424,9 +301,36 @@ function AssistantDashboard({ data }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+const DASHBOARD_VIEWS = [
+    { key: 'admin', perm: 'dashboard.admin', label: 'Clinic overview' },
+    { key: 'front', perm: 'dashboard.receptionist', label: 'Front desk' },
+    { key: 'assistant', perm: 'dashboard.assistant', label: 'Assistant' },
+];
+const VIEW_STORAGE_KEY = 'today_view';
+
+function ViewTabs({ views, value, onChange }) {
+    if (views.length < 2) return null;
+    return (
+        <div role="tablist" aria-label="Dashboard" className="mb-5 inline-flex rounded-xl border border-slate-200 bg-white p-1">
+            {views.map((v) => (
+                <button
+                    key={v.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={value === v.key}
+                    onClick={() => onChange(v.key)}
+                    className={`h-8 rounded-lg px-3 text-sm ${value === v.key ? 'bg-slate-900 font-semibold text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+                >
+                    {v.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
 export default function DashboardPage() {
     const { user } = useAuth();
-    const { context, ready, can } = useScope() || {};
+    const { context, ready, can, roleKind } = useScope() || {};
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
 
@@ -434,12 +338,28 @@ export default function DashboardPage() {
     const isSuperAdmin = user?.role === 'super_admin';
     const allowed = (permission) => (typeof can === 'function' ? can(permission) : false);
     // Each role-specific dashboard is gated by its own permission on the API
-    // (dashboard.admin / .receptionist / .assistant). Pick the first one this
-    // user holds, in that order; anyone holding none of them (doctors, custom
-    // roles) falls back to the summary view, which every clinic user may read.
-    const isClinicAdmin = !isSuperAdmin && allowed('dashboard.admin');
-    const isReceptionist = !isSuperAdmin && !isClinicAdmin && allowed('dashboard.receptionist');
-    const isAssistant = !isSuperAdmin && !isClinicAdmin && !isReceptionist && allowed('dashboard.assistant');
+    // (dashboard.admin / .receptionist / .assistant). Anyone holding none of
+    // them falls back to the summary view, which every clinic user may read.
+    // A role may hold several of them (the super admin decides); each one it
+    // holds becomes a tab, and the choice is remembered per browser.
+    // Doctor-kind roles (set on the role by the super admin) also get their
+    // own day, listed first.
+    const views = isSuperAdmin ? [] : [
+        ...(roleKind === 'doctor' ? [{ key: 'doctor', label: 'My day' }] : []),
+        ...DASHBOARD_VIEWS.filter((v) => allowed(v.perm)),
+    ];
+    const [picked, setPicked] = useState(() => {
+        try { return localStorage.getItem(VIEW_STORAGE_KEY) || ''; } catch { return ''; }
+    });
+    const view = views.find((v) => v.key === picked)?.key || views[0]?.key || null;
+    const pickView = (key) => {
+        setPicked(key);
+        try { localStorage.setItem(VIEW_STORAGE_KEY, key); } catch { /* storage unavailable */ }
+    };
+    const isClinicAdmin = view === 'admin';
+    const isReceptionist = view === 'front';
+    const isAssistant = view === 'assistant';
+    const isDoctorDay = view === 'doctor';
     const activeDoctorId = context?.active_doctor_id ?? null;
 
     useEffect(() => {
@@ -450,6 +370,8 @@ export default function DashboardPage() {
         // in-flight requests whose responses can land out of order and leave
         // `data` shaped for the wrong dashboard.
         if (!isSuperAdmin && !ready) return;
+        // The front desk and doctor Today screens load their own live data.
+        if (isReceptionist || isDoctorDay) return;
 
         let cancelled = false;
         const load = async () => {
@@ -478,10 +400,25 @@ export default function DashboardPage() {
         return () => {
             cancelled = true;
         };
-    }, [base, isSuperAdmin, isClinicAdmin, isReceptionist, isAssistant, activeDoctorId, ready]);
+    }, [base, isSuperAdmin, isClinicAdmin, isReceptionist, isAssistant, isDoctorDay, activeDoctorId, ready]);
+
+    const withTabs = (node) => (
+        <>
+            <ViewTabs views={views} value={view} onChange={pickView} />
+            {node}
+        </>
+    );
+
+    if (ready && isDoctorDay) {
+        return withTabs(<DoctorToday />);
+    }
+
+    if (ready && isReceptionist) {
+        return withTabs(<FrontDeskToday />);
+    }
 
     if (error) {
-        return (
+        return withTabs(
             <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
                 <AppIcon name="alert-triangle" className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
                 <p className="text-sm text-red-700">{error}</p>
@@ -490,7 +427,7 @@ export default function DashboardPage() {
     }
 
     if (!data) {
-        return (
+        return withTabs(
             <div className="flex items-center justify-center py-20">
                 <div className="flex flex-col items-center gap-3">
                     <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
@@ -500,14 +437,9 @@ export default function DashboardPage() {
         );
     }
 
-    // ── Receptionist dashboard ────────────────────────────────────────────────
-    if (isReceptionist) {
-        return <ReceptionistDashboard data={data} />;
-    }
-
     // ── Assistant dashboard ───────────────────────────────────────────────────
     if (isAssistant) {
-        return <AssistantDashboard data={data} />;
+        return withTabs(<AssistantDashboard data={data} />);
     }
 
     // ── Clinic Admin dashboard ─────────────────────────────────────────────────
@@ -521,13 +453,13 @@ export default function DashboardPage() {
         const bookingSources = (insights.booking_sources_30d || []).map((x) => ({ label: x.source, count: x.count }));
         const doctors = (insights.doctor_performance_30d || []).map((x) => ({ label: x.doctor_name, count: x.total }));
 
-        return (
+        return withTabs(
             <div className="space-y-6">
                 {/* Page header */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-                        <p className="mt-0.5 text-sm text-gray-500">Today's operations, trends, and actionables.</p>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">How the clinic is doing</h1>
+                        <p className="mt-0.5 text-sm text-slate-500">Today’s numbers, trends and anything that needs your attention.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <Link to="/modules/patients/new" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">

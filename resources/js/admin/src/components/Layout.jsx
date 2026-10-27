@@ -1,9 +1,11 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { modules } from '../config/modules';
 import { navigationFor, resolveNavHref } from '../config/navigation';
 import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import AppIcon from './AppIcon';
+import CommandPalette from './CommandPalette';
 
 // Map route paths → icon names
 const ROUTE_ICONS = {
@@ -15,6 +17,14 @@ const ROUTE_ICONS = {
     '/workflows/create-staff': 'user-plus',
     '/workflows/setup-doctor': 'user-check',
     '/workflows/my-profile': 'user-circle',
+    '/workflows/my-profile?tab=calendar': 'calendar',
+    '/workflows/my-availability': 'activity',
+    '/workflows/clinic-profile': 'building',
+    '/settings': 'settings',
+    '/workflows/clinics': 'hospital',
+    '/workflows/system-settings': 'settings',
+    '/billing/plans': 'layout-template',
+    '/billing/subscription-transactions': 'credit-card',
     '/workflows/communication/delivery-issues': 'alert-triangle',
     '/workflows/subscription': 'credit-card',
     '/workflows/roles': 'key',
@@ -76,38 +86,75 @@ export default function Layout({ children }) {
     const { context, setActiveDoctorId } = scope;
     const location = useLocation();
     const role = user?.role || 'staff';
+    const isSuperAdmin = role === 'super_admin';
     const navSections = navigationFor(user, scope);
     const displayRoleLabel = scope.roleLabel || roleLabel(role);
+    const [paletteOpen, setPaletteOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+
+    // ⌘K / Ctrl+K opens search from anywhere in the app.
+    useEffect(() => {
+        const onKey = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                setPaletteOpen((o) => !o);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
+    // Close the phone menu whenever the route changes.
+    useEffect(() => { setMenuOpen(false); }, [location.pathname, location.search]);
+
+    const itemLabel = (item) => item.label || modules[item.moduleKey]?.label || '';
+    const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
+
+    const paletteSections = navSections.map((s) => s.section).join('|');
+    const palettePages = useMemo(
+        () => navSections.flatMap((section) => (section.items || []).map((item) => ({
+            label: item.label || itemLabel(item),
+            href: resolveNavHref(item),
+            icon: resolveIcon(item),
+            section: section.section,
+        }))),
+        // navSections is rebuilt each render; its section names are a stable key.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [paletteSections, navSections.length],
+    );
 
     const renderNavLink = (item) => {
         const href = resolveNavHref(item);
-        const isActive = location.pathname === href || (href !== '/dashboard' && location.pathname.startsWith(`${href}/`));
-        const label = item.type === 'module'
-            ? (modules[item.moduleKey]?.label || item.label)
-            : item.label;
-        const iconName = resolveIcon(item);
+        const [path, query] = href.split('?');
+        const isActive = query
+            ? location.pathname === path && location.search === `?${query}`
+            : location.pathname === href
+                || (href !== '/dashboard' && location.pathname.startsWith(`${href}/`))
+                || (path === '/workflows/my-profile' && location.pathname === path && !location.search.includes('tab=calendar'));
 
         return (
             <Link
                 key={`${item.type}:${href}`}
                 to={href}
-                className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                aria-current={isActive ? 'page' : undefined}
+                className={`group flex h-9 items-center gap-3 rounded-lg px-3 text-sm transition-colors ${
                     isActive
                         ? 'bg-blue-50 font-semibold text-blue-700'
-                        : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
             >
                 <AppIcon
-                    name={iconName}
-                    className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}
+                    name={resolveIcon(item)}
+                    className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`}
                 />
-                <span className="truncate">{label}</span>
+                <span className="truncate">{itemLabel(item)}</span>
             </Link>
         );
     };
 
-    const clinicName = context?.clinic_name || 'Clinic SaaS';
-    const clinicLogoUrl = context?.clinic_logo_url;
+    const clinicName = isSuperAdmin ? 'Clinic SaaS' : (context?.clinic_name || 'Clinic');
+    const clinicLogoUrl = isSuperAdmin ? null : context?.clinic_logo_url;
+    const userName = user?.full_name || user?.email || 'User';
 
     const subscriptionBanner = (() => {
         const sub = context?.subscription;
@@ -120,10 +167,12 @@ export default function Layout({ children }) {
 
         if (sub.status === 'trialing') {
             const days = daysLeft(sub.trial_ends_at);
+            // A trial with plenty of time left is not worth a banner on every page.
+            if (days != null && days > 7) return null;
             return {
                 tone: 'amber',
-                text: days == null ? 'Your account is on a trial period' : `Trial: ${days} day${days === 1 ? '' : 's'} left`,
-                payNow: false,
+                text: days == null ? 'Your account is on a trial period' : `Trial ends in ${days} day${days === 1 ? '' : 's'}`,
+                payNow: true,
             };
         }
 
@@ -148,120 +197,148 @@ export default function Layout({ children }) {
         return null;
     })();
 
-    return (
-        <div className="min-h-screen bg-gray-50">
-            {/* ── Subscription Banner ── */}
-            {subscriptionBanner && (
-                <div className={`fixed inset-x-0 top-0 z-40 flex items-center justify-center gap-3 px-4 py-1.5 text-xs font-semibold ${subscriptionBanner.tone === 'red' ? 'bg-red-600 text-white' : 'bg-amber-400 text-amber-900'}`}>
-                    {subscriptionBanner.text}
-                    {subscriptionBanner.payNow && scope.can?.('subscription.manage') && (
-                        <Link to="/workflows/subscription" className="rounded-full bg-amber-900/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-900/30">
-                            Pay now →
-                        </Link>
-                    )}
+    const sidebar = (
+        <div className="flex h-full flex-col">
+            <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+                {clinicLogoUrl ? (
+                    <img src={clinicLogoUrl} alt="" className="h-9 w-9 rounded-lg border border-slate-200 bg-white object-contain" />
+                ) : (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white">
+                        <AppIcon name="hospital" className="h-5 w-5" />
+                    </span>
+                )}
+                <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{clinicName}</p>
+                    <p className="truncate text-xs text-slate-500">{displayRoleLabel}</p>
                 </div>
-            )}
-            {/* ── Top Header ── */}
-            <header className={`fixed inset-x-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm ${subscriptionBanner ? 'top-7' : 'top-0'}`}>
-                {/* Logo */}
-                <div className="flex items-center gap-3">
-                    {clinicLogoUrl ? (
-                        <img src={clinicLogoUrl} alt={clinicName} className="h-8 w-8 rounded-lg border border-gray-200 object-contain" />
-                    ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                            <AppIcon name="hospital" className="h-4.5 w-4.5 text-white" />
-                        </div>
-                    )}
-                    <div className="hidden sm:block">
-                        <span className="text-sm font-bold text-gray-900">{clinicName}</span>
-                    </div>
-                </div>
+            </div>
 
-                {/* Right side */}
-                <div className="flex items-center gap-3">
-                    {/* Doctor selector */}
-                    {context?.allowed_doctors?.length > 0 && (
-                        <div className="hidden items-center gap-2 sm:flex">
-                            <AppIcon name="stethoscope" className="h-3.5 w-3.5 text-gray-400" />
-                            {context.allowed_doctors.length === 1 ? (
-                                <span className="text-sm font-medium text-gray-700">{context.allowed_doctors[0].full_name}</span>
-                            ) : (
-                                <select
-                                    className="rounded-lg border border-gray-200 bg-white py-1.5 pl-2 pr-7 text-sm font-medium text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                    value={context.active_doctor_id || ''}
-                                    onChange={(e) => setActiveDoctorId?.(e.target.value)}
-                                >
-                                    {context.allowed_doctors.map((d) => (
-                                        <option key={d.id} value={d.id}>{d.full_name}</option>
-                                    ))}
-                                </select>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Divider */}
-                    <div className="h-6 w-px bg-gray-200" />
-
-                    {/* User info + logout */}
-                    <div className="flex items-center gap-2.5">
-                        <div className="hidden flex-col items-end sm:flex">
-                            <span className="text-sm font-semibold text-gray-900 leading-tight">{user?.full_name || user?.email || 'User'}</span>
-                            <span className={`mt-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold ${roleBadgeColor(role)}`}>
-                                {displayRoleLabel}
-                            </span>
-                        </div>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                            {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
-                        </div>
-                        <button
-                            onClick={logout}
-                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-                            title="Sign out"
+            <div className="space-y-2 px-3 pb-2">
+                <button
+                    type="button"
+                    onClick={() => setPaletteOpen(true)}
+                    className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-left text-sm text-slate-500 hover:border-slate-300 hover:bg-white"
+                >
+                    <AppIcon name="search" className="h-4 w-4" />
+                    <span className="flex-1 truncate">{isSuperAdmin ? 'Go to…' : 'Search patients, bookings…'}</span>
+                    <kbd className="rounded border border-slate-300 bg-white px-1.5 text-[11px] text-slate-500">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+                </button>
+                {!isSuperAdmin && scope.can?.('appointments.create') && (
+                    <Link
+                        to="/workflows/appointments/new"
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                        <AppIcon name="plus" className="h-4 w-4" />
+                        New booking
+                    </Link>
+                )}
+                {context?.allowed_doctors?.length > 1 && (
+                    <label className="block">
+                        <span className="sr-only">Working as doctor</span>
+                        <select
+                            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                            value={context.active_doctor_id || ''}
+                            onChange={(e) => setActiveDoctorId?.(e.target.value)}
                         >
-                            <AppIcon name="log-out" className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">Sign out</span>
-                        </button>
+                            {context.allowed_doctors.map((d) => (
+                                <option key={d.id} value={d.id}>{d.full_name}</option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+            </div>
+
+            <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-4">
+                {navSections.map((section, i) => (
+                    <div key={section.section || `s${i}`} className="pt-3 first:pt-1">
+                        {section.section && (
+                            <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                                {section.section}
+                            </p>
+                        )}
+                        <div className="space-y-0.5">
+                            {(section.items || []).map(renderNavLink)}
+                        </div>
                     </div>
+                ))}
+            </nav>
+
+            <div className="flex items-center gap-2.5 border-t border-slate-100 p-3">
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+                    {userName[0].toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
+                    <span className={`inline-block rounded-full px-1.5 py-px text-[10px] font-semibold ${roleBadgeColor(role)}`}>{displayRoleLabel}</span>
                 </div>
+                <button
+                    type="button"
+                    onClick={logout}
+                    title="Sign out"
+                    aria-label="Sign out"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                >
+                    <AppIcon name="log-out" className="h-4 w-4" />
+                </button>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="min-h-screen bg-slate-50">
+            {/* ── Phone top bar ── */}
+            <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-slate-200 bg-white px-3 lg:hidden">
+                <button
+                    type="button"
+                    onClick={() => setMenuOpen(true)}
+                    aria-label="Open menu"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100"
+                >
+                    <AppIcon name="menu" className="h-5 w-5" />
+                </button>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{clinicName}</span>
+                <button
+                    type="button"
+                    onClick={() => setPaletteOpen(true)}
+                    aria-label="Search"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100"
+                >
+                    <AppIcon name="search" className="h-5 w-5" />
+                </button>
             </header>
 
-            {/* ── Sidebar ── */}
-            <aside className={`fixed inset-y-0 left-0 z-20 flex w-64 flex-col border-r border-gray-200 bg-white ${subscriptionBanner ? 'pt-[84px]' : 'pt-14'}`}>
-                <div className="flex-1 overflow-y-auto px-3 py-4">
-                    <nav className="space-y-0.5">
-                        {navSections.map((section) => (
-                            <div key={section.section} className="pb-2 pt-4 first:pt-0">
-                                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                                    {section.section}
-                                </p>
-                                <div className="space-y-0.5">
-                                    {(section.items || []).map(renderNavLink)}
-                                </div>
-                            </div>
-                        ))}
-                    </nav>
-                </div>
-
-                {/* Sidebar footer */}
-                <div className="border-t border-gray-100 p-3">
-                    <div className="flex items-center gap-2.5 rounded-lg bg-gray-50 px-3 py-2.5">
-                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                            {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-gray-900">{user?.full_name || user?.email}</p>
-                            <p className="truncate text-[10px] text-gray-500">{displayRoleLabel}</p>
-                        </div>
-                    </div>
-                </div>
+            {/* ── Sidebar: fixed on desktop, a drawer on phones ── */}
+            {menuOpen && <div className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+            <aside
+                className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white transition-transform lg:z-20 lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            >
+                {sidebar}
             </aside>
 
             {/* ── Main content ── */}
-            <main className={`pl-64 ${subscriptionBanner ? 'pt-[84px]' : 'pt-14'}`}>
-                <div className="min-h-[calc(100vh-3.5rem)] p-6">
+            <main className="lg:pl-64">
+                {subscriptionBanner && (
+                    <div className={`flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-sm font-medium ${subscriptionBanner.tone === 'red' ? 'bg-red-600 text-white' : 'bg-amber-50 text-amber-900 border-b border-amber-200'}`}>
+                        {subscriptionBanner.text}
+                        {subscriptionBanner.payNow && scope.can?.('subscription.manage') && (
+                            <Link to="/workflows/subscription" className="font-semibold underline underline-offset-2">
+                                Choose a plan
+                            </Link>
+                        )}
+                    </div>
+                )}
+                <div className="min-h-screen p-4 sm:p-6">
                     {children}
                 </div>
             </main>
+
+            <CommandPalette
+                open={paletteOpen}
+                onClose={() => setPaletteOpen(false)}
+                pages={palettePages}
+                can={scope.can || (() => false)}
+                isClinicUser={!isSuperAdmin}
+            />
         </div>
     );
 }
