@@ -193,8 +193,8 @@ final class WaitlistService
                 ->update(['status' => 'expired', 'updated_at' => now()]);
 
             // Oldest waiting entry whose patient and account holder still
-            // exist; an entry left without a (non-deleted) holder can't be
-            // messaged, so it is skipped rather than blocking the slot.
+            // exist and whose holder accepts WhatsApp; anyone else can't be
+            // messaged, so they are skipped rather than blocking the slot.
             $entry = null;
             $holder = null;
             $candidates = $this->entriesAt($clinicId, $doctorId, $date, $startTime)
@@ -205,7 +205,7 @@ final class WaitlistService
                 ->get();
             foreach ($candidates as $candidate) {
                 $holder = $this->accountHolder($candidate->patient);
-                if ($holder !== null) {
+                if ($holder !== null && $holder->whatsapp_opt_in !== false) {
                     $entry = $candidate;
                     break;
                 }
