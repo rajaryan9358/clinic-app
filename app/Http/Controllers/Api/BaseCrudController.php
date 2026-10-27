@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 abstract class BaseCrudController extends Controller
 {
@@ -21,6 +23,55 @@ abstract class BaseCrudController extends Controller
     protected array $filterable = [];
 
     protected string $defaultSort = 'id';
+
+    /** Allowed values for changeStatus/block/unblock; empty means no extra check. */
+    protected array $statuses = [];
+
+    private static array $columnListingCache = [];
+
+    /** Validation rules for store/update; empty means the raw payload is persisted. */
+    protected function rules(Request $request, ?Model $model = null): array
+    {
+        return [];
+    }
+
+    protected function validatedPayload(Request $request, ?Model $model = null): array
+    {
+        $rules = $this->rules($request, $model);
+
+        return $rules === [] ? $request->all() : $request->validate($rules);
+    }
+
+    protected function applySort(Builder $query, Request $request): Builder
+    {
+        $sortBy = (string) $request->input('sort_by', $this->defaultSort);
+        if (! in_array($sortBy, $this->sortableColumns($query), true)) {
+            $sortBy = $this->defaultSort;
+        }
+
+        $sortDir = strtolower((string) $request->input('sort_dir', 'desc'));
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'desc';
+        }
+
+        return $query->orderBy($sortBy, $sortDir);
+    }
+
+    private function sortableColumns(Builder $query): array
+    {
+        $model = $query->getModel();
+        $columns = $this->tableColumns($query);
+
+        // Sorting by a hidden attribute (password, OTP hashes, ...) would leak its ordering.
+        return array_values(array_diff($columns, $model->getHidden()));
+    }
+
+    private function tableColumns(Builder $query): array
+    {
+        $table = $query->getModel()->getTable();
+
+        return self::$columnListingCache[$table] ??= Schema::getColumnListing($table);
+    }
 
     protected function baseQuery(Request $request): Builder
     {
@@ -49,9 +100,7 @@ abstract class BaseCrudController extends Controller
             $query->withTrashed();
         }
 
-        $sortBy = $request->input('sort_by', $this->defaultSort);
-        $sortDir = $request->input('sort_dir', 'desc');
-        $query->orderBy($sortBy, $sortDir);
+        $this->applySort($query, $request);
 
         $result = $query->paginate((int) $request->input('per_page', 15));
 
@@ -60,7 +109,7 @@ abstract class BaseCrudController extends Controller
 
     public function store(Request $request)
     {
-        $model = ($this->modelClass)::create($request->all());
+        $model = ($this->modelClass)::create($this->validatedPayload($request));
 
         return $this->success('Record created successfully', $model, 201);
     }
@@ -75,7 +124,7 @@ abstract class BaseCrudController extends Controller
     public function update(Request $request, int $id)
     {
         $model = $this->findModel($id);
-        $model->update($request->all());
+        $model->update($this->validatedPayload($request, $model));
 
         return $this->success('Record updated successfully', $model->refresh());
     }
@@ -104,7 +153,17 @@ abstract class BaseCrudController extends Controller
     public function changeStatus(StatusChangeRequest $request, int $id)
     {
         $model = $this->findModel($id);
-        $model->update(['status' => $request->validated('status')]);
+        $status = $request->validated('status');
+
+        if (! in_array('status', $this->tableColumns($model->newQuery()), true)) {
+            return $this->error('Status field not available on model', null, 422);
+        }
+
+        if ($this->statuses !== [] && ! in_array($status, $this->statuses, true)) {
+            throw ValidationException::withMessages(['status' => ['The selected status is invalid.']]);
+        }
+
+        $model->update(['status' => $status]);
 
         return $this->success('Status updated successfully', $model->refresh());
     }
@@ -125,6 +184,10 @@ abstract class BaseCrudController extends Controller
 
         if (! isset($model->status)) {
             return $this->error('Status field not available on model', null, 422);
+        }
+
+        if ($this->statuses !== [] && ! in_array($status, $this->statuses, true)) {
+            return $this->error("Status '{$status}' is not supported for this module", null, 422);
         }
 
         $model->update(['status' => $status]);

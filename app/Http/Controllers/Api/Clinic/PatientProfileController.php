@@ -48,8 +48,8 @@ class PatientProfileController extends Controller
             ->where('clinic_id', $clinicId)
             ->with([
                 'medicalProfile',
-                'managedBy:id,full_name,phone,managed_by_patient_id',
-                'dependents:id,full_name,phone,managed_by_patient_id',
+                'managedBy' => fn ($q) => $q->select('id', 'full_name', 'phone', 'managed_by_patient_id')->where('clinic_id', $clinicId),
+                'dependents' => fn ($q) => $q->select('id', 'full_name', 'phone', 'managed_by_patient_id')->where('clinic_id', $clinicId),
             ]);
 
         $activeDoctorId = $request->attributes->get('active_doctor_id');

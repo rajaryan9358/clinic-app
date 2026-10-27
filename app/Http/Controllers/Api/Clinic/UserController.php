@@ -16,6 +16,7 @@ class UserController extends BaseClinicCrudController
     protected string $modelClass = User::class;
     protected array $searchable = ['full_name', 'email', 'phone'];
     protected array $filterable = ['role', 'status'];
+    protected array $statuses = ['active', 'inactive', 'blocked'];
 
     public function __construct(private readonly UserManagementService $userManagementService) {}
 

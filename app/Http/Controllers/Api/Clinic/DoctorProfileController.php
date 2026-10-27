@@ -10,6 +10,7 @@ use App\Models\DoctorScheduleException;
 use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class DoctorProfileController extends Controller
 {
@@ -134,7 +135,7 @@ class DoctorProfileController extends Controller
         $data = validator($request->all(), [
             'day_of_week' => ['required', 'integer', 'min:0', 'max:6'],
             'start_time' => ['required', 'date_format:H:i'],
-            'end_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
             'consultation_mode' => ['required', 'in:in_person,video,both'],
             'max_patients' => ['nullable', 'integer', 'min:1'],
             'slot_duration_minutes' => ['nullable', 'integer', 'min:5', 'max:240'],
@@ -179,6 +180,12 @@ class DoctorProfileController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ])->validate();
 
+        $start = substr((string) ($data['start_time'] ?? $schedule->start_time), 0, 5);
+        $end = substr((string) ($data['end_time'] ?? $schedule->end_time), 0, 5);
+        if ($end <= $start) {
+            throw ValidationException::withMessages(['end_time' => ['The end time must be after the start time.']]);
+        }
+
         $schedule->update($data);
 
         return $this->success('Schedule updated', $schedule->refresh());
@@ -207,8 +214,8 @@ class DoctorProfileController extends Controller
         $data = validator($request->all(), [
             'exception_date' => ['required', 'date'],
             'type' => ['required', 'in:leave,blocked,special_hours'],
-            'start_time' => ['nullable', 'date_format:H:i'],
-            'end_time' => ['nullable', 'date_format:H:i'],
+            'start_time' => ['nullable', 'required_if:type,special_hours', 'required_with:end_time', 'date_format:H:i'],
+            'end_time' => ['nullable', 'required_if:type,special_hours', 'required_with:start_time', 'date_format:H:i', 'after:start_time'],
             'reason' => ['nullable', 'string', 'max:1000'],
         ])->validate();
 

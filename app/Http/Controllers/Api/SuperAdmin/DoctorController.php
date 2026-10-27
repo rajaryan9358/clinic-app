@@ -17,6 +17,8 @@ class DoctorController extends BaseCrudController
 
     protected array $filterable = ['clinic_id', 'status', 'specialization'];
 
+    protected array $statuses = ['active', 'inactive'];
+
     public function __construct(private readonly DoctorManagementService $doctorManagementService) {}
 
     public function index(Request $request)
@@ -38,9 +40,7 @@ class DoctorController extends BaseCrudController
             }
         }
 
-        $sortBy = $request->input('sort_by', $this->defaultSort);
-        $sortDir = $request->input('sort_dir', 'desc');
-        $query->orderBy($sortBy, $sortDir);
+        $this->applySort($query, $request);
 
         $result = $query->paginate((int) $request->input('per_page', 15));
 

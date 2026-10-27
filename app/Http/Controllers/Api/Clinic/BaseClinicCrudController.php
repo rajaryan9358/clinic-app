@@ -6,17 +6,21 @@ use App\Http\Controllers\Api\BaseCrudController;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
 
 abstract class BaseClinicCrudController extends BaseCrudController
 {
     private static array $hasColumnCache = [];
 
+    protected function clinicId(Request $request): int
+    {
+        return (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
+    }
+
     protected function baseQuery(Request $request): Builder
     {
-        $clinicId = (int) ($request->attributes->get('clinic_id') ?? $request->user()?->clinic_id);
-
-        $query = parent::baseQuery($request)->where('clinic_id', $clinicId);
+        $query = parent::baseQuery($request)->where('clinic_id', $this->clinicId($request));
 
         return $this->applyAccessScopes($request, $query);
     }
@@ -39,7 +43,7 @@ abstract class BaseClinicCrudController extends BaseCrudController
     public function update(Request $request, int $id)
     {
         $model = $this->findModel($id);
-        $model->update($request->except(['clinic_id']));
+        $model->update(Arr::except($this->validatedPayload($request, $model), ['clinic_id']));
 
         return $this->success('Record updated successfully', $model->refresh());
     }
@@ -63,7 +67,7 @@ abstract class BaseClinicCrudController extends BaseCrudController
 
     public function store(Request $request)
     {
-        $data = $request->all();
+        $data = $this->validatedPayload($request);
         $data['clinic_id'] = $request->attributes->get('clinic_id') ?? $request->user()?->clinic_id;
 
         $model = ($this->modelClass)::create($data);

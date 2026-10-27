@@ -10,6 +10,7 @@ class ServiceController extends BaseClinicCrudController
     protected string $modelClass = Service::class;
     protected array $searchable = ['name', 'code'];
     protected array $filterable = ['status'];
+    protected array $statuses = ['active', 'inactive'];
 
     public function store(Request $request)
     {
