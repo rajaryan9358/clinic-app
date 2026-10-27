@@ -3,6 +3,7 @@
 namespace Tests\Feature\Dashboards;
 
 use App\Models\Clinic;
+use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,10 +16,10 @@ use Tests\TestCase;
 /**
  * Who may call the dashboard endpoints.
  *
- * The four dashboard routes carry no `perm:` middleware, only the clinic
- * group middleware (auth:sanctum, clinic.scope, clinic.context,
- * clinic.subscription). These tests pin that: any authenticated clinic user
- * can read every dashboard, subject to the context middleware rules.
+ * summary is open to every clinic user (scoped per user, see
+ * DashboardCountsTest); the role dashboards are gated by permission:
+ * clinic-admin -> dashboard.admin, receptionist -> dashboard.receptionist,
+ * assistant -> dashboard.assistant. clinic_admin kind passes every check.
  */
 class DashboardAccessTest extends TestCase
 {
@@ -44,18 +45,6 @@ class DashboardAccessTest extends TestCase
         ];
     }
 
-    public static function endpointsByRole(): array
-    {
-        $out = [];
-        foreach (['clinic_admin', 'receptionist', 'assistant', 'doctor'] as $role) {
-            foreach (self::endpoints() as $name => [$uri]) {
-                $out["{$role} -> {$name}"] = [$role, $uri];
-            }
-        }
-
-        return $out;
-    }
-
     private function userForRole(string $role): User
     {
         return match ($role) {
@@ -65,23 +54,96 @@ class DashboardAccessTest extends TestCase
         };
     }
 
+    /** Expected status per system role and endpoint. */
+    private const MATRIX = [
+        'clinic_admin' => ['summary' => 200, 'clinic-admin' => 200, 'receptionist' => 200, 'assistant' => 200],
+        'receptionist' => ['summary' => 200, 'clinic-admin' => 403, 'receptionist' => 200, 'assistant' => 403],
+        'assistant' => ['summary' => 200, 'clinic-admin' => 403, 'receptionist' => 403, 'assistant' => 200],
+        'doctor' => ['summary' => 200, 'clinic-admin' => 403, 'receptionist' => 403, 'assistant' => 403],
+    ];
+
+    public static function roleMatrix(): array
+    {
+        $out = [];
+        foreach (self::MATRIX as $role => $expectations) {
+            foreach ($expectations as $name => $status) {
+                $out["{$role} -> {$name}"] = [$role, self::endpoints()[$name][0], $status];
+            }
+        }
+
+        return $out;
+    }
+
     #[Test]
-    #[DataProvider('endpointsByRole')]
-    public function every_system_role_can_read_every_dashboard(string $role, string $uri): void
+    #[DataProvider('roleMatrix')]
+    public function system_roles_follow_the_dashboard_access_matrix(string $role, string $uri, int $status): void
     {
         Sanctum::actingAs($this->userForRole($role));
+
+        $res = $this->getJson($uri)->assertStatus($status);
+
+        if ($status === 200) {
+            $res->assertJsonPath('success', true);
+        } else {
+            $res->assertJsonPath('success', false);
+            $this->assertStringStartsWith("You don't have permission to view the", $res->json('message'));
+        }
+    }
+
+    #[Test]
+    public function staff_with_no_permissions_only_gets_the_summary(): void
+    {
+        Sanctum::actingAs($this->staffWith($this->clinic, []));
+
+        $this->getJson('/api/clinic/dashboard/summary')->assertOk();
+        $this->getJson('/api/clinic/dashboard/clinic-admin')->assertForbidden()->assertJsonPath('success', false);
+        $this->getJson('/api/clinic/dashboard/receptionist')->assertForbidden();
+        $this->getJson('/api/clinic/dashboard/assistant')->assertForbidden();
+    }
+
+    public static function permissionGates(): array
+    {
+        return [
+            'clinic-admin' => ['dashboard.admin', '/api/clinic/dashboard/clinic-admin'],
+            'receptionist' => ['dashboard.receptionist', '/api/clinic/dashboard/receptionist'],
+            'assistant' => ['dashboard.assistant', '/api/clinic/dashboard/assistant'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('permissionGates')]
+    public function custom_role_with_the_dashboard_permission_can_read_it(string $permission, string $uri): void
+    {
+        Sanctum::actingAs($this->staffWith($this->clinic, [$permission]));
 
         $this->getJson($uri)->assertOk()->assertJsonPath('success', true);
     }
 
-    /** Pins current behaviour: no permission is required (see report notes). */
     #[Test]
-    #[DataProvider('endpoints')]
-    public function staff_with_no_permissions_can_still_read_dashboards(string $uri): void
+    #[DataProvider('permissionGates')]
+    public function custom_role_without_the_dashboard_permission_is_forbidden(string $permission, string $uri): void
     {
-        Sanctum::actingAs($this->staffWith($this->clinic, []));
+        // Every other dashboard permission, plus a broad operational set:
+        // none of them stands in for the one this endpoint needs.
+        $others = array_values(array_diff(['dashboard.admin', 'dashboard.receptionist', 'dashboard.assistant'], [$permission]));
+        Sanctum::actingAs($this->staffWith($this->clinic, array_merge($others, ['appointments.view', 'patients.view', 'reports.view', 'audit_logs.view'])));
 
-        $this->getJson($uri)->assertOk();
+        $this->getJson($uri)->assertForbidden()->assertJsonPath('success', false);
+    }
+
+    #[Test]
+    public function custom_doctor_kind_role_with_dashboard_admin_can_read_the_admin_dashboard(): void
+    {
+        $role = Role::create(['name' => 'senior_doctor', 'guard_name' => 'web', 'label' => 'Senior doctor', 'kind' => 'doctor']);
+        $role->syncPermissions(['dashboard.admin']);
+        $user = $this->makeUser($this->clinic, 'doctor');
+        $user->update(['role' => 'senior_doctor']);
+        $user->syncRoles(['senior_doctor']);
+        $this->makeDoctor($this->clinic, 'Dr Senior', ['user_id' => $user->id]);
+        Sanctum::actingAs($user->fresh());
+
+        $this->getJson('/api/clinic/dashboard/clinic-admin')->assertOk();
+        $this->getJson('/api/clinic/dashboard/receptionist')->assertForbidden();
     }
 
     #[Test]

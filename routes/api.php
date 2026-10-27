@@ -253,10 +253,12 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
     Route::post('subscription/checkout', [ClinicSubscriptionController::class, 'checkout'])->middleware('perm:subscription.manage');
     Route::post('subscription/verify', [ClinicSubscriptionController::class, 'verify'])->middleware('perm:subscription.manage');
 
+    // Summary is open to every clinic user but scoped per user in the controller
+    // (doctor-limited counts, recent_activity only with audit_logs.view).
     Route::get('dashboard/summary', [ClinicDashboardController::class, 'summary']);
-    Route::get('dashboard/clinic-admin', [ClinicDashboardController::class, 'clinicAdmin']);
-    Route::get('dashboard/receptionist', [ClinicDashboardController::class, 'receptionist']);
-    Route::get('dashboard/assistant', [ClinicDashboardController::class, 'assistant']);
+    Route::get('dashboard/clinic-admin', [ClinicDashboardController::class, 'clinicAdmin'])->middleware('perm:dashboard.admin');
+    Route::get('dashboard/receptionist', [ClinicDashboardController::class, 'receptionist'])->middleware('perm:dashboard.receptionist');
+    Route::get('dashboard/assistant', [ClinicDashboardController::class, 'assistant'])->middleware('perm:dashboard.assistant');
 
     Route::get('reports/appointments.pdf', [ClinicReportController::class, 'appointmentsPdf'])->middleware('perm:reports.view');
     Route::get('reports/patients.pdf', [ClinicReportController::class, 'patientsPdf'])->middleware('perm:reports.view');

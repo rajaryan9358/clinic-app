@@ -336,20 +336,102 @@ class DashboardCountsTest extends TestCase
     }
 
     /**
-     * Doctor-kind users get the clinic-wide summary: the dashboard
-     * controller does not narrow by active_doctor_id.
+     * Doctor-kind users get a summary scoped to their own doctor record,
+     * mirroring BaseClinicCrudController::applyAccessScopes: appointments
+     * and follow-ups by doctor_id, patients by preferred_doctor_id, doctors
+     * by id, and no clinic-wide staff headcount.
      */
     #[Test]
-    public function doctor_user_summary_is_clinic_wide_not_doctor_scoped(): void
+    public function doctor_user_summary_is_scoped_to_their_doctor(): void
     {
         $drB = $this->makeDoctor($this->clinic, 'Dr B');
-        $this->makeAppointment($this->clinic, $this->doctor, $this->patient, self::TODAY);
+        $mine = $this->makePatient($this->clinic, 'Mine', 'Patient', ['preferred_doctor_id' => $this->doctor->id]);
+        $this->makePatient($this->clinic, 'Theirs', 'Patient', ['preferred_doctor_id' => $drB->id]);
+
+        $this->makeAppointment($this->clinic, $this->doctor, $mine, self::TODAY);
+        $this->makeAppointment($this->clinic, $this->doctor, $mine, '2026-10-20', 'completed');
         $this->makeAppointment($this->clinic, $drB, $this->patient, self::TODAY);
+        $this->makeAppointment($this->clinic, $drB, $this->patient, self::TODAY);
+        $this->makeAppointment($this->clinic, $drB, $this->patient, '2026-10-20', 'completed');
+
+        FollowupTask::create(['clinic_id' => $this->clinic->id, 'patient_id' => $mine->id, 'doctor_id' => $this->doctor->id, 'due_date' => self::TODAY, 'task_type' => 'call', 'status' => 'pending']);
+        FollowupTask::create(['clinic_id' => $this->clinic->id, 'patient_id' => $this->patient->id, 'doctor_id' => $drB->id, 'due_date' => self::TODAY, 'task_type' => 'call', 'status' => 'pending']);
+        FollowupTask::create(['clinic_id' => $this->clinic->id, 'patient_id' => $this->patient->id, 'due_date' => self::TODAY, 'task_type' => 'call', 'status' => 'pending']);
 
         Sanctum::actingAs($this->makeDoctorUser($this->clinic, $this->doctor));
         $res = $this->getJson('/api/clinic/dashboard/summary')->assertOk();
 
+        $this->assertSame(1, $res->json('data.today_appointments'));
+        $this->assertSame(2, $res->json('data.total_appointments'));
+        $this->assertSame(1, $res->json('data.total_doctors'));
+        $this->assertSame(1, $res->json('data.total_patients'));
+        $this->assertSame(1, $res->json('data.pending_followups'));
+        $this->assertArrayNotHasKey('total_staff', $res->json('data'));
+    }
+
+    #[Test]
+    public function doctor_limited_custom_role_summary_is_scoped_to_the_active_doctor(): void
+    {
+        $drB = $this->makeDoctor($this->clinic, 'Dr B');
+        $this->makeAppointment($this->clinic, $this->doctor, $this->patient, self::TODAY);
+        $this->makeAppointment($this->clinic, $drB, $this->patient, self::TODAY);
+        $this->makeAppointment($this->clinic, $drB, $this->patient, self::TODAY);
+
+        $user = $this->staffWith($this->clinic, []);
+        $user->roleModel()->update(['limit_to_assigned_doctors' => true]);
+        $user->assignedDoctors()->attach($drB->id, ['clinic_id' => $this->clinic->id]);
+        Sanctum::actingAs($user->fresh());
+
+        $res = $this->getJson('/api/clinic/dashboard/summary')->assertOk();
         $this->assertSame(2, $res->json('data.today_appointments'));
+        $this->assertSame(1, $res->json('data.total_doctors'));
+    }
+
+    #[Test]
+    public function summary_recent_activity_is_omitted_without_audit_logs_view(): void
+    {
+        AuditLog::create(['clinic_id' => $this->clinic->id, 'module' => 'patients', 'entity_type' => 'patient', 'action' => 'created', 'created_at' => now()]);
+
+        foreach ([
+            'receptionist' => $this->makeUser($this->clinic, 'receptionist'),
+            'doctor' => $this->makeDoctorUser($this->clinic, $this->doctor),
+            'staff without permissions' => $this->staffWith($this->clinic, []),
+        ] as $label => $user) {
+            Sanctum::actingAs($user);
+            $res = $this->getJson('/api/clinic/dashboard/summary')->assertOk();
+            $this->assertArrayNotHasKey('recent_activity', $res->json('data'), $label);
+        }
+    }
+
+    #[Test]
+    public function summary_recent_activity_is_included_with_audit_logs_view(): void
+    {
+        AuditLog::create(['clinic_id' => $this->clinic->id, 'module' => 'patients', 'entity_type' => 'patient', 'action' => 'created', 'created_at' => now()]);
+
+        Sanctum::actingAs($this->staffWith($this->clinic, ['audit_logs.view']));
+        $res = $this->getJson('/api/clinic/dashboard/summary')->assertOk();
+
+        $this->assertCount(1, $res->json('data.recent_activity'));
+        $this->assertSame(1, $res->json('data.total_staff'));
+    }
+
+    #[Test]
+    public function receptionist_dashboard_is_scoped_for_a_doctor_limited_custom_role(): void
+    {
+        $drB = $this->makeDoctor($this->clinic, 'Dr B');
+        $this->makeAppointment($this->clinic, $this->doctor, $this->patient, self::TODAY);
+        $this->makeAppointment($this->clinic, $drB, $this->patient, self::TODAY);
+        $this->makePatient($this->clinic, 'Mine', 'New', ['preferred_doctor_id' => $drB->id]);
+        $this->makePatient($this->clinic, 'Other', 'New', ['preferred_doctor_id' => $this->doctor->id]);
+
+        $user = $this->staffWith($this->clinic, ['dashboard.receptionist']);
+        $user->roleModel()->update(['limit_to_assigned_doctors' => true]);
+        $user->assignedDoctors()->attach($drB->id, ['clinic_id' => $this->clinic->id]);
+        Sanctum::actingAs($user->fresh());
+
+        $res = $this->getJson('/api/clinic/dashboard/receptionist')->assertOk();
+        $this->assertSame(1, $res->json('data.kpis.total_today'));
+        $this->assertSame(1, $res->json('data.kpis.new_patients_today'));
     }
 
     // ---------------------------------------------------------------
