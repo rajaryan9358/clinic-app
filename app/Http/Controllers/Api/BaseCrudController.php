@@ -27,12 +27,22 @@ abstract class BaseCrudController extends Controller
     /** Allowed values for changeStatus/block/unblock; empty means no extra check. */
     protected array $statuses = [];
 
+    /** System-generated records: the API only lists and shows them. */
+    protected bool $readOnly = false;
+
     private static array $columnListingCache = [];
 
     /** Validation rules for store/update; empty means the raw payload is persisted. */
     protected function rules(Request $request, ?Model $model = null): array
     {
         return [];
+    }
+
+    protected function abortIfReadOnly(): void
+    {
+        if ($this->readOnly) {
+            abort(405, 'This module is read-only.');
+        }
     }
 
     protected function validatedPayload(Request $request, ?Model $model = null): array
@@ -109,6 +119,8 @@ abstract class BaseCrudController extends Controller
 
     public function store(Request $request)
     {
+        $this->abortIfReadOnly();
+
         $model = ($this->modelClass)::create($this->validatedPayload($request));
 
         return $this->success('Record created successfully', $model, 201);
@@ -123,6 +135,8 @@ abstract class BaseCrudController extends Controller
 
     public function update(Request $request, int $id)
     {
+        $this->abortIfReadOnly();
+
         $model = $this->findModel($id);
         $model->update($this->validatedPayload($request, $model));
 
@@ -131,6 +145,8 @@ abstract class BaseCrudController extends Controller
 
     public function destroy(int $id)
     {
+        $this->abortIfReadOnly();
+
         $model = $this->findModel($id);
         $model->delete();
 
@@ -139,6 +155,8 @@ abstract class BaseCrudController extends Controller
 
     public function restore(int $id)
     {
+        $this->abortIfReadOnly();
+
         if (! $this->supportsSoftDeletes()) {
             return $this->error('Restore is not supported for this module', null, 422);
         }
@@ -152,6 +170,8 @@ abstract class BaseCrudController extends Controller
 
     public function changeStatus(StatusChangeRequest $request, int $id)
     {
+        $this->abortIfReadOnly();
+
         $model = $this->findModel($id);
         $status = $request->validated('status');
 
@@ -180,6 +200,8 @@ abstract class BaseCrudController extends Controller
 
     protected function toggleBlock(int $id, string $status)
     {
+        $this->abortIfReadOnly();
+
         $model = $this->findModel($id);
 
         if (! isset($model->status)) {

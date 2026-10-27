@@ -14,6 +14,9 @@ export function isSuperAdminHiddenModuleKey(moduleKey) {
 // Modules that cannot be created via the generic form
 export const NON_CREATABLE_MODULE_KEYS = ['clinicSettings', 'auditLogs'];
 
+// System-generated records: the API refuses every write (405)
+export const READ_ONLY_MODULE_KEYS = ['auditLogs', 'reminders', 'whatsappMessages', 'whatsappSessions'];
+
 // Module key → permission module name (the `{module}` in `{module}.{view|create|edit|delete}`).
 export const MODULE_PERMISSION = {
     patients: 'patients',
@@ -45,7 +48,7 @@ export function canCreateModule(role, moduleKey, can) {
     const key = String(moduleKey);
     const r = String(role || '');
 
-    if (NON_CREATABLE_MODULE_KEYS.includes(key)) return false;
+    if (NON_CREATABLE_MODULE_KEYS.includes(key) || READ_ONLY_MODULE_KEYS.includes(key)) return false;
 
     // Clinics: only super_admin
     if (key === 'clinics') return r === 'super_admin';
@@ -65,6 +68,8 @@ export function canEditModule(role, moduleKey, can) {
     const key = String(moduleKey);
     const r = String(role || '');
 
+    if (READ_ONLY_MODULE_KEYS.includes(key)) return false;
+
     if (r === 'super_admin') return true;
 
     const perm = clinicPermissionFor(key, 'edit');
@@ -76,6 +81,8 @@ export function canDeleteModule(role, moduleKey, can) {
     if (!moduleKey) return false;
     const key = String(moduleKey);
     const r = String(role || '');
+
+    if (READ_ONLY_MODULE_KEYS.includes(key)) return false;
 
     if (r === 'super_admin') return true;
 
