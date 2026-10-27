@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use App\Traits\BelongsToClinicScope;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 class Appointment extends Model
 {
@@ -20,6 +22,9 @@ class Appointment extends Model
         'cancellation_reason', 'rescheduled_from_appointment_id', 'notes',
     ];
 
+    /** Lets the staff UI show "Undo" only inside the server's window. */
+    protected $appends = ['can_undo_status'];
+
     protected function casts(): array
     {
         return [
@@ -32,6 +37,26 @@ class Appointment extends Model
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    /**
+     * True while AppointmentService::undoStatus() would accept this
+     * appointment's status and date: cancelled / no-show / completed, and
+     * the clinic-local date is on or before the appointment day. Read from
+     * raw attributes so partial selects never trip over missing columns.
+     * Permissions and slot conflicts are still checked by the endpoint.
+     */
+    protected function canUndoStatus(): Attribute
+    {
+        return Attribute::get(function (): bool {
+            $status = $this->attributes['status'] ?? null;
+            $date = $this->attributes['appointment_date'] ?? null;
+            if (! in_array($status, ['cancelled', 'no_show', 'completed'], true) || ! $date) {
+                return false;
+            }
+
+            return Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'))->toDateString() <= substr((string) $date, 0, 10);
+        });
     }
 
     public function clinic(): BelongsTo

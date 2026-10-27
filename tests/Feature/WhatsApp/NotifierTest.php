@@ -242,6 +242,38 @@ class NotifierTest extends TestCase
         $this->assertSame('waitlist-token-123', $button['parameters'][0]['text']);
     }
 
+    public function test_waitlist_slot_taken_sends_expected_template_without_a_button(): void
+    {
+        $entry = WaitlistEntry::create([
+            'clinic_id' => $this->clinic->id,
+            'patient_id' => $this->patient->id,
+            'doctor_id' => $this->doctor->id,
+            'appointment_date' => '2026-09-29',
+            'start_time' => '10:30:00',
+            'end_time' => '10:45:00',
+            'status' => 'waiting',
+            'source' => 'portal',
+        ]);
+
+        $row = $this->notifier->waitlistSlotTaken($entry);
+
+        $this->assertSame($this->patient->id, $row->patient_id);
+        $this->assertNull($row->appointment_id);
+        $this->assertSame('waitlist_slot_taken', $row->notification_type);
+        $this->assertSame('waitlist_slot_taken', $row->template_name);
+        $this->assertSame('919876543210', $row->to_phone);
+        $this->assertStringContainsString('has been booked by the clinic', $row->content_text);
+        $this->assertStringContainsString('remain on the waitlist', $row->content_text);
+
+        $sent = $this->fake->sent[array_key_last($this->fake->sent)];
+        $this->assertSame('waitlist_slot_taken', $sent['template']);
+        $this->assertSame(
+            ['Ravi Kumar', 'Sunrise Clinic', 'Dr Asha Rao', 'Tue, 29 Sep 2026', '10:30 AM'],
+            array_map(fn ($p) => $p['text'], $this->bodyComponent($sent['components'])['parameters']),
+        );
+        $this->assertSame([], array_values(array_filter($sent['components'], fn ($c) => $c['type'] === 'button')));
+    }
+
     public function test_waitlist_offer_for_a_dependent_goes_to_the_holders_phone(): void
     {
         $holder = Patient::create([

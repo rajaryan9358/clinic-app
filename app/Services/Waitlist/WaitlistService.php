@@ -193,8 +193,8 @@ final class WaitlistService
                 ->update(['status' => 'expired', 'updated_at' => now()]);
 
             // Oldest waiting entry whose patient and account holder still
-            // exist; an entry left without a (non-deleted) holder can't be
-            // messaged, so it is skipped rather than blocking the slot.
+            // exist and whose holder accepts WhatsApp; anyone else can't be
+            // messaged, so they are skipped rather than blocking the slot.
             $entry = null;
             $holder = null;
             $candidates = $this->entriesAt($clinicId, $doctorId, $date, $startTime)
@@ -205,7 +205,7 @@ final class WaitlistService
                 ->get();
             foreach ($candidates as $candidate) {
                 $holder = $this->accountHolder($candidate->patient);
-                if ($holder !== null) {
+                if ($holder !== null && $holder->whatsapp_opt_in !== false) {
                     $entry = $candidate;
                     break;
                 }
@@ -314,7 +314,9 @@ final class WaitlistService
      *  1. active entries whose slot has started → expired (expired_past);
      *  2. per future slot with active entries, under its doctor lock:
      *     offers whose hold lapsed, or whose slot someone else now occupies
-     *     (e.g. staff booked over the hold) → expired (expired_holds); then
+     *     (an appointment written outside AppointmentService, whose
+     *     slotTaken() would have re-queued a live hold) → expired
+     *     (expired_holds); then
      *     slotFreed() offers the next in line if the slot is free and
      *     unheld (offered).
      *
@@ -411,9 +413,16 @@ final class WaitlistService
     /**
      * Called by AppointmentService inside its transaction whenever an
      * appointment lands on a slot (create, reschedule-into). The booking
-     * patient's own entry is marked booked; any other patient's offer on
-     * that slot (staff can book over a hold) is expired — the slot is
-     * taken, so nobody else is offered it until it frees again.
+     * patient's own entry is marked booked. Any other patient's offer on
+     * that slot (staff can book over a hold):
+     *  - a live hold (hold_expires_at still in the future) goes back to
+     *    `waiting` — same row, so it keeps its place in line (slotFreed()
+     *    offers oldest id first) — its offer fields are cleared, its login
+     *    link consumed, and (after commit) the holder gets the
+     *    `waitlist_slot_taken` WhatsApp;
+     *  - a lapsed offer the expiry command hasn't processed yet is expired.
+     * Nothing is offered here: the slot is occupied now, and the re-queued
+     * entry is only offered again if this slot frees (slotFreed()).
      */
     public function slotTaken(Appointment $appointment): void
     {
@@ -426,10 +435,75 @@ final class WaitlistService
 
         $this->markBookedIfOffered($appointment);
 
-        $this->entriesAt((int) $appointment->clinic_id, (int) $appointment->doctor_id, $date, $this->normaliseTime((string) $appointment->start_time))
+        $offers = $this->entriesAt((int) $appointment->clinic_id, (int) $appointment->doctor_id, $date, $this->normaliseTime((string) $appointment->start_time))
             ->where('status', 'offered')
             ->when($appointment->patient_id !== null, fn ($q) => $q->where('patient_id', '!=', $appointment->patient_id))
-            ->update(['status' => 'expired', 'updated_at' => now()]);
+            ->get();
+
+        foreach ($offers as $offer) {
+            $live = $offer->hold_expires_at !== null && $offer->hold_expires_at->greaterThan(now());
+            if (! $live) {
+                $offer->update(['status' => 'expired']);
+
+                continue;
+            }
+
+            $this->requeueTakenHold($offer);
+        }
+    }
+
+    /**
+     * A live hold someone else's booking just took: back to `waiting`
+     * (created_at/id untouched, so its place in line is unchanged), offer
+     * fields cleared, its "Book it" link consumed, and the holder told
+     * after commit.
+     */
+    private function requeueTakenHold(WaitlistEntry $entry): void
+    {
+        $loginLinkId = $entry->login_link_id;
+
+        $entry->update([
+            'status' => 'waiting',
+            'offered_at' => null,
+            'hold_expires_at' => null,
+            'login_link_id' => null,
+        ]);
+
+        if ($loginLinkId !== null) {
+            PatientLoginLink::query()
+                ->whereKey($loginLinkId)
+                ->whereNull('consumed_at')
+                ->update(['consumed_at' => now()]);
+        }
+
+        if (! $this->shouldNotifySlotTaken($entry)) {
+            return;
+        }
+
+        DB::afterCommit(function () use ($entry) {
+            try {
+                app(PatientNotifier::class)->waitlistSlotTaken($entry);
+            } catch (\Throwable $e) {
+                Log::warning('WhatsApp notifier failed: '.$e->getMessage(), ['exception' => $e]);
+            }
+        });
+    }
+
+    /**
+     * The same gates as an offer (waitlist and portal on, a reachable
+     * account holder), plus the holder's WhatsApp opt-in.
+     */
+    private function shouldNotifySlotTaken(WaitlistEntry $entry): bool
+    {
+        $clinicId = (int) $entry->clinic_id;
+        if (! $this->settings($clinicId)['enabled'] || ! PortalProfiles::portalEnabled($clinicId)) {
+            return false;
+        }
+
+        $patient = $entry->patient;
+        $holder = $patient !== null ? $this->accountHolder($patient) : null;
+
+        return $holder !== null && $holder->whatsapp_opt_in !== false;
     }
 
     /** The slot's live hold (offered and not yet lapsed), if any. */

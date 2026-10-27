@@ -218,8 +218,9 @@ class WaitlistOfferTest extends TestCase
 
     // --- staff booking over a hold ------------------------------------------
 
-    public function test_staff_booking_over_a_hold_expires_the_offer_without_offering_the_next(): void
+    public function test_staff_booking_over_a_hold_requeues_the_offer_without_offering_the_next(): void
     {
+        // Message and re-queue details: WaitlistHeldSlotTakenTest.
         [$first, $second] = $this->offeredQueue();
 
         Sanctum::actingAs($this->receptionist());
@@ -233,7 +234,7 @@ class WaitlistOfferTest extends TestCase
             'booking_channel' => 'walk_in',
         ])->assertCreated();
 
-        $this->assertSame('expired', $first->fresh()->status);
+        $this->assertSame('waiting', $first->fresh()->status);
         $this->assertSame('waiting', $second->fresh()->status);
         $this->assertNull($this->service()->heldFor($this->clinic->id, $this->doctor->id, $this->tomorrow, '09:00'));
         $this->assertSame(1, $this->waitlistMessages()->count());
@@ -241,6 +242,7 @@ class WaitlistOfferTest extends TestCase
         // The expiry command leaves the occupied slot alone too.
         $this->travel(31)->minutes();
         $this->assertSame(['expired_holds' => 0, 'expired_past' => 0, 'offered' => 0], $this->service()->process());
+        $this->assertSame('waiting', $first->fresh()->status);
         $this->assertSame('waiting', $second->fresh()->status);
     }
 
@@ -305,7 +307,7 @@ class WaitlistOfferTest extends TestCase
         $this->assertSame(1, $this->waitlistMessages()->count());
     }
 
-    public function test_cancelling_the_staff_booking_offers_the_next_waiting_entry(): void
+    public function test_cancelling_the_staff_booking_re_offers_the_requeued_entry_first(): void
     {
         [$first, $second] = $this->offeredQueue();
         $staffBooked = app(AppointmentService::class)->create([
@@ -319,11 +321,12 @@ class WaitlistOfferTest extends TestCase
             'booking_channel' => 'walk_in',
             'status' => 'confirmed',
         ]);
-        $this->assertSame('expired', $first->fresh()->status);
+        $this->assertSame('waiting', $first->fresh()->status);
 
         app(AppointmentService::class)->changeStatus($staffBooked, AppointmentStatus::CANCELLED);
 
-        $this->assertSame('offered', $second->fresh()->status);
-        $this->assertSame(1, PatientLoginLink::where('id', $second->fresh()->login_link_id)->count());
+        $this->assertSame('offered', $first->fresh()->status);
+        $this->assertSame('waiting', $second->fresh()->status);
+        $this->assertSame(1, PatientLoginLink::where('id', $first->fresh()->login_link_id)->whereNull('consumed_at')->count());
     }
 }

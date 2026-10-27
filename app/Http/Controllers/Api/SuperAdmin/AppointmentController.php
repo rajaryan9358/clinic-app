@@ -148,6 +148,15 @@ class AppointmentController extends BaseCrudController
         return $this->success('Appointment status changed successfully', $updated);
     }
 
+    /** POST /appointments/{id}/undo-status (see AppointmentService::undoStatus). */
+    public function undoStatus(Request $request, int $id)
+    {
+        $appointment = $this->findModel($id);
+        $updated = $this->appointmentService->undoStatus($appointment, $request->user()?->id);
+
+        return $this->success('Appointment status change undone', $updated);
+    }
+
     public function reschedule(Request $request, int $id)
     {
         $request->validate([

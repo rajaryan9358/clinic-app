@@ -404,6 +404,22 @@ class WaitlistServiceTest extends TestCase
         $this->assertSame(1, $this->waitlistMessages()->count());
     }
 
+    public function test_slot_freed_skips_entry_whose_account_holder_opted_out_of_whatsapp(): void
+    {
+        $holder = $this->consentedPatient();
+        $dependent = $this->consentedPatient(['managed_by_patient_id' => $holder->id]);
+        $appointment = $this->appointment($this->consentedPatient(), $this->tomorrow, '09:00');
+        $optedOut = $this->join($dependent, $this->tomorrow, '09:00');
+        $next = $this->join($this->consentedPatient(), $this->tomorrow, '09:00');
+        $holder->update(['whatsapp_opt_in' => false]);
+
+        app(AppointmentService::class)->changeStatus($appointment, AppointmentStatus::CANCELLED);
+
+        $this->assertSame('waiting', $optedOut->fresh()->status);
+        $this->assertSame('offered', $next->fresh()->status);
+        $this->assertSame(1, $this->waitlistMessages()->count());
+    }
+
     public function test_slot_freed_expires_a_lapsed_offer_and_offers_the_next(): void
     {
         $lapsed = $this->offeredEntry($this->consentedPatient(), $this->tomorrow, '09:00');

@@ -18,24 +18,52 @@ class DashboardController extends Controller
 {
     use ApiResponse;
 
+    /**
+     * Open to every clinic user, but scoped to what that user may see:
+     * a doctor-limited user (doctor kind, or a role limited to assigned
+     * doctors) gets counts for their active doctor only, mirroring
+     * BaseClinicCrudController::applyAccessScopes, and recent_activity
+     * (straight from the audit log) is only included with audit_logs.view.
+     */
     public function summary(Request $request)
     {
         $clinicId = $request->attributes->get('clinic_id');
+        $activeDoctorId = $request->attributes->get('active_doctor_id');
+        $activeDoctorId = $activeDoctorId ? (int) $activeDoctorId : null;
 
-        return $this->success('Dashboard summary fetched successfully', [
-            'total_staff' => User::where('clinic_id', $clinicId)->count(),
-            'total_doctors' => Doctor::where('clinic_id', $clinicId)->count(),
-            'total_patients' => Patient::where('clinic_id', $clinicId)->count(),
-            'total_appointments' => Appointment::where('clinic_id', $clinicId)->count(),
-            'today_appointments' => Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', $this->clinicNow()->toDateString())->count(),
-            'pending_followups' => FollowupTask::where('clinic_id', $clinicId)->where('status', 'pending')->count(),
-            'recent_activity' => AuditLog::where('clinic_id', $clinicId)->latest('created_at')->limit(10)->get(),
-        ]);
+        $forDoctor = function ($query, string $column) use ($activeDoctorId) {
+            return $activeDoctorId ? $query->where($column, $activeDoctorId) : $query;
+        };
+
+        $data = [];
+        if (! $activeDoctorId) {
+            // Staff headcount is clinic-wide and has no doctor scope.
+            $data['total_staff'] = User::where('clinic_id', $clinicId)->count();
+        }
+
+        $data += [
+            'total_doctors' => $forDoctor(Doctor::where('clinic_id', $clinicId), 'id')->count(),
+            'total_patients' => $forDoctor(Patient::where('clinic_id', $clinicId), 'preferred_doctor_id')->count(),
+            'total_appointments' => $forDoctor(Appointment::where('clinic_id', $clinicId), 'doctor_id')->count(),
+            'today_appointments' => $forDoctor(Appointment::where('clinic_id', $clinicId), 'doctor_id')->whereDate('appointment_date', $this->clinicNow()->toDateString())->count(),
+            'pending_followups' => $forDoctor(FollowupTask::where('clinic_id', $clinicId), 'doctor_id')->where('status', 'pending')->count(),
+        ];
+
+        if ($request->user()?->can('audit_logs.view')) {
+            $data['recent_activity'] = AuditLog::where('clinic_id', $clinicId)->latest('created_at')->limit(10)->get();
+        }
+
+        return $this->success('Dashboard summary fetched successfully', $data);
     }
 
     public function clinicAdmin(Request $request)
     {
         $clinicId = (int) $request->attributes->get('clinic_id');
+
+        // Doctor-limited roles granted dashboard.admin see only their doctors.
+        $allowed = $request->attributes->get('allowed_doctor_ids');
+        $doctorIds = is_array($allowed) ? array_map('intval', $allowed) : null;
+        $scoped = fn ($query, string $column) => $doctorIds === null ? $query : $query->whereIn($column, $doctorIds);
 
         $now = $this->clinicNow();
         $today = $now->toDateString();
@@ -43,7 +71,7 @@ class DashboardController extends Controller
         $from7 = $now->copy()->subDays(6)->toDateString();
         $to = $today;
 
-        $todayStatus = Appointment::query()
+        $todayStatus = $scoped(Appointment::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', $today)
             ->select('status', DB::raw('count(*) as count'))
@@ -53,7 +81,7 @@ class DashboardController extends Controller
             ->map(fn ($row) => ['status' => $row->status, 'count' => (int) $row->count])
             ->values();
 
-        $appointmentsTrend30 = Appointment::query()
+        $appointmentsTrend30 = $scoped(Appointment::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', '>=', $from30)
             ->whereDate('appointment_date', '<=', $to)
@@ -72,7 +100,7 @@ class DashboardController extends Controller
             ];
         }
 
-        $visitType30 = Appointment::query()
+        $visitType30 = $scoped(Appointment::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', '>=', $from30)
             ->whereDate('appointment_date', '<=', $to)
@@ -83,7 +111,7 @@ class DashboardController extends Controller
         $newCount = (int) ($visitType30->firstWhere('visit_type', 'new')->count ?? 0);
         $repeatCount = (int) ($visitType30->sum('count') - $newCount);
 
-        $bookingChannels30 = Appointment::query()
+        $bookingChannels30 = $scoped(Appointment::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', '>=', $from30)
             ->whereDate('appointment_date', '<=', $to)
@@ -94,7 +122,7 @@ class DashboardController extends Controller
             ->map(fn ($row) => ['source' => $row->booking_channel ?: 'unknown', 'count' => (int) $row->count])
             ->values();
 
-        $doctorPerf30 = Appointment::query()
+        $doctorPerf30 = $scoped(Appointment::query(), 'appointments.doctor_id')
             ->where('appointments.clinic_id', $clinicId)
             ->whereDate('appointments.appointment_date', '>=', $from30)
             ->whereDate('appointments.appointment_date', '<=', $to)
@@ -123,26 +151,26 @@ class DashboardController extends Controller
             ])
             ->values();
 
-        $followupsOverdue = FollowupTask::query()
+        $followupsOverdue = $scoped(FollowupTask::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->where('status', 'pending')
             ->whereDate('due_date', '<', $today)
             ->count();
 
-        $followupsDueToday = FollowupTask::query()
+        $followupsDueToday = $scoped(FollowupTask::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->where('status', 'pending')
             ->whereDate('due_date', $today)
             ->count();
 
-        $followupsDone7 = FollowupTask::query()
+        $followupsDone7 = $scoped(FollowupTask::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereDate('due_date', '>=', $from7)
             ->whereDate('due_date', '<=', $to)
             ->where('status', 'done')
             ->count();
 
-        $followupsTotal7 = FollowupTask::query()
+        $followupsTotal7 = $scoped(FollowupTask::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereDate('due_date', '>=', $from7)
             ->whereDate('due_date', '<=', $to)
@@ -150,7 +178,7 @@ class DashboardController extends Controller
 
         $followupCompletionRate7 = $followupsTotal7 > 0 ? round(($followupsDone7 / $followupsTotal7) * 100, 1) : null;
 
-        $appointments30 = Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', '>=', $from30)->whereDate('appointment_date', '<=', $to);
+        $appointments30 = $scoped(Appointment::query(), 'doctor_id')->where('clinic_id', $clinicId)->whereDate('appointment_date', '>=', $from30)->whereDate('appointment_date', '<=', $to);
         $appointments30Total = (clone $appointments30)->count();
         $appointments30NoShow = (clone $appointments30)->where('status', 'no_show')->count();
         $appointments30Cancelled = (clone $appointments30)->where('status', 'cancelled')->count();
@@ -158,12 +186,12 @@ class DashboardController extends Controller
         $noShowRate30 = $appointments30Total > 0 ? round(($appointments30NoShow / $appointments30Total) * 100, 1) : null;
         $cancelRate30 = $appointments30Total > 0 ? round(($appointments30Cancelled / $appointments30Total) * 100, 1) : null;
 
-        $newPatients30 = Patient::query()
+        $newPatients30 = $scoped(Patient::query(), 'preferred_doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereBetween('created_at', $this->clinicDayBounds($from30, $to))
             ->count();
 
-        $upcoming7Appointments = Appointment::query()
+        $upcoming7Appointments = $scoped(Appointment::query(), 'doctor_id')
             ->where('clinic_id', $clinicId)
             ->whereDate('appointment_date', '>=', $today)
             ->whereDate('appointment_date', '<=', $now->copy()->addDays(6)->toDateString())
@@ -199,9 +227,9 @@ class DashboardController extends Controller
 
         return $this->success('Clinic admin dashboard fetched successfully', [
             'kpis' => [
-                'today_appointments' => Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', $today)->count(),
-                'today_completed' => Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', $today)->where('status', 'completed')->count(),
-                'today_pending' => Appointment::where('clinic_id', $clinicId)->whereDate('appointment_date', $today)->whereIn('status', ['pending', 'confirmed', 'checked_in', 'in_consultation'])->count(),
+                'today_appointments' => $scoped(Appointment::query(), 'doctor_id')->where('clinic_id', $clinicId)->whereDate('appointment_date', $today)->count(),
+                'today_completed' => $scoped(Appointment::query(), 'doctor_id')->where('clinic_id', $clinicId)->whereDate('appointment_date', $today)->where('status', 'completed')->count(),
+                'today_pending' => $scoped(Appointment::query(), 'doctor_id')->where('clinic_id', $clinicId)->whereDate('appointment_date', $today)->whereIn('status', ['pending', 'confirmed', 'checked_in', 'in_consultation'])->count(),
                 'upcoming_7d_appointments' => $upcoming7Appointments,
                 'new_patients_30d' => $newPatients30,
                 'appointments_30d' => $appointments30Total,
@@ -243,6 +271,7 @@ class DashboardController extends Controller
         $base = Appointment::query()
             ->where('appointments.clinic_id', $clinicId)
             ->whereDate('appointment_date', $today);
+        $this->scopeToAllowedDoctors($request, $base);
 
         // KPI counts
         $totalToday       = (clone $base)->count();
@@ -253,8 +282,10 @@ class DashboardController extends Controller
         $noShowCount      = (clone $base)->where('status', 'no_show')->count();
         $cancelledCount   = (clone $base)->where('status', 'cancelled')->count();
 
+        $allowedDoctorIds = $request->attributes->get('allowed_doctor_ids');
         $newPatientsToday = Patient::query()
             ->where('clinic_id', $clinicId)
+            ->when(is_array($allowedDoctorIds), fn ($q) => $q->whereIn('preferred_doctor_id', array_map('intval', $allowedDoctorIds)))
             ->whereBetween('created_at', $this->clinicDayBounds($today, $today))
             ->count();
 
@@ -321,19 +352,12 @@ class DashboardController extends Controller
         $today     = $now->toDateString();
         $nowTime   = $now->format('H:i:s');
 
-        // Scope to doctors this assistant is assigned to
-        $assignedDoctorIds = $request->user()
-            ?->assignedDoctors()
-            ->pluck('doctors.id')
-            ->toArray() ?? [];
-
+        // Scope to the doctors this user is assigned to (all of them, not just
+        // the active one); clinic admins have no such limit.
         $base = Appointment::query()
             ->where('appointments.clinic_id', $clinicId)
             ->whereDate('appointment_date', $today);
-
-        if (count($assignedDoctorIds) > 0) {
-            $base->whereIn('appointments.doctor_id', $assignedDoctorIds);
-        }
+        $this->scopeToAllowedDoctors($request, $base);
 
         $totalToday     = (clone $base)->count();
         $pendingCount   = (clone $base)->whereIn('status', ['pending', 'confirmed'])->count();
@@ -343,8 +367,10 @@ class DashboardController extends Controller
         $noShowCount    = (clone $base)->where('status', 'no_show')->count();
         $cancelledCount = (clone $base)->where('status', 'cancelled')->count();
 
+        $allowedDoctorIds = $request->attributes->get('allowed_doctor_ids');
         $newPatientsToday = Patient::query()
             ->where('clinic_id', $clinicId)
+            ->when(is_array($allowedDoctorIds), fn ($q) => $q->whereIn('preferred_doctor_id', array_map('intval', $allowedDoctorIds)))
             ->whereBetween('created_at', $this->clinicDayBounds($today, $today))
             ->count();
 
@@ -396,6 +422,19 @@ class DashboardController extends Controller
             'status_breakdown' => $statusBreakdown,
             'upcoming'         => $upcoming,
         ]);
+    }
+
+    /**
+     * Doctor-limited users (doctor kind, or roles limited to assigned
+     * doctors) only see appointments for the doctors ResolveClinicContext
+     * allowed them.
+     */
+    private function scopeToAllowedDoctors(Request $request, $query): void
+    {
+        $allowed = $request->attributes->get('allowed_doctor_ids');
+        if (is_array($allowed)) {
+            $query->whereIn('appointments.doctor_id', array_map('intval', $allowed));
+        }
     }
 
     private function clinicNow(): Carbon

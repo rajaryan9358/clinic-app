@@ -426,22 +426,24 @@ function AssistantDashboard({ data }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
     const { user } = useAuth();
-    const { context, ready } = useScope() || {};
+    const { context, ready, can } = useScope() || {};
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
 
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
     const isSuperAdmin = user?.role === 'super_admin';
-    const roleKind = context?.role_kind;
-    const isClinicAdmin = roleKind === 'clinic_admin';
-    // Staff kind with role_limits_assigned_doctors set sees the assistant
-    // dashboard; every other staff kind (default: receptionist-style role or
-    // any custom staff role without the limit) sees the receptionist one.
-    const isAssistant = roleKind === 'staff' && Boolean(context?.role_limits_assigned_doctors);
-    const isReceptionist = roleKind === 'staff' && !isAssistant;
+    const allowed = (permission) => (typeof can === 'function' ? can(permission) : false);
+    // Each role-specific dashboard is gated by its own permission on the API
+    // (dashboard.admin / .receptionist / .assistant). Pick the first one this
+    // user holds, in that order; anyone holding none of them (doctors, custom
+    // roles) falls back to the summary view, which every clinic user may read.
+    const isClinicAdmin = !isSuperAdmin && allowed('dashboard.admin');
+    const isReceptionist = !isSuperAdmin && !isClinicAdmin && allowed('dashboard.receptionist');
+    const isAssistant = !isSuperAdmin && !isClinicAdmin && !isReceptionist && allowed('dashboard.assistant');
+    const activeDoctorId = context?.active_doctor_id ?? null;
 
     useEffect(() => {
-        // Don't fetch until role_kind is known (or the caller is super_admin,
+        // Don't fetch until permissions are known (or the caller is super_admin,
         // whose branch never depends on it): otherwise this fires once for
         // the generic/summary endpoint while roleKind is still unresolved,
         // then again for the real per-role endpoint once it resolves — two
@@ -459,7 +461,7 @@ export default function DashboardPage() {
                     url = `${base}/dashboard/receptionist`;
                 } else if (isAssistant) {
                     url = `${base}/dashboard/assistant`;
-                } else if (!isSuperAdmin && isClinicAdmin) {
+                } else if (isClinicAdmin) {
                     url = `${base}/dashboard/clinic-admin`;
                 } else {
                     url = `${base}/dashboard/summary`;
@@ -476,7 +478,7 @@ export default function DashboardPage() {
         return () => {
             cancelled = true;
         };
-    }, [base, isSuperAdmin, isClinicAdmin, isReceptionist, isAssistant, ready]);
+    }, [base, isSuperAdmin, isClinicAdmin, isReceptionist, isAssistant, activeDoctorId, ready]);
 
     if (error) {
         return (
@@ -509,7 +511,7 @@ export default function DashboardPage() {
     }
 
     // ── Clinic Admin dashboard ─────────────────────────────────────────────────
-    if (!isSuperAdmin && isClinicAdmin) {
+    if (isClinicAdmin) {
         const kpis = data?.kpis || {};
         const today = data?.today || {};
         const trends = data?.trends || {};
@@ -623,7 +625,18 @@ export default function DashboardPage() {
         );
     }
 
-    // ── Super Admin / other roles ──────────────────────────────────────────────
+    // ── Super Admin / summary (doctors, custom roles) ─────────────────────────
+    // Only offer shortcuts to pages this user can open.
+    const startOfDayActions = [
+        allowed('appointments.create') && { to: '/workflows/appointments/new', label: 'New Appointment' },
+        allowed('appointments.view') && { to: '/workflows/appointments', label: 'Appointments' },
+        allowed('followups.view') && { to: '/modules/followups', label: 'Follow-ups' },
+    ].filter(Boolean);
+    const teamActions = [
+        allowed('staff.create') && { to: '/workflows/create-staff', label: 'Add Staff' },
+        allowed('doctors.create') && { to: '/workflows/setup-doctor', label: 'Add Doctor' },
+    ].filter(Boolean);
+
     return (
         <div className="space-y-6">
             {/* Page header */}
@@ -638,14 +651,18 @@ export default function DashboardPage() {
                             : 'Run daily workflows: appointments, patients, billing, and communication.'}
                     </p>
                 </div>
-                {!isSuperAdmin && (
+                {!isSuperAdmin && (allowed('patients.create') || allowed('appointments.create')) && (
                     <div className="flex flex-wrap gap-2">
-                        <Link to="/modules/patients/new" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                            + New Patient
-                        </Link>
-                        <Link to="/workflows/appointments/new" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                            + New Appointment
-                        </Link>
+                        {allowed('patients.create') && (
+                            <Link to="/modules/patients/new" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                + New Patient
+                            </Link>
+                        )}
+                        {allowed('appointments.create') && (
+                            <Link to="/workflows/appointments/new" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                                + New Appointment
+                            </Link>
+                        )}
                     </div>
                 )}
             </div>
@@ -663,27 +680,22 @@ export default function DashboardPage() {
                         ]}
                     />
                 ) : (
-                    <ActionCard
-                        title="Start of Day"
-                        description="Jump into today's appointments and tasks."
-                        icon="calendar"
-                        actions={[
-                            { to: '/workflows/appointments/new', label: 'New Appointment' },
-                            { to: '/workflows/appointments', label: 'Appointments' },
-                            { to: '/modules/followups', label: 'Follow-ups' },
-                        ]}
-                    />
+                    startOfDayActions.length > 0 && (
+                        <ActionCard
+                            title="Start of Day"
+                            description="Jump into today's appointments and tasks."
+                            icon="calendar"
+                            actions={startOfDayActions}
+                        />
+                    )
                 )}
 
-                {!isSuperAdmin && (
+                {!isSuperAdmin && teamActions.length > 0 && (
                     <ActionCard
                         title="Team Management"
                         description="Add staff and doctors to your clinic."
                         icon="users"
-                        actions={[
-                            { to: '/workflows/create-staff', label: 'Add Staff' },
-                            { to: '/workflows/setup-doctor', label: 'Add Doctor' },
-                        ]}
+                        actions={teamActions}
                     />
                 )}
             </div>

@@ -82,6 +82,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
     const [actionError, setActionError] = useState('');
     const [cancelReason, setCancelReason] = useState('');
     const [showCancelInput, setShowCancelInput] = useState(false);
+    const [showUndoConfirm, setShowUndoConfirm] = useState(false);
 
     // Summary state
     const [summary, setSummary] = useState(null);
@@ -193,6 +194,22 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
         }
     };
 
+    const undoStatus = async () => {
+        setActionLoading(true);
+        setActionError('');
+        try {
+            await client.post(`${base}/appointments/${appointmentId}/undo-status`);
+            setShowUndoConfirm(false);
+            const res = await client.get(`${base}/appointments/${appointmentId}/detail`);
+            setPayload(res.data.data);
+            onChanged?.();
+        } catch (e) {
+            setActionError(e?.response?.data?.message || e?.response?.data?.errors?.status?.[0] || e?.message || 'Undo failed');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (!open || !appointmentId) return;
         let cancelled = false;
@@ -204,6 +221,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
         setActionError('');
         setShowCancelInput(false);
         setCancelReason('');
+        setShowUndoConfirm(false);
         (async () => {
             try {
                 const [detailRes, summaryRes] = await Promise.allSettled([
@@ -265,6 +283,11 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
         }
         return acts.filter((a) => (a.status === 'cancelled' ? canCancel : canCheckIn));
     })();
+    // Undo of a cancel / no-show / completion (POST undo-status). The server
+    // flags whether the date window is still open; the permission mirrors
+    // the one the original transition needed.
+    const canUndo = Boolean(appt?.can_undo_status) && (apptStatus === 'cancelled' ? canCancel : canCheckIn);
+    const undoLabel = { cancelled: 'cancellation', no_show: 'no-show', completed: 'completion' }[apptStatus] || 'status change';
     const actionStyleMap = {
         indigo:  'bg-indigo-600 hover:bg-indigo-700 text-white',
         emerald: 'bg-emerald-600 hover:bg-emerald-700 text-white',
@@ -327,7 +350,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                         <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
                     ) : null}
 
-                    {statusActions.length > 0 && (
+                    {(statusActions.length > 0 || canUndo) && (
                         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                             <h4 className="mb-3 text-sm font-semibold text-slate-900">Actions</h4>
 
@@ -362,7 +385,43 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                         </button>
                                     );
                                 })}
+                                {canUndo ? (
+                                    <button
+                                        type="button"
+                                        disabled={actionLoading}
+                                        onClick={() => setShowUndoConfirm((v) => !v)}
+                                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                        Undo {undoLabel}
+                                    </button>
+                                ) : null}
                             </div>
+
+                            {showUndoConfirm && canUndo && (
+                                <div className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                                    <p className="text-sm text-amber-900">
+                                        Undo this {undoLabel}? The appointment goes back to its previous status
+                                        {apptStatus === 'cancelled' ? ' and the patient is sent the booking confirmation again' : ''}.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={actionLoading}
+                                            onClick={undoStatus}
+                                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                        >
+                                            {actionLoading ? 'Undoing…' : 'Confirm Undo'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUndoConfirm(false)}
+                                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                        >
+                                            Dismiss
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {showCancelInput && (
                                 <div className="mt-3 flex flex-col gap-2">

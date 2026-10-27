@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import AppIcon from '../components/AppIcon';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { modules } from '../config/modules';
 import { canAccessModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +24,7 @@ function ModuleViewPageInner() {
     const [actionError, setActionError] = useState('');
     const [actionSaving, setActionSaving] = useState(false);
     const [apptStatusReason, setApptStatusReason] = useState('');
+    const [undoConfirmOpen, setUndoConfirmOpen] = useState(false);
     const [reschedule, setReschedule] = useState({ appointment_date: '', start_time: '', end_time: '', reason: '' });
 
     const [waOptions, setWaOptions] = useState({ users: null, doctors: null });
@@ -109,7 +111,7 @@ function ModuleViewPageInner() {
         loadRelated();
     }, [moduleKey, id, base, module]);
 
-    const hiddenKeys = new Set(['password', 'remember_token', 'clinic_id', 'deleted_at']);
+    const hiddenKeys = new Set(['password', 'remember_token', 'clinic_id', 'deleted_at', 'can_undo_status']);
     const entries = Object.entries(record || {}).filter(([key]) => !hiddenKeys.has(key));
 
     const renderValue = (value) => {
@@ -163,6 +165,30 @@ function ModuleViewPageInner() {
             setApptStatusReason('');
         } catch (e) {
             setActionError(e?.response?.data?.message || e?.message || 'Failed to change status');
+        } finally {
+            setActionSaving(false);
+        }
+    };
+
+    // Undo of a cancel / no-show / completion (POST undo-status): the server
+    // flags whether the date window is open; the permission mirrors the one
+    // the original transition needed.
+    const recordStatus = String(record?.status || '');
+    const canUndoStatus = Boolean(record?.can_undo_status)
+        && Boolean(scope?.can?.(recordStatus === 'cancelled' ? 'appointments.cancel' : 'appointments.check_in'));
+    const undoLabel = { cancelled: 'cancellation', no_show: 'no-show', completed: 'completion' }[recordStatus] || 'status change';
+
+    const runAppointmentUndo = async () => {
+        setActionSaving(true);
+        setActionError('');
+        try {
+            await client.post(`${base}/appointments/${id}/undo-status`);
+            const { data } = await client.get(`${base}/${module.path}/${id}`);
+            setRecord(data.data);
+            setUndoConfirmOpen(false);
+        } catch (e) {
+            setUndoConfirmOpen(false);
+            setActionError(e?.response?.data?.message || e?.message || 'Failed to undo');
         } finally {
             setActionSaving(false);
         }
@@ -308,7 +334,17 @@ function ModuleViewPageInner() {
                                             {actionSaving ? 'Working…' : a.label}
                                         </button>
                                     ))}
-                                    {!lifecycleActions.length ? (
+                                    {canUndoStatus ? (
+                                        <button
+                                            type="button"
+                                            disabled={actionSaving}
+                                            onClick={() => setUndoConfirmOpen(true)}
+                                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                        >
+                                            Undo {undoLabel}
+                                        </button>
+                                    ) : null}
+                                    {!lifecycleActions.length && !canUndoStatus ? (
                                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">No quick actions available.</div>
                                     ) : null}
                                 </div>
@@ -468,6 +504,16 @@ function ModuleViewPageInner() {
                     </div>
                 ))}
             </div>
+
+            <ConfirmDialog
+                open={undoConfirmOpen}
+                title={`Undo ${undoLabel}?`}
+                message={`The appointment goes back to its previous status${recordStatus === 'cancelled' ? ' and the patient is sent the booking confirmation again' : ''}.`}
+                confirmText="Undo"
+                busy={actionSaving}
+                onConfirm={runAppointmentUndo}
+                onClose={() => setUndoConfirmOpen(false)}
+            />
         </div>
     );
 }

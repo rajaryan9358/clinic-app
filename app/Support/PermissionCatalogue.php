@@ -37,6 +37,11 @@ class PermissionCatalogue
             'appointments.cancel' => ['label' => 'cancel appointments', 'module' => 'appointments'],
             'appointments.prescribe' => ['label' => 'write prescriptions and consultation notes', 'module' => 'appointments'],
             'subscription.manage' => ['label' => 'manage the subscription', 'module' => 'subscription'],
+            // Role-specific home dashboards. The summary dashboard needs no
+            // permission (it is scoped per user instead).
+            'dashboard.admin' => ['label' => 'view the clinic admin dashboard', 'module' => 'dashboard', 'group' => 'Dashboards'],
+            'dashboard.receptionist' => ['label' => 'view the receptionist dashboard', 'module' => 'dashboard', 'group' => 'Dashboards'],
+            'dashboard.assistant' => ['label' => 'view the assistant dashboard', 'module' => 'dashboard', 'group' => 'Dashboards'],
         ];
     }
 
@@ -85,10 +90,12 @@ class PermissionCatalogue
                 $crud('patients'), ['patients.portal_link'], $crud('appointments'), ['appointments.check_in', 'appointments.cancel'],
                 ['doctors.view', 'doctor_schedules.view', 'services.view', 'reminders.view'],
                 $crud('followups'), $crud('whatsapp', ['view', 'create']), $crud('billing'), ['reports.view'],
+                ['dashboard.receptionist'],
             ),
             'assistant' => array_merge(
                 $crud('patients'), $crud('appointments'), ['appointments.check_in'],
                 ['doctors.view', 'doctor_schedules.view', 'services.view', 'followups.view'],
+                ['dashboard.assistant'],
             ),
             default => [],
         };

@@ -11,8 +11,8 @@ const ACTION_COLUMNS = [
  * Permission editor for the super admin role builder (spec §5): rows are the
  * permission catalogue's modules with a checkbox per action the module
  * actually has (e.g. `reports` only has `view`), plus a per-row "All" toggle,
- * and a trailing "Special" section for one-off permissions like
- * `appointments.check_in`.
+ * and trailing sections for one-off permissions like
+ * `appointments.check_in` ("Special") or the role dashboards ("Dashboards").
  *
  * `value` is the flat list of permission names (`{module}.{action}` or a
  * special's own name). `readOnly` disables every checkbox — used for the
@@ -23,6 +23,18 @@ export default function PermissionGrid({ catalogue, value, onChange, readOnly = 
     const specials = Array.isArray(catalogue?.specials) ? catalogue.specials : [];
 
     const selected = useMemo(() => new Set(Array.isArray(value) ? value : []), [value]);
+
+    // Specials render in titled groups: those carrying a catalogue `group`
+    // (e.g. "Dashboards") get their own section, the rest go under "Special".
+    const specialGroups = useMemo(() => {
+        const groups = new Map();
+        specials.forEach((special) => {
+            const title = special.group || 'Special';
+            if (!groups.has(title)) groups.set(title, []);
+            groups.get(title).push(special);
+        });
+        return Array.from(groups.entries());
+    }, [specials]);
 
     const emit = (next) => {
         if (readOnly || typeof onChange !== 'function') return;
@@ -101,11 +113,11 @@ export default function PermissionGrid({ catalogue, value, onChange, readOnly = 
                 </table>
             </div>
 
-            {specials.length ? (
-                <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Special</p>
+            {specialGroups.map(([title, items]) => (
+                <div key={title}>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</p>
                     <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
-                        {specials.map((special) => (
+                        {items.map((special) => (
                             <label
                                 key={special.name}
                                 className={`flex items-center gap-3 px-4 py-2.5 ${readOnly ? '' : 'cursor-pointer hover:bg-gray-50'}`}
@@ -122,7 +134,7 @@ export default function PermissionGrid({ catalogue, value, onChange, readOnly = 
                         ))}
                     </div>
                 </div>
-            ) : null}
+            ))}
         </div>
     );
 }

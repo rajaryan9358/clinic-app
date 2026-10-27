@@ -44,7 +44,7 @@ class RoleController extends Controller
             ->values()->all();
 
         $specials = collect(PermissionCatalogue::specials())
-            ->map(fn (array $def, string $name) => ['name' => $name, 'label' => $def['label'], 'module' => $def['module']])
+            ->map(fn (array $def, string $name) => ['name' => $name, 'label' => $def['label'], 'module' => $def['module'], 'group' => $def['group'] ?? null])
             ->values()->all();
 
         return $this->success('Permission catalogue fetched successfully', ['modules' => $modules, 'specials' => $specials]);
