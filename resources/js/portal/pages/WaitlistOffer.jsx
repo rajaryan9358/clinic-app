@@ -4,7 +4,8 @@ import api from '../api';
 import { useSession } from '../session';
 import { MODE_LABELS, VISIT_TYPES, modeOptionsFor } from '../lib/booking';
 import { formatCountdown, formatDate, formatInstantTime, formatTime } from '../lib/format';
-import { Button, Card, ErrorText, Spinner } from '../components/ui';
+import { Alert, Button, Card, ChoiceGroup, ErrorText, Loading, PageHeader, SectionLabel, inputClass } from '../components/ui';
+import { ClockIcon } from '../components/icons';
 
 
 const OFFER_EXPIRED = 'This offer has expired.';
@@ -143,18 +144,17 @@ export default function WaitlistOffer() {
     }
 
     if (loading) {
-        return (
-            <div className="flex justify-center py-12">
-                <Spinner className="h-6 w-6 text-[var(--accent)]" />
-            </div>
-        );
+        return <Loading />;
     }
 
     if (loadError || !entry) {
         return (
             <div className="space-y-4">
                 <ErrorText>{loadError || 'Offer not found.'}</ErrorText>
-                <Link to="/visits" className="text-sm font-medium text-[var(--accent)]">
+                <Link
+                    to="/visits"
+                    className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-base font-semibold text-slate-800 hover:bg-slate-50"
+                >
                     Go to your visits
                 </Link>
             </div>
@@ -170,15 +170,15 @@ export default function WaitlistOffer() {
     const header = (
         <Card>
             <p className="text-base font-semibold text-slate-900">{slotLine}</p>
-            <p className="text-sm text-slate-600">{doctorLine}</p>
-            {clinic.name && <p className="mt-1 text-xs text-slate-500">{clinic.name}</p>}
+            <p className="mt-0.5 text-sm text-slate-600">{doctorLine}</p>
+            {clinic.name && <p className="mt-0.5 text-sm text-slate-500">{clinic.name}</p>}
         </Card>
     );
 
     const callClinic = clinic.phone ? (
         <p className="text-sm text-slate-600">
             Questions? Call {clinic.name || 'the clinic'} on{' '}
-            <a href={`tel:${clinic.phone}`} className="font-medium text-[var(--accent)]">
+            <a href={`tel:${clinic.phone}`} className="font-semibold text-[var(--accent)] underline-offset-2 hover:underline">
                 {clinic.phone}
             </a>
             .
@@ -265,64 +265,47 @@ export default function WaitlistOffer() {
 
     // Live offer.
     return (
-        <div className="space-y-4">
-            <h1 className="text-xl font-semibold text-slate-900">A time opened up</h1>
+        <div className="space-y-5">
+            <PageHeader title="A time opened up" subtitle="This time is free now and we're holding it for you." />
             {header}
 
-            <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200" aria-live="polite">
-                <p className="font-medium">
-                    Held for you until {formatInstantTime(entry.hold_expires_at)}
-                    <span className="ml-1 tabular-nums">({formatCountdown(holdEndsAt - now)} left)</span>
-                </p>
-                <p className="mt-1">Book it before then, or it goes to the next person in line.</p>
-            </div>
-
-            <div>
-                <h2 className="mb-2 text-sm font-medium text-slate-500">Visit type</h2>
-                <div className="flex gap-2">
-                    {VISIT_TYPES.map((vt) => (
-                        <button
-                            key={vt.value}
-                            type="button"
-                            onClick={() => setVisitType(vt.value)}
-                            className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${
-                                visitType === vt.value ? 'bg-[var(--accent)] text-white' : 'bg-slate-100 text-slate-700'
-                            }`}
-                        >
-                            {vt.label}
-                        </button>
-                    ))}
+            <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" aria-live="polite">
+                <ClockIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                <div>
+                    <p className="font-semibold">
+                        Held for you until {formatInstantTime(entry.hold_expires_at)}
+                        <span className="ml-1 tabular-nums">({formatCountdown(holdEndsAt - now)} left)</span>
+                    </p>
+                    <p className="mt-1">Book it before then, or it goes to the next person in line.</p>
                 </div>
             </div>
 
-            <div>
-                <h2 className="mb-2 text-sm font-medium text-slate-500">Mode</h2>
-                <div className="flex gap-2">
-                    {modeOptions.map((m) => (
-                        <button
-                            key={m}
-                            type="button"
-                            onClick={() => setMode(m)}
-                            className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${
-                                mode === m ? 'bg-[var(--accent)] text-white' : 'bg-slate-100 text-slate-700'
-                            }`}
-                        >
-                            {MODE_LABELS[m] || m}
-                        </button>
-                    ))}
-                </div>
-            </div>
+            <section>
+                <SectionLabel>Visit type</SectionLabel>
+                <ChoiceGroup label="Visit type" options={VISIT_TYPES} value={visitType} onChange={setVisitType} />
+            </section>
 
-            <div>
-                <h2 className="mb-2 text-sm font-medium text-slate-500">Reason (optional)</h2>
+            <section>
+                <SectionLabel>Mode</SectionLabel>
+                <ChoiceGroup
+                    label="Mode"
+                    options={modeOptions.map((m) => ({ value: m, label: MODE_LABELS[m] || m }))}
+                    value={mode}
+                    onChange={setMode}
+                />
+            </section>
+
+            <section>
+                <SectionLabel htmlFor="offer-reason">Reason (optional)</SectionLabel>
                 <textarea
+                    id="offer-reason"
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     rows={3}
                     placeholder="Tell the clinic why you're booking"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                    className={inputClass}
                 />
-            </div>
+            </section>
 
             {submitError ? <ErrorText>{submitError}</ErrorText> : null}
 
@@ -332,8 +315,8 @@ export default function WaitlistOffer() {
                 </Button>
 
                 {confirmDecline ? (
-                    <Card>
-                        <p className="mb-2 text-sm text-slate-600">
+                    <Card className="space-y-3">
+                        <p className="text-sm text-slate-700">
                             Pass on this time? It will be offered to the next person and you'll leave the waitlist for it.
                         </p>
                         <div className="space-y-2">
@@ -366,19 +349,15 @@ export default function WaitlistOffer() {
 // declined, removed, waiting): slot header, a toned message, actions and
 // the clinic's phone.
 function Outcome({ tone = 'slate', title, children, actions, header, submitError, callClinic }) {
-    const tones = {
-        slate: 'bg-slate-50 text-slate-700 ring-slate-200',
-        emerald: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
-        amber: 'bg-amber-50 text-amber-800 ring-amber-200',
-    };
+    const alertTone = { slate: 'info', emerald: 'success', amber: 'warn' }[tone] || 'info';
     return (
-        <div className="space-y-4">
-            <h1 className="text-xl font-semibold text-slate-900">Waitlist</h1>
+        <div className="space-y-5">
+            <PageHeader title="Waitlist" />
             {header}
-            <div className={`rounded-xl px-4 py-3 text-sm ring-1 ${tones[tone]}`}>
-                <p className="font-medium">{title}</p>
+            <Alert tone={alertTone}>
+                <p className="font-semibold">{title}</p>
                 {children ? <p className="mt-1">{children}</p> : null}
-            </div>
+            </Alert>
             {submitError ? <ErrorText>{submitError}</ErrorText> : null}
             <div className="space-y-2">{actions}</div>
             {callClinic}

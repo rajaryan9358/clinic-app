@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import FormRenderer from '../components/FormRenderer';
+import AppIcon from '../components/AppIcon';
+import { Alert, PageHeader, btn, input as inputClass, label as labelClass } from '../components/ui';
 import { modules } from '../config/modules';
 import { canAccessModule, canCreateModule, canEditModule, isSuperAdminHiddenModuleKey, NON_CREATABLE_MODULE_KEYS } from '../config/access';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +15,25 @@ import { useAssignableRoles } from '../hooks/useAssignableRoles';
 // (An early-return between two hook calls can change how many hooks run
 // between renders of the same mounted instance — e.g. once the scope
 // context finishes loading — which React forbids and crashes on.)
+// Local look for the booking steps: a selectable option card and a muted note.
+const optionCard = (selected) => (selected
+    ? 'w-full rounded-xl border border-blue-600 bg-blue-50/40 p-4 text-left ring-2 ring-blue-100'
+    : 'w-full rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-slate-300 hover:bg-slate-50');
+const selectPill = (selected) => (selected
+    ? 'shrink-0 rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white'
+    : 'shrink-0 rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700');
+const note = 'mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600';
+const fieldInput = `${inputClass} h-10`;
+
+function SectionTitle({ title, hint }) {
+    return (
+        <div>
+            <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+            {hint ? <p className="mt-0.5 text-sm text-slate-600">{hint}</p> : null}
+        </div>
+    );
+}
+
 function ModuleFormPageInner({ forcedModuleKey } = {}) {
     const { moduleKey: routeModuleKey, id } = useParams();
     const moduleKey = forcedModuleKey || routeModuleKey;
@@ -431,7 +452,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isUserCreate]);
 
-    if (!module) return <div className="rounded border bg-white p-4">Unknown module.</div>;
+    if (!module) return <Alert tone="error">Unknown module.</Alert>;
 
     const runPatientLookup = async () => {
         setPatientLookup({ loading: true, error: '', results: [] });
@@ -480,35 +501,35 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
 
     const renderInlineSlotPicker = () => (
         <div className="md:col-span-2">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">Timeslot</p>
-                <p className="mt-0.5 text-sm text-slate-600">Pick an available slot for the selected doctor.</p>
+            <div>
+                <SectionTitle title="Timeslot" hint="Pick an available slot for the selected doctor." />
 
                 {!values?.doctor_id ? (
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                    <div className={note}>
                         Select <span className="font-semibold">Doctor</span> to load slots.
                     </div>
                 ) : null}
 
                 {availability.error ? (
-                    <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{availability.error}</div>
+                    <div className="mt-3"><Alert tone="error">{availability.error}</Alert></div>
                 ) : null}
 
                 {availability.loading ? (
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Loading slots…</div>
+                    <div className={note}>Loading slots…</div>
                 ) : null}
 
                 {!availability.loading && availability.days?.length ? (
-                    <div className="mt-3 space-y-3">
-                        <div className="flex gap-2 overflow-x-auto py-1">
+                    <div className="mt-4 space-y-4">
+                        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1" role="group" aria-label="Date">
                             {availability.days.map((d) => (
                                 <button
                                     key={d.date}
                                     type="button"
                                     onClick={() => setSlotDate(d.date)}
+                                    aria-pressed={slotDate === d.date}
                                     className={slotDate === d.date
-                                        ? 'rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white'
-                                        : 'rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50'
+                                        ? 'h-9 shrink-0 whitespace-nowrap rounded-full bg-slate-900 px-3.5 text-sm font-semibold text-white'
+                                        : 'h-9 shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3.5 text-sm text-slate-700 hover:bg-slate-50'
                                     }
                                 >
                                     {prettyDateLabel(d.date)}
@@ -525,6 +546,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                                         key={`${slotDate}:${s.start_time}:${idx}`}
                                         type="button"
                                         disabled={disabled}
+                                        aria-pressed={isSelected}
                                         onClick={() => {
                                             setValues((prev) => ({
                                                 ...prev,
@@ -534,10 +556,10 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                                             }));
                                         }}
                                         className={disabled
-                                            ? 'rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400'
+                                            ? 'h-10 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm tabular-nums text-slate-400 line-through'
                                             : isSelected
-                                                ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white'
-                                                : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50'
+                                                ? 'h-10 rounded-xl bg-blue-600 px-3 text-sm font-semibold tabular-nums text-white'
+                                                : 'h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm tabular-nums text-slate-800 hover:border-blue-400 hover:bg-blue-50'
                                         }
                                     >
                                         {String(s.start_time || '').slice(0, 5)}–{String(s.end_time || '').slice(0, 5)}
@@ -546,12 +568,12 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                             })}
 
                             {!((availability.days.find((x) => x.date === slotDate)?.slots || []).length) ? (
-                                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">No slots for this date.</div>
+                                <p className="text-sm text-slate-600">No slots for this date.</p>
                             ) : null}
                         </div>
 
                         {values?.appointment_date && values?.start_time ? (
-                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                            <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                                 Selected: <span className="font-semibold">{values.appointment_date}</span> · <span className="font-semibold">{String(values.start_time).slice(0, 5)}</span>
                             </div>
                         ) : null}
@@ -562,15 +584,16 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
     );
 
     const renderInlinePatientSection = () => (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-900">Patient</p>
-            <p className="mt-0.5 text-sm text-slate-600">Search by mobile. If not found, add patient details here.</p>
+        <div>
+            <SectionTitle title="Patient" hint="Search by mobile. If not found, add patient details here." />
 
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <div className="md:col-span-2">
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Mobile</label>
+            <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div>
+                    <label htmlFor="booking-patient-mobile" className={labelClass}>Mobile</label>
                     <input
-                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                        id="booking-patient-mobile"
+                        type="tel"
+                        className={fieldInput}
                         value={patientMobile}
                         onChange={(e) => setPatientMobile(e.target.value)}
                         placeholder="Enter mobile number"
@@ -581,7 +604,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                         type="button"
                         onClick={runPatientLookup}
                         disabled={patientLookup.loading}
-                        className="w-full rounded-xl bg-slate-900 px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                        className={`${btn.secondary} w-full sm:w-28`}
                     >
                         {patientLookup.loading ? 'Searching…' : 'Search'}
                     </button>
@@ -589,12 +612,12 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
             </div>
 
             {patientLookup.error ? (
-                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{patientLookup.error}</div>
+                <div className="mt-3"><Alert tone="warn">{patientLookup.error}</Alert></div>
             ) : null}
 
             {patientLookup.results.length ? (
                 <div className="mt-4">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Search Results</div>
+                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Search results</h4>
                     <div className="grid gap-3 md:grid-cols-2">
                         {patientLookup.results.map((p) => {
                             const isSelected = String(values?.patient_id || '') === String(p.id);
@@ -613,25 +636,19 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                                         setValues((prev) => ({ ...prev, patient_id: String(p.id) }));
                                         setCreatePatientInline(false);
                                     }}
-                                    className={isSelected
-                                        ? 'text-left rounded-2xl border border-slate-900 bg-white p-4 shadow-sm'
-                                        : 'text-left rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-300'
-                                    }
+                                    aria-pressed={isSelected}
+                                    className={optionCard(isSelected)}
                                 >
                                     <div className="flex items-start justify-between gap-3">
-                                        <div>
-                                            <div className="text-sm font-semibold text-slate-900">{name}</div>
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-semibold text-slate-900">{name}</div>
                                             <div className="mt-0.5 text-sm text-slate-600">{phone}</div>
                                         </div>
-                                        {isSelected ? (
-                                            <div className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">Selected</div>
-                                        ) : (
-                                            <div className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">Select</div>
-                                        )}
+                                        <span className={selectPill(isSelected)}>{isSelected ? 'Selected' : 'Select'}</span>
                                     </div>
 
-                                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                                        <div><span className="font-semibold text-slate-700">Email:</span> {email || '—'}</div>
+                                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                                        <div className="truncate"><span className="font-semibold text-slate-700">Email:</span> {email || '—'}</div>
                                         <div><span className="font-semibold text-slate-700">Gender:</span> {gender || '—'}</div>
                                         <div><span className="font-semibold text-slate-700">DOB:</span> {dob ? String(dob).slice(0, 10) : '—'}</div>
                                         <div><span className="font-semibold text-slate-700">Age:</span> {age !== '' && age !== null && age !== undefined ? age : '—'}</div>
@@ -643,7 +660,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                 </div>
             ) : null}
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     onClick={() => {
@@ -654,7 +671,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                             phone: String(patientMobile || '').trim() || prev.phone,
                         }));
                     }}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className={createPatientInline ? `${btn.secondary} border-blue-600 text-blue-700` : btn.secondary}
                 >
                     Add New Patient
                 </button>
@@ -664,65 +681,70 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                         setCreatePatientInline(false);
                         setInlinePatient({ first_name: '', last_name: '', phone: '', email: '', gender: '', dob: '', age: '' });
                     }}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className={btn.ghost}
                 >
                     Use Existing Patient
                 </button>
                 {values.patient_id ? (
-                    <div className="text-sm text-slate-700">
+                    <div role="status" className="text-sm text-slate-700">
                         Selected:{' '}
                         <span className="font-semibold">
                             {selectedPatient?.full_name || (selectedPatient?.first_name ? `${selectedPatient.first_name}${selectedPatient.last_name ? ` ${selectedPatient.last_name}` : ''}` : `Patient #${values.patient_id}`)}
                         </span>
-                        {selectedPatient?.phone ? <span className="text-slate-500"> · {selectedPatient.phone}</span> : null}
+                        {selectedPatient?.phone ? <span className="text-slate-600"> · {selectedPatient.phone}</span> : null}
                     </div>
                 ) : null}
             </div>
 
             {createPatientInline ? (
-                <div className="mt-4">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">New Patient Details</div>
-                    <div className="grid gap-3 md:grid-cols-2">
+                <div className="mt-5 border-t border-slate-100 pt-5">
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">New patient details</h4>
+                    <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">First Name *</label>
+                        <label htmlFor="np-first" className={labelClass}>First name <span className="text-rose-600" aria-hidden="true">*</span></label>
                         <input
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            id="np-first"
+                            className={fieldInput}
                             value={inlinePatient.first_name}
                             onChange={(e) => setInlinePatient((p) => ({ ...p, first_name: e.target.value }))}
                             placeholder="First name"
                         />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Last Name</label>
+                        <label htmlFor="np-last" className={labelClass}>Last name</label>
                         <input
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            id="np-last"
+                            className={fieldInput}
                             value={inlinePatient.last_name}
                             onChange={(e) => setInlinePatient((p) => ({ ...p, last_name: e.target.value }))}
                             placeholder="Last name"
                         />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Mobile *</label>
+                        <label htmlFor="np-mobile" className={labelClass}>Mobile <span className="text-rose-600" aria-hidden="true">*</span></label>
                         <input
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            id="np-mobile"
+                            className={fieldInput}
                             value={inlinePatient.phone}
                             onChange={(e) => setInlinePatient((p) => ({ ...p, phone: e.target.value }))}
                             placeholder="Mobile"
                         />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email</label>
+                        <label htmlFor="np-email" className={labelClass}>Email</label>
                         <input
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            id="np-email"
+                            className={fieldInput}
                             value={inlinePatient.email}
                             onChange={(e) => setInlinePatient((p) => ({ ...p, email: e.target.value }))}
                             placeholder="Email (optional)"
                         />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Gender</label>
+                        <label htmlFor="np-gender" className={labelClass}>Gender</label>
                         <select
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            id="np-gender"
+                            className={fieldInput}
                             value={inlinePatient.gender ?? ''}
                             onChange={(e) => setInlinePatient((p) => ({ ...p, gender: e.target.value }))}
                         >
@@ -733,19 +755,21 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                         </select>
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date of Birth</label>
+                        <label htmlFor="np-dob" className={labelClass}>Date of birth</label>
                         <input
                             type="date"
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            id="np-dob"
+                            className={fieldInput}
                             value={inlinePatient.dob ?? ''}
                             onChange={(e) => setInlinePatient((p) => ({ ...p, dob: e.target.value }))}
                         />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Age</label>
+                        <label htmlFor="np-age" className={labelClass}>Age</label>
                         <input
                             type="number"
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            id="np-age"
+                            className={fieldInput}
                             value={inlinePatient.age ?? ''}
                             onChange={(e) => setInlinePatient((p) => ({ ...p, age: e.target.value }))}
                             placeholder="Age"
@@ -808,45 +832,46 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
         const services = Array.isArray(serviceOptions.items) ? serviceOptions.items : [];
 
         return (
-            <div className="space-y-4">
-                <div className="flex gap-2 overflow-x-auto">
-                    {steps.map((s) => (
-                        <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => goToAppointmentStep(s.id)}
-                            className={appointmentStep === s.id
-                                ? 'rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white'
-                                : 'rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50'
-                            }
-                        >
-                            {s.label}
-                        </button>
-                    ))}
-                </div>
+            <div className="space-y-5">
+                <ol className="-mx-5 -mt-5 flex overflow-x-auto border-b border-slate-100 px-3" aria-label="Booking steps">
+                    {steps.map((s) => {
+                        const current = appointmentStep === s.id;
+                        const done = appointmentStep > s.id;
+                        return (
+                            <li key={s.id} className="shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => goToAppointmentStep(s.id)}
+                                    aria-current={current ? 'step' : undefined}
+                                    className={`flex h-12 items-center gap-2 border-b-2 px-3 text-sm ${current ? 'border-blue-600 font-semibold text-slate-900' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                                >
+                                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${current ? 'bg-blue-600 text-white' : done ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{s.id}</span>
+                                    {s.label}
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ol>
 
-                {stepError ? (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{stepError}</div>
-                ) : null}
+                {stepError ? <Alert tone="error">{stepError}</Alert> : null}
 
                 {appointmentStep === 1 ? renderInlinePatientSection() : null}
 
                 {appointmentStep === 2 ? (
                     <div className="space-y-4">
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="text-sm font-semibold text-slate-900">Doctor</p>
-                            <p className="mt-0.5 text-sm text-slate-600">Choose the doctor for this appointment.</p>
+                        <div>
+                            <SectionTitle title="Doctor" hint="Choose the doctor for this appointment." />
 
                             {doctorOptions.error ? (
-                                <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{doctorOptions.error}</div>
+                                <div className="mt-3"><Alert tone="error">{doctorOptions.error}</Alert></div>
                             ) : null}
 
                             {doctorOptions.loading ? (
-                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Loading doctors…</div>
+                                <div className={note}>Loading doctors…</div>
                             ) : null}
 
                             {!doctorOptions.loading && doctors.length ? (
-                                <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                     {doctors.map((d) => {
                                         const isSelected = String(values?.doctor_id || '') === String(d.id);
                                         const name = [d.title, d.full_name].filter(Boolean).join(' ').trim() || `Doctor #${d.id}`;
@@ -856,38 +881,30 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                                                 key={d.id}
                                                 type="button"
                                                 onClick={() => setValues((prev) => ({ ...prev, doctor_id: String(d.id) }))}
-                                                className={isSelected
-                                                    ? 'text-left w-full overflow-hidden rounded-2xl border border-slate-900 bg-white shadow-sm'
-                                                    : 'text-left w-full overflow-hidden rounded-2xl border border-slate-200 bg-white hover:border-slate-300'
-                                                }
+                                                aria-pressed={isSelected}
+                                                className={optionCard(isSelected)}
                                             >
-                                                <div className="relative h-20 w-full bg-slate-100">
+                                                <div className="flex items-start gap-3">
                                                     {photoUrl ? (
                                                         <img
                                                             src={photoUrl}
                                                             alt={name}
-                                                            className="h-full w-full object-cover"
+                                                            className="h-11 w-11 shrink-0 rounded-full object-cover"
                                                         />
                                                     ) : (
-                                                        <div className="flex h-full w-full items-center justify-center text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                                            No Photo
-                                                        </div>
+                                                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-hidden="true">
+                                                            <AppIcon name="stethoscope" className="h-5 w-5" />
+                                                        </span>
                                                     )}
-
-                                                    <div className="absolute right-3 top-3">
-                                                        {isSelected ? (
-                                                            <div className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">Selected</div>
-                                                        ) : (
-                                                            <div className="rounded-full border border-slate-300 bg-white/90 px-2.5 py-1 text-xs font-semibold text-slate-700">Select</div>
-                                                        )}
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="truncate text-sm font-semibold text-slate-900">{name}</div>
+                                                        <div className="mt-0.5 truncate text-xs text-slate-600">{d.specialization || '—'}</div>
                                                     </div>
+                                                    <span className={selectPill(isSelected)}>{isSelected ? 'Selected' : 'Select'}</span>
                                                 </div>
 
-                                                <div className="p-3">
-                                                    <div className="truncate text-sm font-semibold text-slate-900">{name}</div>
-                                                    <div className="mt-0.5 truncate text-xs text-slate-600">{d.specialization || '—'}</div>
-
-                                                    <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-600">
+                                                <div>
+                                                    <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
                                                         <div className="truncate"><span className="font-semibold text-slate-700">Phone:</span> {d.phone || '—'}</div>
                                                         <div className="shrink-0"><span className="font-semibold text-slate-700">Fee:</span> {d.consultation_fee ?? '—'}</div>
                                                     </div>
@@ -899,7 +916,7 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                             ) : null}
 
                             {!doctorOptions.loading && !doctors.length ? (
-                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">No doctors found.</div>
+                                <div className={note}>No doctors found.</div>
                             ) : null}
                         </div>
                     </div>
@@ -908,20 +925,19 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                 {appointmentStep === 3 ? renderInlineSlotPicker() : null}
 
                 {appointmentStep === 4 ? (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-sm font-semibold text-slate-900">Service</p>
-                        <p className="mt-0.5 text-sm text-slate-600">Pick a service (optional).</p>
+                    <div>
+                        <SectionTitle title="Service" hint="Pick a service (optional)." />
 
                         {serviceOptions.error ? (
-                            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{serviceOptions.error}</div>
+                            <div className="mt-3"><Alert tone="error">{serviceOptions.error}</Alert></div>
                         ) : null}
 
                         {serviceOptions.loading ? (
-                            <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Loading services…</div>
+                            <div className={note}>Loading services…</div>
                         ) : null}
 
                         {!serviceOptions.loading && services.length ? (
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 {services.map((s) => {
                                     const isSelected = String(values?.service_id || '') === String(s.id);
                                     return (
@@ -929,21 +945,15 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                                             key={s.id}
                                             type="button"
                                             onClick={() => setValues((prev) => ({ ...prev, service_id: String(s.id) }))}
-                                            className={isSelected
-                                                ? 'text-left rounded-2xl border border-slate-900 bg-white p-4 shadow-sm'
-                                                : 'text-left rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-300'
-                                            }
+                                            aria-pressed={isSelected}
+                                            className={optionCard(isSelected)}
                                         >
                                             <div className="flex items-start justify-between gap-3">
-                                                <div>
+                                                <div className="min-w-0">
                                                     <div className="text-sm font-semibold text-slate-900">{s.name || `Service #${s.id}`}</div>
                                                     <div className="mt-0.5 text-sm text-slate-600">{s.description || '—'}</div>
                                                 </div>
-                                                {isSelected ? (
-                                                    <div className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">Selected</div>
-                                                ) : (
-                                                    <div className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">Select</div>
-                                                )}
+                                                <span className={selectPill(isSelected)}>{isSelected ? 'Selected' : 'Select'}</span>
                                             </div>
                                             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                                                 <div><span className="font-semibold text-slate-700">Fee:</span> {s.fee ?? '—'}</div>
@@ -956,14 +966,14 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
                         ) : null}
 
                         {!serviceOptions.loading && !services.length ? (
-                            <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">No services found.</div>
+                            <div className={note}>No services found.</div>
                         ) : null}
 
                         {values?.service_id ? (
                             <button
                                 type="button"
                                 onClick={() => setValues((prev) => ({ ...prev, service_id: '' }))}
-                                className="mt-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                className={`${btn.ghost} mt-3`}
                             >
                                 Clear Service
                             </button>
@@ -976,21 +986,22 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
 
     const renderDoctorLoginTop = () => (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-900">Doctor Login</p>
+            <h3 className="text-sm font-semibold text-slate-900">Doctor login</h3>
             <p className="mt-0.5 text-sm text-slate-600">A staff user will be created with role <span className="font-semibold">doctor</span>.</p>
 
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
                 <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Password</label>
+                    <label htmlFor="doctor-login-password" className={labelClass}>Password</label>
                     <input
+                        id="doctor-login-password"
                         type="password"
-                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                        className={fieldInput}
                         value={doctorLoginPassword}
                         onChange={(e) => setDoctorLoginPassword(e.target.value)}
                         placeholder="Set a password"
                     />
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
+                <div className="self-end rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
                     Uses Doctor <span className="font-semibold">Email/Phone</span> for login.
                 </div>
             </div>
@@ -1111,14 +1122,14 @@ function ModuleFormPageInner({ forcedModuleKey } = {}) {
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">{isEdit ? `Edit ${module.label}` : `Add ${module.label}`}</h2>
-                <Link to={`/modules/${moduleKey}`} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back</Link>
-            </div>
+        <div className={`mx-auto space-y-5 ${isAppointmentCreate ? 'max-w-5xl' : 'max-w-3xl'}`}>
+            <PageHeader
+                title={isEdit ? `Edit ${module.label}` : `Add ${module.label}`}
+                back={{ to: `/modules/${moduleKey}`, label: module.label }}
+            />
 
             <FormRenderer
-                title={isEdit ? `Edit ${module.label}` : `Add ${module.label}`}
+                title={isAppointmentCreate ? null : 'Details'}
                 fields={fieldsForRenderer}
                 values={values}
                 error={error}

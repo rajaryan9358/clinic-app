@@ -14,5 +14,5 @@
    is the fallback teal used before a clinic's primary_color is known
    (login/magic-link/consent screens, and clinics with no color set). */
 #portal-root {
-    --accent: #0f766e;
+    --accent: #2563eb;
 }

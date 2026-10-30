@@ -1,73 +1,73 @@
 const STATUS_CONFIG = {
     // ── User / Clinic ─────────────────────────────────────────────────────────
-    active:          { dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    inactive:        { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
-    blocked:         { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
-    suspended:       { dot: 'bg-amber-500',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
+    active:          { cls: 'bg-emerald-100 text-emerald-800' },
+    inactive:        { cls: 'bg-slate-100 text-slate-700' },
+    blocked:         { cls: 'bg-rose-100 text-rose-800' },
+    suspended:       { cls: 'bg-amber-100 text-amber-800' },
 
     // ── Appointment ───────────────────────────────────────────────────────────
-    pending:         { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-    confirmed:       { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
-    checked_in:      { dot: 'bg-sky-500',     text: 'text-sky-700',    bg: 'bg-sky-50',      border: 'border-sky-200' },
-    in_consultation: { dot: 'bg-violet-500',  text: 'text-violet-700', bg: 'bg-violet-50',   border: 'border-violet-200' },
-    completed:       { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    cancelled:       { dot: 'bg-red-400',     text: 'text-red-600',    bg: 'bg-red-50',      border: 'border-red-200' },
-    no_show:         { dot: 'bg-orange-500',  text: 'text-orange-700', bg: 'bg-orange-50',   border: 'border-orange-200' },
-    rescheduled:     { dot: 'bg-indigo-400',  text: 'text-indigo-700', bg: 'bg-indigo-50',   border: 'border-indigo-200' },
+    pending:         { cls: 'bg-amber-100 text-amber-800' },
+    confirmed:       { cls: 'bg-blue-100 text-blue-800' },
+    checked_in:      { cls: 'bg-sky-100 text-sky-800' },
+    in_consultation: { cls: 'bg-violet-100 text-violet-800' },
+    completed:       { cls: 'bg-emerald-100 text-emerald-800' },
+    cancelled:       { cls: 'bg-rose-100 text-rose-800' },
+    no_show:         { cls: 'bg-orange-100 text-orange-800' },
+    rescheduled:     { cls: 'bg-indigo-100 text-indigo-800' },
 
     // ── Waitlist ──────────────────────────────────────────────────────────────
-    waiting:         { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-    offered:         { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
-    booked:          { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    declined:        { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
-    removed:         { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
+    waiting:         { cls: 'bg-amber-100 text-amber-800' },
+    offered:         { cls: 'bg-blue-100 text-blue-800' },
+    booked:          { cls: 'bg-emerald-100 text-emerald-800' },
+    declined:        { cls: 'bg-slate-100 text-slate-700' },
+    removed:         { cls: 'bg-slate-100 text-slate-700' },
 
     // ── Invoice / Payment ─────────────────────────────────────────────────────
-    draft:           { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
-    final:           { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    issued:          { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
-    paid:            { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    partial:         { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-    refunded:        { dot: 'bg-violet-400',  text: 'text-violet-700', bg: 'bg-violet-50',   border: 'border-violet-200' },
+    draft:           { cls: 'bg-slate-100 text-slate-700' },
+    final:           { cls: 'bg-emerald-100 text-emerald-800' },
+    issued:          { cls: 'bg-blue-100 text-blue-800' },
+    paid:            { cls: 'bg-emerald-100 text-emerald-800' },
+    partial:         { cls: 'bg-amber-100 text-amber-800' },
+    refunded:        { cls: 'bg-violet-100 text-violet-800' },
 
     // ── Delivery / Reminder ───────────────────────────────────────────────────
-    sent:            { dot: 'bg-sky-500',     text: 'text-sky-700',    bg: 'bg-sky-50',      border: 'border-sky-200' },
-    delivered:       { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    read:            { dot: 'bg-purple-500',  text: 'text-purple-700', bg: 'bg-purple-50',   border: 'border-purple-200' },
-    failed:          { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
+    sent:            { cls: 'bg-sky-100 text-sky-800' },
+    delivered:       { cls: 'bg-emerald-100 text-emerald-800' },
+    read:            { cls: 'bg-purple-100 text-purple-800' },
+    failed:          { cls: 'bg-rose-100 text-rose-800' },
 
     // ── Review Sentiment ──────────────────────────────────────────────────────
-    positive:        { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    neutral:         { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-    negative:        { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
+    positive:        { cls: 'bg-emerald-100 text-emerald-800' },
+    neutral:         { cls: 'bg-amber-100 text-amber-800' },
+    negative:        { cls: 'bg-rose-100 text-rose-800' },
 
     // ── WhatsApp Conversation ─────────────────────────────────────────────────
-    open:            { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
-    closed:          { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
-    resolved:        { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
+    open:            { cls: 'bg-blue-100 text-blue-800' },
+    closed:          { cls: 'bg-slate-100 text-slate-700' },
+    resolved:        { cls: 'bg-emerald-100 text-emerald-800' },
 
     // ── Task / Followup ───────────────────────────────────────────────────────
-    overdue:         { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
-    due_today:       { dot: 'bg-orange-500',  text: 'text-orange-700', bg: 'bg-orange-50',   border: 'border-orange-200' },
-    done:            { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    in_progress:     { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
+    overdue:         { cls: 'bg-rose-100 text-rose-800' },
+    due_today:       { cls: 'bg-orange-100 text-orange-800' },
+    done:            { cls: 'bg-emerald-100 text-emerald-800' },
+    in_progress:     { cls: 'bg-blue-100 text-blue-800' },
 
     // ── SSL / Domain ──────────────────────────────────────────────────────────
-    enabled:         { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    disabled:        { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
-    provisioning:    { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-    error:           { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
-    yes:             { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
-    no:              { dot: 'bg-gray-400',    text: 'text-gray-600',   bg: 'bg-gray-50',     border: 'border-gray-200' },
+    enabled:         { cls: 'bg-emerald-100 text-emerald-800' },
+    disabled:        { cls: 'bg-slate-100 text-slate-700' },
+    provisioning:    { cls: 'bg-amber-100 text-amber-800' },
+    error:           { cls: 'bg-rose-100 text-rose-800' },
+    yes:             { cls: 'bg-emerald-100 text-emerald-800' },
+    no:              { cls: 'bg-slate-100 text-slate-700' },
 
     // ── Subscription ──────────────────────────────────────────────────────────
-    trialing:        { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',     border: 'border-blue-200' },
-    pending_payment: { dot: 'bg-amber-500',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-    past_due:        { dot: 'bg-amber-500',   text: 'text-amber-700',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-    expired:         { dot: 'bg-red-500',     text: 'text-red-700',    bg: 'bg-red-50',      border: 'border-red-200' },
+    trialing:        { cls: 'bg-blue-100 text-blue-800' },
+    pending_payment: { cls: 'bg-amber-100 text-amber-800' },
+    past_due:        { cls: 'bg-amber-100 text-amber-800' },
+    expired:         { cls: 'bg-rose-100 text-rose-800' },
 };
 
-const FALLBACK = { dot: 'bg-gray-400', text: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' };
+const FALLBACK = { cls: 'bg-slate-100 text-slate-700' };
 
 function prettify(str) {
     return String(str || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -79,8 +79,7 @@ export default function StatusBadge({ status }) {
     const cfg = STATUS_CONFIG[key] ?? FALLBACK;
 
     return (
-        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.border} ${cfg.text}`}>
-            <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
+        <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${cfg.cls}`}>
             {prettify(status)}
         </span>
     );

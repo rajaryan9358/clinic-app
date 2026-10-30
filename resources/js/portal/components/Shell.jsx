@@ -61,29 +61,32 @@ export default function Shell() {
 
     return (
         <div style={accent ? { '--accent': accent } : undefined} className="min-h-screen bg-slate-50">
-            <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-50">
-                <header className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
-                    <div className="flex min-w-0 items-center gap-2">
+            <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-50 sm:border-x sm:border-slate-200">
+                <header
+                    className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur"
+                    style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}
+                >
+                    <div className="flex min-w-0 items-center gap-3">
                         {clinic?.logo_url ? (
-                            <img src={clinic.logo_url} alt="" className="h-9 w-9 rounded-full object-cover" />
+                            <img src={clinic.logo_url} alt="" className="h-10 w-10 shrink-0 rounded-xl border border-slate-200 object-cover" />
                         ) : (
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10 text-sm font-semibold text-[var(--accent)]">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-base font-bold text-white">
                                 {(clinic?.name || 'C').charAt(0).toUpperCase()}
                             </div>
                         )}
                         <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-slate-900">{clinic?.name || 'Clinic'}</p>
-                            <p className="truncate text-xs text-slate-500">
+                            <p className="truncate text-xs text-slate-600">
                                 {activeProfile?.full_name || me?.account?.full_name}
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex shrink-0 items-center">
                         {showSwitcher && (
                             <button
                                 type="button"
                                 onClick={() => setSwitcherOpen(true)}
-                                className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+                                className="flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                                 aria-label="Switch clinic"
                             >
                                 <SwitchIcon className="h-5 w-5" />
@@ -92,7 +95,7 @@ export default function Shell() {
                         <button
                             type="button"
                             onClick={handleLogout}
-                            className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                             aria-label="Log out"
                         >
                             <LogoutIcon className="h-5 w-5" />
@@ -100,13 +103,13 @@ export default function Shell() {
                     </div>
                 </header>
 
-                <main className="flex-1 px-4 py-4 pb-24">
+                <main className="flex-1 px-4 pb-28 pt-5">
                     <Outlet />
                 </main>
 
                 <nav
-                    className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-slate-100 bg-white"
-                    style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+                    className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-md border-t border-slate-200 bg-white/95 backdrop-blur sm:border-x"
+                    style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
                     aria-label="Primary"
                 >
                     <ul className="grid grid-cols-5">
@@ -116,13 +119,23 @@ export default function Shell() {
                                     to={item.to}
                                     end={item.end}
                                     className={({ isActive }) =>
-                                        `flex flex-col items-center gap-1 py-2 text-xs font-medium ${
-                                            isActive ? 'text-[var(--accent)]' : 'text-slate-400'
+                                        `group flex min-h-[56px] flex-col items-center justify-center gap-0.5 pt-1.5 text-xs ${
+                                            isActive ? 'font-semibold text-[var(--accent)]' : 'font-medium text-slate-500 hover:text-slate-800'
                                         }`
                                     }
                                 >
-                                    <item.icon className="h-5 w-5" />
-                                    {item.label}
+                                    {({ isActive }) => (
+                                        <>
+                                            <span
+                                                className={`flex h-7 w-12 items-center justify-center rounded-full transition ${
+                                                    isActive ? 'bg-[var(--accent)]/10' : ''
+                                                }`}
+                                            >
+                                                <item.icon className="h-5 w-5" />
+                                            </span>
+                                            {item.label}
+                                        </>
+                                    )}
                                 </NavLink>
                             </li>
                         ))}
@@ -138,16 +151,16 @@ export default function Shell() {
                                     type="button"
                                     onClick={() => handleSwitchClinic(row)}
                                     disabled={switchingId !== null}
-                                    className="flex w-full items-center justify-between rounded-xl border border-slate-100 px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
+                                    className="flex min-h-[56px] w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
                                 >
-                                    <span>
-                                        <span className="block text-sm font-medium text-slate-900">{row.clinic_name}</span>
-                                        <span className="block text-xs text-slate-500">{row.patient_name}</span>
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-sm font-semibold text-slate-900">{row.clinic_name}</span>
+                                        <span className="block truncate text-sm text-slate-600">{row.patient_name}</span>
                                     </span>
                                     {switchingId === row.patient_id ? (
-                                        <Spinner className="h-4 w-4 text-slate-400" />
+                                        <Spinner className="h-4 w-4 shrink-0 text-slate-500" />
                                     ) : (
-                                        <ChevronRightIcon className="h-4 w-4 text-slate-400" />
+                                        <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-400" />
                                     )}
                                 </button>
                             </li>

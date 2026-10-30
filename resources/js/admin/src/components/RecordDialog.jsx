@@ -2,25 +2,26 @@ import AppIcon from './AppIcon';
 import StatusBadge from './StatusBadge';
 
 function prettyLabel(key) {
-    return key.replaceAll('_', ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+    const text = key.replaceAll('_', ' ');
+    return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function formatValue(value, key) {
     if (value === null || value === undefined || value === '') return null;
     if (typeof value === 'boolean') {
         return (
-            <span className={`inline-flex items-center gap-1 text-xs font-medium ${value ? 'text-emerald-600' : 'text-gray-400'}`}>
+            <span className={`inline-flex items-center gap-1 text-xs font-medium ${value ? 'text-emerald-700' : 'text-slate-500'}`}>
                 <AppIcon name={value ? 'check' : 'close'} className="h-3 w-3" />
                 {value ? 'Yes' : 'No'}
             </span>
         );
     }
     if (typeof value === 'object') {
-        if (Array.isArray(value)) return <span className="font-mono text-xs text-gray-500">{JSON.stringify(value, null, 2)}</span>;
+        if (Array.isArray(value)) return <span className="font-mono text-xs text-slate-600">{JSON.stringify(value, null, 2)}</span>;
         for (const k of ['name', 'full_name', 'fullName', 'title', 'label']) {
             if (value?.[k] !== undefined && value?.[k] !== null) return String(value[k]);
         }
-        return <span className="font-mono text-xs text-gray-500">{JSON.stringify(value, null, 2)}</span>;
+        return <span className="font-mono text-xs text-slate-600">{JSON.stringify(value, null, 2)}</span>;
     }
     if (String(key).includes('status')) return <StatusBadge status={value} />;
     return String(value);
@@ -31,11 +32,25 @@ function Field({ label, value, fieldKey }) {
     if (formatted === null) return null;
 
     return (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3.5">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                {label}
-            </p>
-            <div className="break-words text-sm text-gray-900 whitespace-pre-wrap">{formatted}</div>
+        <div className="min-w-0 py-3">
+            <dt className="text-xs font-medium text-slate-600">{label}</dt>
+            <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-900">{formatted}</dd>
+        </div>
+    );
+}
+
+function Header({ title, onClose }) {
+    return (
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <h3 className="min-w-0 truncate text-base font-semibold text-slate-900">{title}</h3>
+            <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            >
+                <AppIcon name="close" className="h-4 w-4" />
+            </button>
         </div>
     );
 }
@@ -51,37 +66,18 @@ export default function RecordDialog({ title, open, record, onClose, hiddenKeys 
 
     if (variant === 'sheet') {
         return (
-            <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-                <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={onClose} />
-
+            <div className="fixed inset-0 z-50 flex bg-slate-950/50" aria-modal="true" role="dialog" onClick={onClose}>
                 <div
-                    className="relative ml-auto flex h-full w-full max-w-xl flex-col border-l border-gray-200 bg-white shadow-2xl"
+                    className="relative ml-auto flex h-full w-full max-w-xl flex-col bg-white shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    {/* Header */}
-                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-                                <AppIcon name="eye" className="h-4 w-4 text-blue-600" />
-                            </div>
-                            <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                        >
-                            <AppIcon name="close" className="h-4 w-4" />
-                        </button>
-                    </div>
-
-                    {/* Body */}
-                    <div className="flex-1 overflow-y-auto p-5">
-                        <div className="grid gap-3">
+                    <Header title={title} onClose={onClose} />
+                    <div className="flex-1 overflow-y-auto px-5 py-2">
+                        <dl className="divide-y divide-slate-100">
                             {entries.map(([key, value]) => (
                                 <Field key={key} label={prettyLabel(key)} value={value} fieldKey={key} />
                             ))}
-                        </div>
+                        </dl>
                     </div>
                 </div>
             </div>
@@ -91,41 +87,22 @@ export default function RecordDialog({ title, open, record, onClose, hiddenKeys 
     // Default: centered modal
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
             aria-modal="true"
             role="dialog"
             onClick={onClose}
         >
-            <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" />
-
             <div
-                className="relative max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
+                className="relative max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-4">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-                            <AppIcon name="eye" className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                    >
-                        <AppIcon name="close" className="h-4 w-4" />
-                    </button>
-                </div>
-
-                {/* Body */}
-                <div className="max-h-[calc(90vh-4rem)] overflow-y-auto p-5">
-                    <div className="grid gap-3 md:grid-cols-2">
+                <Header title={title} onClose={onClose} />
+                <div className="max-h-[calc(90vh-4rem)] overflow-y-auto px-5 py-2">
+                    <dl className="grid gap-x-6 md:grid-cols-2 [&>div]:border-b [&>div]:border-slate-100">
                         {entries.map(([key, value]) => (
                             <Field key={key} label={prettyLabel(key)} value={value} fieldKey={key} />
                         ))}
-                    </div>
+                    </dl>
                 </div>
             </div>
         </div>

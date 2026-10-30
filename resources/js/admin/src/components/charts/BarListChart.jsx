@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 const BAR_COLORS = [
-    'bg-blue-500',
+    'bg-blue-600',
     'bg-emerald-500',
     'bg-violet-500',
     'bg-amber-500',
@@ -16,34 +16,33 @@ export default function BarListChart({ title, subtitle, items = [], labelKey = '
     const max = useMemo(() => Math.max(1, ...trimmed.map((i) => Number(i?.[valueKey] ?? 0))), [trimmed, valueKey]);
 
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <section className="h-full rounded-2xl border border-slate-200 bg-white">
             {(title || subtitle) && (
-                <div className="mb-4">
-                    {title && <h3 className="text-sm font-semibold text-gray-900">{title}</h3>}
-                    {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+                <div className="border-b border-slate-100 px-5 py-4">
+                    {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
+                    {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
                 </div>
             )}
 
+            <div className="p-5">
             {!trimmed.length ? (
-                <div className="flex h-20 items-center justify-center text-sm text-gray-400">No data</div>
+                <div className="flex h-20 items-center justify-center text-sm text-slate-500">No data yet</div>
             ) : (
                 <div className="space-y-3">
                     {trimmed.map((it, idx) => {
                         const label = String(it?.[labelKey] ?? `Item ${idx + 1}`);
                         const value = Number(it?.[valueKey] ?? 0);
                         const pct = Math.round((value / max) * 100);
-                        const barColor = BAR_COLORS[idx % BAR_COLORS.length];
+                        // One series, one colour: bars are compared by length, not hue.
+                        const barColor = BAR_COLORS[0];
 
                         return (
                             <div key={`${label}:${idx}`}>
-                                <div className="flex items-center justify-between gap-3 mb-1">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <span className={`h-2 w-2 flex-shrink-0 rounded-full ${barColor}`} />
-                                        <span className="truncate text-xs font-medium text-gray-700">{label}</span>
-                                    </div>
-                                    <span className="flex-shrink-0 text-xs font-bold text-gray-900">{value}</span>
+                                <div className="mb-1 flex items-center justify-between gap-3">
+                                    <span className="min-w-0 truncate text-sm capitalize text-slate-700">{label.replace(/_/g, ' ')}</span>
+                                    <span className="flex-shrink-0 text-sm font-semibold text-slate-900 tabular-nums">{value}</span>
                                 </div>
-                                <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                                     <div
                                         className={`h-full rounded-full transition-all ${barColor}`}
                                         style={{ width: `${pct}%` }}
@@ -54,6 +53,7 @@ export default function BarListChart({ title, subtitle, items = [], labelKey = '
                     })}
                 </div>
             )}
-        </div>
+            </div>
+        </section>
     );
 }

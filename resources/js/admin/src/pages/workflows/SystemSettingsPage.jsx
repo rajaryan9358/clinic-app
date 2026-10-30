@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
+import { Alert, btn, Card as UiCard, input, PageHeader, Spinner, Tabs } from '../../components/ui';
 
 const TABS = [
     { key: 'openai',    label: 'AI / OpenAI',         icon: 'activity' },
     { key: 'whatsapp',  label: 'WhatsApp',            icon: 'settings' },
     { key: 'payments',  label: 'Payments',            icon: 'settings' },
-    { key: 'trial',     label: 'Trial Settings',      icon: 'settings' },
+    { key: 'trial',     label: 'Trial settings',      icon: 'settings' },
 ];
 
 // Meta template category + body/button parameter order for each notification
@@ -16,22 +17,22 @@ const TABS = [
 // one that carries a one-time code, which Meta requires as Authentication.
 const TEMPLATE_INFO = {
     booking_confirmed: {
-        label: 'Booking Confirmed',
+        label: 'Booking confirmed',
         category: 'Utility',
         params: 'Body: patient name, clinic name, doctor name, date (D, d M Y), time (g:i A).',
     },
     appointment_reminder: {
-        label: 'Appointment Reminder',
+        label: 'Appointment reminder',
         category: 'Utility',
         params: 'Body: patient name, clinic name, doctor name, date (D, d M Y), time (g:i A).',
     },
     appointment_updated: {
-        label: 'Appointment Updated',
+        label: 'Appointment updated',
         category: 'Utility',
         params: 'Body: patient name, clinic name, status line ("has been rescheduled to" / "has been cancelled"), date, time.',
     },
     prescription_ready: {
-        label: 'Prescription Ready',
+        label: 'Prescription ready',
         category: 'Utility',
         params: 'Header: PDF document (prescription-<appointment id>.pdf). Body: patient name, clinic name, doctor name.',
     },
@@ -41,46 +42,40 @@ const TEMPLATE_INFO = {
         params: 'Body: OTP code. Button (Copy Code, sub_type "url", index 0): OTP code.',
     },
     portal_link: {
-        label: 'Portal Login Link',
+        label: 'Portal login link',
         category: 'Utility',
         params: 'Body: 1 patient name, 2 clinic name. URL button: {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}.',
     },
     waitlist_slot_open: {
-        label: 'Waitlist Slot Open',
+        label: 'Waitlist slot open',
         category: 'Utility',
         params: 'body: 1 patient, 2 clinic, 3 doctor, 4 date, 5 time, 6 hold minutes · URL button {{1}} = link token; button URL https://<your domain>/portal/login/{{1}}',
     },
     waitlist_slot_taken: {
-        label: 'Waitlist Held Slot Booked',
+        label: 'Waitlist held slot booked',
         category: 'Utility',
         params: 'Body: 1 patient, 2 clinic, 3 doctor, 4 date, 5 time. No button. Sent when the clinic books a slot held for a waitlisted patient; they stay on the waitlist.',
     },
 };
 
-function Card({ children, className = '' }) {
-    return <div className={`rounded-xl border border-gray-200 bg-white p-5 shadow-sm ${className}`}>{children}</div>;
+function Card({ title, subtitle, children }) {
+    return <UiCard title={title} description={subtitle}>{children}</UiCard>;
 }
 
-function SectionTitle({ title, subtitle }) {
-    return (
-        <div className="mb-4">
-            <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-            {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
-        </div>
-    );
-}
-
+// Wrapping label so every field's text is tied to its control.
 function Field({ label, hint, children }) {
     return (
-        <div>
-            <label className="mb-1.5 block text-sm font-semibold text-gray-700">{label}</label>
+        <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
             {children}
-            {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
-        </div>
+            {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+        </label>
     );
 }
 
-const inputCls = 'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputCls = input;
+const readOnlyCls = `${input} bg-slate-50 text-slate-700`;
+const loadingEl = <UiCard><Spinner className="py-10" /></UiCard>;
 
 // ── OpenAI / AI Tab ────────────────────────────────────────────────────────────
 function OpenAITab() {
@@ -115,15 +110,14 @@ function OpenAITab() {
         }
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) return loadingEl;
 
     return (
-        <Card>
-            <SectionTitle title="OpenAI Configuration" subtitle="Powers AI prescription generation and review reply suggestions." />
-            {error && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-            {success && <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
-            <form onSubmit={save} className="space-y-4 max-w-lg">
-                <Field label="OpenAI API Key" hint="Stored securely. Leave blank to keep existing.">
+        <Card title="OpenAI configuration" subtitle="Powers AI prescription generation and review reply suggestions.">
+            {error && <div className="mb-4"><Alert tone="error">{error}</Alert></div>}
+            {success && <div className="mb-4"><Alert tone="success">{success}</Alert></div>}
+            <form onSubmit={save} className="max-w-xl space-y-4">
+                <Field label="OpenAI API key" hint="Stored securely. Leave blank to keep existing.">
                     <input
                         className={inputCls}
                         type="password"
@@ -139,9 +133,9 @@ function OpenAITab() {
                         ))}
                     </select>
                 </Field>
-                <div className="flex justify-end pt-2">
-                    <button type="submit" disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-                        {saving ? 'Saving…' : 'Save AI Settings'}
+                <div className="flex justify-end border-t border-slate-100 pt-4">
+                    <button type="submit" disabled={saving} className={btn.primary}>
+                        {saving ? 'Saving…' : 'Save AI settings'}
                     </button>
                 </div>
             </form>
@@ -259,17 +253,16 @@ function WhatsAppTab() {
         }));
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) return loadingEl;
 
     return (
         <div className="space-y-5">
-            <Card>
-                <SectionTitle title="WhatsApp Business API" subtitle="Meta Cloud API credentials used to send template messages and receive delivery webhooks." />
-                {error && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-                {success && <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
-                <form onSubmit={save} className="space-y-4 max-w-lg">
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Phone Number ID">
+            <Card title="WhatsApp Business API" subtitle="Meta Cloud API credentials used to send template messages and receive delivery webhooks.">
+                {error && <div className="mb-4"><Alert tone="error">{error}</Alert></div>}
+                {success && <div className="mb-4"><Alert tone="success">{success}</Alert></div>}
+                <form onSubmit={save} className="max-w-xl space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Phone number ID">
                             <input
                                 className={inputCls}
                                 type="text"
@@ -286,7 +279,7 @@ function WhatsAppTab() {
                             />
                         </Field>
                     </div>
-                    <Field label="Graph API Version">
+                    <Field label="Graph API version">
                         <input
                             className={inputCls}
                             type="text"
@@ -295,7 +288,7 @@ function WhatsAppTab() {
                             onChange={(e) => setForm((p) => ({ ...p, whatsapp_graph_version: e.target.value }))}
                         />
                     </Field>
-                    <Field label="Access Token" hint={accessTokenSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                    <Field label="Access token" hint={accessTokenSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
                         <input
                             className={inputCls}
                             type="password"
@@ -304,7 +297,7 @@ function WhatsAppTab() {
                             onChange={(e) => setForm((p) => ({ ...p, whatsapp_access_token: e.target.value }))}
                         />
                     </Field>
-                    <Field label="App Secret" hint={appSecretSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                    <Field label="App secret" hint={appSecretSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
                         <input
                             className={inputCls}
                             type="password"
@@ -313,7 +306,7 @@ function WhatsAppTab() {
                             onChange={(e) => setForm((p) => ({ ...p, whatsapp_app_secret: e.target.value }))}
                         />
                     </Field>
-                    <Field label="Webhook Verify Token" hint={verifyTokenSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                    <Field label="Webhook verify token" hint={verifyTokenSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
                         <input
                             className={inputCls}
                             type="password"
@@ -324,50 +317,50 @@ function WhatsAppTab() {
                     </Field>
                     <Field label="Webhook URL">
                         <div className="flex items-center gap-2">
-                            <input className={`${inputCls} bg-gray-50 text-gray-600`} type="text" value={webhookUrl} readOnly />
+                            <input className={readOnlyCls} type="text" value={webhookUrl} readOnly />
                             <button
                                 type="button"
                                 onClick={copyWebhookUrl}
-                                className="whitespace-nowrap rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                                className={`${btn.secondary} shrink-0`}
                             >
                                 Copy
                             </button>
                         </div>
-                        {copyMsg && <p className="mt-1 text-xs text-gray-500">{copyMsg}</p>}
-                        <p className="mt-2 text-xs text-gray-400">
+                        {copyMsg && <span role="status" className="mt-1 block text-xs text-slate-600">{copyMsg}</span>}
+                        <span className="mt-2 block text-xs text-slate-500">
                             Add this URL as the Webhook callback URL for your WhatsApp Business App in Meta's App Dashboard, with the verify token above, and subscribe to the "messages" field.
-                        </p>
+                        </span>
                     </Field>
 
-                    <div className="flex items-center justify-between gap-3 pt-2">
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                        <div className="flex flex-wrap items-center gap-2">
                             <button
                                 type="button"
                                 onClick={testConnection}
                                 disabled={testing}
-                                className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                                className={btn.secondary}
                             >
                                 {testing ? 'Testing…' : 'Test connection'}
                             </button>
                             {testResult && (
-                                <span className={`text-sm font-medium ${testResult.ok ? 'text-emerald-700' : 'text-red-700'}`}>
-                                    {testResult.ok ? '✓ ' : '✗ '}{testResult.message}
+                                <span role="status" className={`inline-flex items-center gap-1.5 text-sm font-medium ${testResult.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                    <AppIcon name={testResult.ok ? 'check' : 'x'} className="h-4 w-4" />{testResult.message}
                                 </span>
                             )}
                         </div>
-                        <button type="submit" disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-                            {saving ? 'Saving…' : 'Save WhatsApp Settings'}
+                        <button type="submit" disabled={saving} className={btn.primary}>
+                            {saving ? 'Saving…' : 'Save WhatsApp settings'}
                         </button>
                     </div>
                 </form>
             </Card>
 
-            <Card>
-                <SectionTitle title="Notification Templates" subtitle="Map each notification type to an approved Meta template. Names must match exactly (lowercase, digits, underscores)." />
-                <div className="overflow-hidden rounded-xl border border-gray-200">
-                    <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <Card title="Notification templates" subtitle="Map each notification type to an approved Meta template. Names must match exactly (lowercase, digits, underscores).">
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <div className="min-w-[860px]">
+                    <div className="grid grid-cols-12 gap-3 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-600">
                         <div className="col-span-3">Type</div>
-                        <div className="col-span-3">Template Name</div>
+                        <div className="col-span-3">Template name</div>
                         <div className="col-span-2">Language</div>
                         <div className="col-span-1">Enabled</div>
                         <div className="col-span-3">Reference</div>
@@ -376,11 +369,12 @@ function WhatsAppTab() {
                         const t = templates[type] || {};
                         const info = TEMPLATE_INFO[type];
                         return (
-                            <div key={type} className="grid grid-cols-12 gap-2 border-t border-gray-100 px-4 py-3 text-sm">
-                                <div className="col-span-3 font-medium text-gray-900">{info.label}</div>
+                            <div key={type} className="grid grid-cols-12 items-start gap-3 border-t border-slate-100 px-4 py-3 text-sm hover:bg-slate-50">
+                                <div className="col-span-3 pt-2 font-medium text-slate-900">{info.label}</div>
                                 <div className="col-span-3">
                                     <input
-                                        className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        className={inputCls}
+                                        aria-label={`${info.label} template name`}
                                         type="text"
                                         value={t.name || ''}
                                         onChange={(e) => updateTemplate(type, 'name', e.target.value)}
@@ -388,26 +382,29 @@ function WhatsAppTab() {
                                 </div>
                                 <div className="col-span-2">
                                     <input
-                                        className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        className={inputCls}
+                                        aria-label={`${info.label} language`}
                                         type="text"
                                         value={t.language || ''}
                                         onChange={(e) => updateTemplate(type, 'language', e.target.value)}
                                     />
                                 </div>
-                                <div className="col-span-1 flex items-center">
+                                <div className="col-span-1 flex items-center pt-2.5">
                                     <input
                                         type="checkbox"
-                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        aria-label={`${info.label} enabled`}
+                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                         checked={Boolean(t.enabled)}
                                         onChange={(e) => updateTemplate(type, 'enabled', e.target.checked)}
                                     />
                                 </div>
-                                <div className="col-span-3 text-xs text-gray-500">
-                                    <span className="font-semibold text-gray-700">{info.category}</span> — {info.params}
+                                <div className="col-span-3 text-xs text-slate-600">
+                                    <span className="font-semibold text-slate-800">{info.category}</span> — {info.params}
                                 </div>
                             </div>
                         );
                     })}
+                    </div>
                 </div>
             </Card>
         </div>
@@ -447,27 +444,26 @@ function TrialTab() {
         }
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) return loadingEl;
 
     return (
-        <Card>
-            <SectionTitle title="Free Trial Settings" subtitle="Default trial configuration for newly onboarded clinics." />
-            {error && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-            {success && <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
-            <form onSubmit={save} className="space-y-4 max-w-md">
+        <Card title="Free trial settings" subtitle="Default trial configuration for newly onboarded clinics.">
+            {error && <div className="mb-4"><Alert tone="error">{error}</Alert></div>}
+            {success && <div className="mb-4"><Alert tone="success">{success}</Alert></div>}
+            <form onSubmit={save} className="max-w-md space-y-4">
                 <Field label="Default trial length (days)" hint="Number of days new clinics get on a free trial by default.">
                     <input
                         type="number"
                         min={1}
                         max={365}
-                        className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className={`${inputCls} w-32`}
                         value={form.trial_days}
                         onChange={(e) => setForm((p) => ({ ...p, trial_days: Number(e.target.value) }))}
                     />
                 </Field>
-                <div className="flex justify-end pt-2">
-                    <button type="submit" disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-                        {saving ? 'Saving…' : 'Save Trial Settings'}
+                <div className="flex justify-end border-t border-slate-100 pt-4">
+                    <button type="submit" disabled={saving} className={btn.primary}>
+                        {saving ? 'Saving…' : 'Save trial settings'}
                     </button>
                 </div>
             </form>
@@ -556,15 +552,14 @@ function PaymentsTab() {
         }
     };
 
-    if (loading) return <div className="flex justify-center py-10"><span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>;
+    if (loading) return loadingEl;
 
     return (
-        <Card>
-            <SectionTitle title="Razorpay Configuration" subtitle="Credentials and behavior for subscription billing via Razorpay." />
-            {error && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-            {success && <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
-            <form onSubmit={save} className="space-y-4 max-w-lg">
-                <Field label="Razorpay Key ID">
+        <Card title="Razorpay configuration" subtitle="Credentials and behavior for subscription billing via Razorpay.">
+            {error && <div className="mb-4"><Alert tone="error">{error}</Alert></div>}
+            {success && <div className="mb-4"><Alert tone="success">{success}</Alert></div>}
+            <form onSubmit={save} className="max-w-xl space-y-4">
+                <Field label="Razorpay key ID">
                     <input
                         className={inputCls}
                         type="text"
@@ -573,7 +568,7 @@ function PaymentsTab() {
                         onChange={(e) => setForm((p) => ({ ...p, razorpay_key_id: e.target.value }))}
                     />
                 </Field>
-                <Field label="Key Secret" hint={keySecretSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                <Field label="Key secret" hint={keySecretSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
                     <input
                         className={inputCls}
                         type="password"
@@ -582,7 +577,7 @@ function PaymentsTab() {
                         onChange={(e) => setForm((p) => ({ ...p, razorpay_key_secret: e.target.value }))}
                     />
                 </Field>
-                <Field label="Webhook Secret" hint={webhookSecretSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
+                <Field label="Webhook secret" hint={webhookSecretSet ? 'Saved — leave blank to keep.' : 'Not set yet.'}>
                     <input
                         className={inputCls}
                         type="password"
@@ -591,7 +586,7 @@ function PaymentsTab() {
                         onChange={(e) => setForm((p) => ({ ...p, razorpay_webhook_secret: e.target.value }))}
                     />
                 </Field>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Mode">
                         <select
                             className={inputCls}
@@ -615,23 +610,23 @@ function PaymentsTab() {
                 </div>
                 <Field label="Webhook URL">
                     <div className="flex items-center gap-2">
-                        <input className={`${inputCls} bg-gray-50 text-gray-600`} type="text" value={webhookUrl} readOnly />
+                        <input className={readOnlyCls} type="text" value={webhookUrl} readOnly />
                         <button
                             type="button"
                             onClick={copyWebhookUrl}
-                            className="whitespace-nowrap rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            className={`${btn.secondary} shrink-0`}
                         >
                             Copy
                         </button>
                     </div>
-                    {copyMsg && <p className="mt-1 text-xs text-gray-500">{copyMsg}</p>}
-                    <p className="mt-2 text-xs text-gray-400">
+                    {copyMsg && <span role="status" className="mt-1 block text-xs text-slate-600">{copyMsg}</span>}
+                    <span className="mt-2 block text-xs text-slate-500">
                         In the Razorpay dashboard, add this URL as a webhook and enable: subscription.activated, subscription.charged, subscription.pending, subscription.halted, subscription.cancelled, subscription.completed, payment.failed.
-                    </p>
+                    </span>
                 </Field>
-                <div className="flex justify-end pt-2">
-                    <button type="submit" disabled={saving} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-                        {saving ? 'Saving…' : 'Save Payment Settings'}
+                <div className="flex justify-end border-t border-slate-100 pt-4">
+                    <button type="submit" disabled={saving} className={btn.primary}>
+                        {saving ? 'Saving…' : 'Save payment settings'}
                     </button>
                 </div>
             </form>
@@ -644,29 +639,15 @@ export default function SystemSettingsPage() {
     const [activeTab, setActiveTab] = useState('openai');
 
     return (
-        <div className="space-y-5">
-            <div>
-                <h1 className="text-xl font-bold text-gray-900">System Settings</h1>
-                <p className="mt-0.5 text-sm text-gray-500">Global configuration for AI integrations and trial settings.</p>
-            </div>
+        <div className="mx-auto max-w-5xl space-y-5">
+            <PageHeader title="System settings" subtitle="Global configuration for AI integrations and trial settings." />
 
-            {/* Tabs */}
-            <div className="flex gap-1 border-b border-gray-200">
-                {TABS.map((tab) => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                            activeTab === tab.key
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-900'
-                        }`}
-                    >
-                        <AppIcon name={tab.icon} className="h-4 w-4" />
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+            <Tabs
+                label="Settings sections"
+                tabs={TABS.map((tab) => ({ value: tab.key, label: tab.label }))}
+                value={activeTab}
+                onChange={setActiveTab}
+            />
 
             <div>
                 {activeTab === 'openai' && <OpenAITab />}

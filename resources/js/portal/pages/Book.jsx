@@ -7,7 +7,8 @@ import SlotGrid from '../components/SlotGrid';
 import useDoctorSlots from '../hooks/useDoctorSlots';
 import { MODE_LABELS, VISIT_TYPES, modeOptionsFor } from '../lib/booking';
 import { addDays, isoDate } from '../lib/format';
-import { Button, Card, ErrorText, Spinner } from '../components/ui';
+import { Button, Card, ChoiceGroup, EmptyState, ErrorText, Loading, PageHeader, SectionLabel, inputClass } from '../components/ui';
+import { UsersIcon } from '../components/icons';
 
 const STRIP_DAYS = 14;
 
@@ -140,44 +141,63 @@ export default function Book() {
     }
 
     return (
-        <div className="space-y-4">
-            <h1 className="text-xl font-semibold text-slate-900">Book a visit</h1>
+        <div className="space-y-6">
+            <PageHeader title="Book a visit" subtitle="Choose a doctor, then a day and time. The clinic will confirm your request." />
 
-            <div>
-                <h2 className="mb-2 text-sm font-medium text-slate-500">Doctor</h2>
-                {doctorsLoading && (
-                    <div className="flex justify-center py-6">
-                        <Spinner className="h-5 w-5 text-[var(--accent)]" />
-                    </div>
-                )}
+            <section>
+                <SectionLabel>Doctor</SectionLabel>
+                {doctorsLoading && <Loading className="py-8" />}
                 {!doctorsLoading && doctorsError && <ErrorText>{doctorsError}</ErrorText>}
-                {!doctorsLoading && !doctorsError && doctors.length === 0 && (
-                    <Card className="py-6 text-center text-sm text-slate-500">No doctors available.</Card>
-                )}
+                {!doctorsLoading && !doctorsError && doctors.length === 0 && <EmptyState icon={UsersIcon} title="No doctors available." />}
                 {!doctorsLoading && !doctorsError && doctors.length > 0 && (
-                    <div className="space-y-2">
-                        {doctors.map((d) => (
-                            <button key={d.id} type="button" onClick={() => selectDoctor(d)} className="block w-full text-left">
-                                <Card className={doctorId === d.id ? 'ring-2 ring-[var(--accent)]' : ''}>
-                                    <p className="text-sm font-medium text-slate-900">{d.full_name}</p>
-                                    {d.specialization && <p className="text-xs text-slate-500">{d.specialization}</p>}
-                                </Card>
-                            </button>
-                        ))}
+                    <div className="space-y-2" role="radiogroup" aria-label="Doctor">
+                        {doctors.map((d) => {
+                            const selected = doctorId === d.id;
+                            return (
+                                <button
+                                    key={d.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    onClick={() => selectDoctor(d)}
+                                    className={`flex min-h-[64px] w-full items-center gap-3 rounded-2xl border bg-white p-4 text-left transition ${
+                                        selected
+                                            ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]'
+                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10 text-sm font-bold text-[var(--accent)]">
+                                        {(d.full_name || '?').replace(/^dr\.?\s*/i, '').charAt(0).toUpperCase()}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-semibold text-slate-900">{d.full_name}</span>
+                                        {d.specialization && <span className="block truncate text-sm text-slate-600">{d.specialization}</span>}
+                                    </span>
+                                    <span
+                                        aria-hidden="true"
+                                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                                            selected ? 'border-[var(--accent)]' : 'border-slate-300'
+                                        }`}
+                                    >
+                                        {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[var(--accent)]" /> : null}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
-            </div>
+            </section>
 
             {doctorId && (
-                <div>
-                    <h2 className="mb-2 text-sm font-medium text-slate-500">Date</h2>
+                <section>
+                    <SectionLabel>Date</SectionLabel>
                     <DateStrip dates={dates} selectedDate={date} onSelect={selectDate} />
-                </div>
+                </section>
             )}
 
             {doctorId && date && (
-                <div>
-                    <h2 className="mb-2 text-sm font-medium text-slate-500">Time</h2>
+                <section>
+                    <SectionLabel>Time</SectionLabel>
                     <SlotGrid
                         key={`${doctorId}:${date}`}
                         loading={slotsLoading}
@@ -189,11 +209,11 @@ export default function Book() {
                         onSelect={selectSlot}
                         onJoin={joinWaitlist}
                     />
-                </div>
+                </section>
             )}
 
             {conflict && conflict.doctorId === doctorId && conflict.date === date && !slot && (
-                <Card className="space-y-2">
+                <Card className="space-y-3">
                     <ErrorText>{submitError}</ErrorText>
                     {conflictJoinOpen ? (
                         <JoinWaitlist
@@ -212,52 +232,32 @@ export default function Book() {
 
             {doctorId && date && slot && (
                 <>
-                    <div>
-                        <h2 className="mb-2 text-sm font-medium text-slate-500">Visit type</h2>
-                        <div className="flex gap-2">
-                            {VISIT_TYPES.map((vt) => (
-                                <button
-                                    key={vt.value}
-                                    type="button"
-                                    onClick={() => setVisitType(vt.value)}
-                                    className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${
-                                        visitType === vt.value ? 'bg-[var(--accent)] text-white' : 'bg-slate-100 text-slate-700'
-                                    }`}
-                                >
-                                    {vt.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <section>
+                        <SectionLabel>Visit type</SectionLabel>
+                        <ChoiceGroup label="Visit type" options={VISIT_TYPES} value={visitType} onChange={setVisitType} />
+                    </section>
 
-                    <div>
-                        <h2 className="mb-2 text-sm font-medium text-slate-500">Mode</h2>
-                        <div className="flex gap-2">
-                            {modeOptions.map((m) => (
-                                <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => setMode(m)}
-                                    className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${
-                                        mode === m ? 'bg-[var(--accent)] text-white' : 'bg-slate-100 text-slate-700'
-                                    }`}
-                                >
-                                    {MODE_LABELS[m] || m}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <section>
+                        <SectionLabel>Mode</SectionLabel>
+                        <ChoiceGroup
+                            label="Mode"
+                            options={modeOptions.map((m) => ({ value: m, label: MODE_LABELS[m] || m }))}
+                            value={mode}
+                            onChange={setMode}
+                        />
+                    </section>
 
-                    <div>
-                        <h2 className="mb-2 text-sm font-medium text-slate-500">Reason (optional)</h2>
+                    <section>
+                        <SectionLabel htmlFor="book-reason">Reason (optional)</SectionLabel>
                         <textarea
+                            id="book-reason"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             rows={3}
                             placeholder="Tell the clinic why you're booking"
-                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                            className={inputClass}
                         />
-                    </div>
+                    </section>
 
                     {submitError ? <ErrorText>{submitError}</ErrorText> : null}
                     <Button onClick={submit} loading={submitting}>

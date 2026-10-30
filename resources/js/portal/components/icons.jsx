@@ -96,3 +96,47 @@ export function ChevronRightIcon(props) {
         </Icon>
     );
 }
+
+export function ChevronLeftIcon(props) {
+    return (
+        <Icon {...props}>
+            <path d="M15 6l-6 6 6 6" />
+        </Icon>
+    );
+}
+
+export function MapPinIcon(props) {
+    return (
+        <Icon {...props}>
+            <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+            <circle cx="12" cy="10" r="2.3" />
+        </Icon>
+    );
+}
+
+export function PhoneIcon(props) {
+    return (
+        <Icon {...props}>
+            <path d="M5 4h3l1.5 4-2 1.3a11 11 0 0 0 7.2 7.2L16 14.5l4 1.5v3a1.5 1.5 0 0 1-1.6 1.5A16 16 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4z" />
+        </Icon>
+    );
+}
+
+export function DownloadIcon(props) {
+    return (
+        <Icon {...props}>
+            <path d="M12 4v11" />
+            <path d="M7.5 10.5 12 15l4.5-4.5" />
+            <path d="M5 19.5h14" />
+        </Icon>
+    );
+}
+
+export function ClockIcon(props) {
+    return (
+        <Icon {...props}>
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 7.5V12l3 2" />
+        </Icon>
+    );
+}

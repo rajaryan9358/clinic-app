@@ -25,17 +25,17 @@ function PlanPicker({ plans, planId, billingCycle, onSelectPlan, onSelectCycle }
                             type="button"
                             key={plan.id}
                             onClick={() => onSelectPlan(plan)}
-                            className={`rounded-xl border p-3 text-left transition-colors ${active ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                            className={`rounded-xl border p-3 text-left transition-colors ${active ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200' : 'border-slate-200 bg-white hover:border-slate-300'}`}
                         >
                             <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-gray-900">{plan.name}</p>
+                                <p className="text-sm font-semibold text-slate-900">{plan.name}</p>
                                 {active && <AppIcon name="check" className="h-4 w-4 text-blue-600" />}
                             </div>
-                            <p className="mt-1 text-xs text-gray-600">
+                            <p className="mt-1 text-xs text-slate-600">
                                 {formatINR(plan.monthly_price)}/mo
                                 {plan.yearly_price != null && <> · {formatINR(plan.yearly_price)}/yr</>}
                             </p>
-                            <p className="mt-1 text-xs text-gray-400">
+                            <p className="mt-1 text-xs text-slate-500">
                                 {limitLabel(plan.max_doctors)} doctors · {limitLabel(plan.max_staff)} staff · {limitLabel(plan.max_appointments_per_month)} appts/mo
                             </p>
                         </button>
@@ -44,11 +44,11 @@ function PlanPicker({ plans, planId, billingCycle, onSelectPlan, onSelectCycle }
             </div>
 
             {selected && (
-                <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
+                <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
                     <button
                         type="button"
                         onClick={() => onSelectCycle('monthly')}
-                        className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${billingCycle === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                        className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${billingCycle === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                     >
                         Monthly
                     </button>
@@ -57,7 +57,7 @@ function PlanPicker({ plans, planId, billingCycle, onSelectPlan, onSelectCycle }
                         disabled={!selected.yearly_price}
                         onClick={() => onSelectCycle('yearly')}
                         title={!selected.yearly_price ? 'This plan has no yearly price' : undefined}
-                        className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ${billingCycle === 'yearly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                        className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:text-slate-400 ${billingCycle === 'yearly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                     >
                         Yearly
                     </button>
@@ -176,7 +176,7 @@ function AssignPlanPanel({ clinicId, plans, onDone }) {
 
             {selectedPlan && (
                 <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
                         <input type="radio" checked={form.start_mode === 'trial'} onChange={() => selectStartMode('trial')} />
                         Start a free trial
                     </label>
@@ -187,11 +187,11 @@ function AssignPlanPanel({ clinicId, plans, onDone }) {
                             </Field>
                         </div>
                     )}
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
                         <input type="radio" checked={form.start_mode === 'pending_payment'} onChange={() => selectStartMode('pending_payment')} />
                         Payment pending (clinic admin pays on first login)
                     </label>
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
                         <input type="radio" checked={form.start_mode === 'paid_offline'} onChange={() => selectStartMode('paid_offline')} />
                         Paid offline
                     </label>
@@ -369,7 +369,7 @@ function CancelPanel({ clinicId, onDone, onCancel }) {
 
     return (
         <div className="space-y-3">
-            <p className="text-sm text-gray-700">This cancels the clinic's subscription immediately. This cannot be undone.</p>
+            <p className="text-sm text-slate-700">This cancels the clinic's subscription immediately. This cannot be undone.</p>
             <ErrorText>{error}</ErrorText>
             <div className="flex gap-2">
                 <Btn variant="danger" onClick={confirmCancel} disabled={saving}>{saving ? 'Cancelling…' : 'Yes, cancel subscription'}</Btn>
@@ -407,7 +407,7 @@ export default function SubscriptionCard({ clinicId, subscription, onChanged }) 
 
             {!subscription ? (
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-400">No plan assigned.</p>
+                    <p className="text-sm text-slate-500">No plan assigned.</p>
                     {action === 'assign' ? (
                         <AssignPlanPanel clinicId={clinicId} plans={plans} onDone={done} />
                     ) : (
@@ -419,40 +419,40 @@ export default function SubscriptionCard({ clinicId, subscription, onChanged }) 
             ) : (
                 <div className="space-y-4">
                     <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                        <div className="flex items-start gap-4 border-b border-gray-100 py-2 last:border-0">
-                            <span className="w-32 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">Plan</span>
-                            <span className="text-sm text-gray-800">{subscription.plan?.name || '—'}</span>
+                        <div className="flex items-start gap-4 border-b border-slate-100 py-2 last:border-0">
+                            <span className="w-32 flex-shrink-0 text-xs font-medium text-slate-600">Plan</span>
+                            <span className="text-sm text-slate-800">{subscription.plan?.name || '—'}</span>
                         </div>
-                        <div className="flex items-start gap-4 border-b border-gray-100 py-2 last:border-0">
-                            <span className="w-32 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">Cycle</span>
-                            <span className="text-sm capitalize text-gray-800">{subscription.billing_cycle || '—'}</span>
+                        <div className="flex items-start gap-4 border-b border-slate-100 py-2 last:border-0">
+                            <span className="w-32 flex-shrink-0 text-xs font-medium text-slate-600">Cycle</span>
+                            <span className="text-sm capitalize text-slate-800">{subscription.billing_cycle || '—'}</span>
                         </div>
-                        <div className="flex items-start gap-4 border-b border-gray-100 py-2 last:border-0">
-                            <span className="w-32 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">Status</span>
+                        <div className="flex items-start gap-4 border-b border-slate-100 py-2 last:border-0">
+                            <span className="w-32 flex-shrink-0 text-xs font-medium text-slate-600">Status</span>
                             <StatusBadge status={subscription.status} />
                         </div>
                         {subscription.trial_ends_at && (
-                            <div className="flex items-start gap-4 border-b border-gray-100 py-2 last:border-0">
-                                <span className="w-32 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">Trial ends</span>
-                                <span className="text-sm text-gray-800">{formatDate(subscription.trial_ends_at)}</span>
+                            <div className="flex items-start gap-4 border-b border-slate-100 py-2 last:border-0">
+                                <span className="w-32 flex-shrink-0 text-xs font-medium text-slate-600">Trial ends</span>
+                                <span className="text-sm text-slate-800">{formatDate(subscription.trial_ends_at)}</span>
                             </div>
                         )}
                         {subscription.current_period_end && (
-                            <div className="flex items-start gap-4 border-b border-gray-100 py-2 last:border-0">
-                                <span className="w-32 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">Period ends</span>
-                                <span className="text-sm text-gray-800">{formatDate(subscription.current_period_end)}</span>
+                            <div className="flex items-start gap-4 border-b border-slate-100 py-2 last:border-0">
+                                <span className="w-32 flex-shrink-0 text-xs font-medium text-slate-600">Period ends</span>
+                                <span className="text-sm text-slate-800">{formatDate(subscription.current_period_end)}</span>
                             </div>
                         )}
                         {subscription.grace_ends_at && (
-                            <div className="flex items-start gap-4 border-b border-gray-100 py-2 last:border-0">
-                                <span className="w-32 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">Grace ends</span>
-                                <span className="text-sm text-gray-800">{formatDate(subscription.grace_ends_at)}</span>
+                            <div className="flex items-start gap-4 border-b border-slate-100 py-2 last:border-0">
+                                <span className="w-32 flex-shrink-0 text-xs font-medium text-slate-600">Grace ends</span>
+                                <span className="text-sm text-slate-800">{formatDate(subscription.grace_ends_at)}</span>
                             </div>
                         )}
                         {subscription.razorpay_subscription_id && (
-                            <div className="flex items-start gap-4 border-b border-gray-100 py-2 last:border-0">
-                                <span className="w-32 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">Razorpay ID</span>
-                                <span className="font-mono text-xs text-gray-600">{subscription.razorpay_subscription_id}</span>
+                            <div className="flex items-start gap-4 border-b border-slate-100 py-2 last:border-0">
+                                <span className="w-32 flex-shrink-0 text-xs font-medium text-slate-600">Razorpay ID</span>
+                                <span className="font-mono text-xs text-slate-600">{subscription.razorpay_subscription_id}</span>
                             </div>
                         )}
                     </div>

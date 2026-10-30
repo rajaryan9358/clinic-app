@@ -6,6 +6,7 @@ import RecordDialog from '../components/RecordDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AppIcon from '../components/AppIcon';
 import StatusBadge from '../components/StatusBadge';
+import { Alert, PageHeader, Spinner, btn, input as inputClass, label as labelClass } from '../components/ui';
 import ClinicStatusBadge from '../components/billing/ClinicStatusBadge.jsx';
 import { modules } from '../config/modules';
 import { canAccessModule, canCreateModule, canDeleteModule, canEditModule, isSuperAdminHiddenModuleKey } from '../config/access';
@@ -38,13 +39,13 @@ function inferLabel(item) {
     return first || `#${item.id}`;
 }
 
-function FilterControl({ field, value, onChange, relationOptions, relationLoading, relationHint }) {
-    const base = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200';
+function FilterControl({ id, field, value, onChange, relationOptions, relationLoading, relationHint }) {
+    const base = `${inputClass} h-10`;
 
     if (field.type === 'select') {
         const options = Array.isArray(field.options) ? field.options : [];
         return (
-            <select className={base} value={value ?? ''} onChange={(e) => onChange(field.key, e.target.value)}>
+            <select id={id} className={base} value={value ?? ''} onChange={(e) => onChange(field.key, e.target.value)}>
                 <option value="">All {field.label}</option>
                 {options.map((opt) => {
                     const normalized = typeof opt === 'string' ? { label: opt, value: opt } : opt;
@@ -62,7 +63,7 @@ function FilterControl({ field, value, onChange, relationOptions, relationLoadin
         const options = relationOptions || [];
         const normalized = value === null || value === undefined ? '' : String(value);
         return (
-            <select className={base} value={normalized} onChange={(e) => onChange(field.key, e.target.value)}>
+            <select id={id} className={base} value={normalized} onChange={(e) => onChange(field.key, e.target.value)}>
                 <option value="">All {field.label}</option>
                 {relationHint ? <option value="" disabled>{relationHint}</option> : null}
                 {relationLoading ? <option disabled>Loading…</option> : null}
@@ -75,6 +76,7 @@ function FilterControl({ field, value, onChange, relationOptions, relationLoadin
 
     return (
         <input
+            id={id}
             type={field.type || 'text'}
             className={base}
             value={value ?? ''}
@@ -90,6 +92,29 @@ function FilterControl({ field, value, onChange, relationOptions, relationLoadin
 // number of hooks called can change between renders of the SAME mounted
 // instance — e.g. once `moduleKey` changes, or once the scope context
 // finishes loading — which React forbids and crashes on.)
+// Local dialog shell for the review dialogs: overlay, white panel, title row
+// with a close button, and a right-aligned footer.
+function DialogShell({ title, onClose, footer, children, maxWidth = 'max-w-2xl' }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+            <div className={`flex max-h-[88vh] w-full ${maxWidth} flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                    <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+                    <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+                        <AppIcon name="close" className="h-4 w-4" />
+                    </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+                {footer ? <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-5 py-4">{footer}</div> : null}
+            </div>
+        </div>
+    );
+}
+
+const chip = (active) => (active
+    ? 'h-8 rounded-full bg-slate-900 px-3 text-sm font-semibold text-white'
+    : 'h-8 rounded-full border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50');
+
 function ModuleListPageInner({ forcedModuleKey } = {}) {
     const { moduleKey: routeModuleKey } = useParams();
     const moduleKey = forcedModuleKey || routeModuleKey;
@@ -510,7 +535,7 @@ Write an appropriate reply.`;
     };
 
     if (!module) {
-        return <div className="rounded border bg-white p-4">Unknown module.</div>;
+        return <Alert tone="error">Unknown module.</Alert>;
     }
 
     const addLabel = moduleKey === 'patients'
@@ -534,115 +559,123 @@ Write an appropriate reply.`;
     const isReadOnly = !canEdit;
 
 
+    const totalPages = Math.max(1, Math.ceil(meta.total / meta.per_page));
+
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="module" className="h-5 w-5 text-slate-700" />
-                    <h2 className="text-xl font-semibold text-slate-800">{module.label}</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                    {canDownloadPdf ? (
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <PageHeader
+                title={module.label}
+                subtitle={meta.total ? `${meta.total} ${meta.total === 1 ? 'record' : 'records'}` : undefined}
+                actions={(
+                    <>
+                        {canDownloadPdf ? (
+                            <button
+                                type="button"
+                                onClick={downloadPdfReport}
+                                disabled={pdfBusy}
+                                className={btn.secondary}
+                            >
+                                <AppIcon name="download" className="h-4 w-4" />
+                                Download PDF report
+                            </button>
+                        ) : null}
+
+                        {moduleKey === 'reviews' ? (
+                            <button
+                                type="button"
+                                onClick={() => setReviewCreate((p) => ({ ...p, open: true, error: '', busy: false, values: { reviewer_name: '', message: '', rating: '5' } }))}
+                                className={btn.primary}
+                            >
+                                <AppIcon name="plus" className="h-4 w-4" />
+                                Add Review
+                            </button>
+                        ) : (
+                            canCreate ? (
+                                <Link to={addHref} className={btn.primary}>
+                                    <AppIcon name="plus" className="h-4 w-4" />
+                                    {addLabel}
+                                </Link>
+                            ) : null
+                        )}
+                    </>
+                )}
+            />
+
+            {actionError ? <Alert tone="error">{actionError}</Alert> : null}
+
+            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
+                    <div className="relative min-w-[220px] flex-1">
+                        <label htmlFor="module-search" className="sr-only">Search {module.label}</label>
+                        <AppIcon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <input
+                            id="module-search"
+                            type="search"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') fetchData(1);
+                            }}
+                            placeholder="Search"
+                            className={`${inputClass} h-10 pl-9`}
+                        />
+                    </div>
+
+                    <button type="button" onClick={() => fetchData(1)} className={btn.secondary}>Search</button>
+
+                    {filterFields.length ? (
                         <button
                             type="button"
-                            onClick={downloadPdfReport}
-                            disabled={pdfBusy}
-                            className={pdfBusy
-                                ? 'rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500'
-                                : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50'
-                            }
+                            onClick={() => setFiltersOpen(true)}
+                            className={activeFilterCount ? `${btn.secondary} border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100` : btn.secondary}
                         >
-                            Download PDF report
+                            <AppIcon name="filter" className="h-4 w-4" />
+                            Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
                         </button>
                     ) : null}
 
-                    {moduleKey === 'reviews' ? (
-                        <button
-                            type="button"
-                            onClick={() => setReviewCreate((p) => ({ ...p, open: true, error: '', busy: false, values: { reviewer_name: '', message: '', rating: '5' } }))}
-                            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        >
-                            Add Review
-                        </button>
-                    ) : (
-                        canCreate ? (
-                            <Link to={addHref} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">{addLabel}</Link>
-                        ) : null
-                    )}
-                </div>
-            </div>
+                    <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm text-slate-700 hover:bg-slate-50">
+                        <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            checked={includeDeleted}
+                            onChange={(e) => {
+                                const next = e.target.checked;
+                                setIncludeDeleted(next);
+                                fetchData(1, { includeDeleted: next });
+                            }}
+                        />
+                        Include deleted
+                    </label>
 
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <div className="flex flex-1 items-center gap-2">
-                    <input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') fetchData(1);
-                        }}
-                        placeholder="Search"
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2"
-                    />
-                </div>
-
-                <label className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
-                    <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={includeDeleted}
-                        onChange={(e) => {
-                            const next = e.target.checked;
-                            setIncludeDeleted(next);
-                            fetchData(1, { includeDeleted: next });
-                        }}
-                    />
-                    Include deleted
-                </label>
-
-                {filterFields.length ? (
                     <button
                         type="button"
-                        onClick={() => setFiltersOpen(true)}
-                        className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        onClick={() => {
+                            setSearch('');
+                            setFilters({});
+                            setIncludeDeleted(false);
+                            fetchData(1, { search: '', filters: {}, includeDeleted: false });
+                        }}
+                        className={btn.ghost}
                     >
-                        Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+                        Clear
                     </button>
-                ) : null}
+                </div>
 
-                <button onClick={() => fetchData(1)} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Search</button>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setSearch('');
-                        setFilters({});
-                        setIncludeDeleted(false);
-                        fetchData(1, { search: '', filters: {}, includeDeleted: false });
-                    }}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                    Clear
-                </button>
-            </div>
+                {moduleKey === 'reviews' ? (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-3 py-3">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Quick filters</span>
 
-            {moduleKey === 'reviews' ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className="mr-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        <AppIcon name="section" className="h-4 w-4" />
-                        Quick Filters
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex flex-wrap items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Rating">
                             {[{ label: 'All Ratings', value: '' }, { label: '5★', value: '5' }, { label: '4★', value: '4' }, { label: '3★', value: '3' }, { label: '2★', value: '2' }, { label: '1★', value: '1' }].map((opt) => {
                                 const active = String(filters?.rating ?? '') === String(opt.value);
                                 return (
                                     <button
                                         key={opt.label}
                                         type="button"
+                                        aria-pressed={active}
                                         onClick={() => setFilterAndFetch('rating', opt.value)}
-                                        className={active
-                                            ? 'rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white'
-                                            : 'rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50'}
+                                        className={chip(active)}
                                     >
                                         {opt.label}
                                     </button>
@@ -650,17 +683,16 @@ Write an appropriate reply.`;
                             })}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Sentiment">
                             {[{ label: 'All Sentiments', value: '' }, { label: 'Positive', value: 'positive' }, { label: 'Neutral', value: 'neutral' }, { label: 'Negative', value: 'negative' }].map((opt) => {
                                 const active = String(filters?.sentiment ?? '') === String(opt.value);
                                 return (
                                     <button
                                         key={opt.label}
                                         type="button"
+                                        aria-pressed={active}
                                         onClick={() => setFilterAndFetch('sentiment', opt.value)}
-                                        className={active
-                                            ? 'rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white'
-                                            : 'rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50'}
+                                        className={chip(active)}
                                     >
                                         {opt.label}
                                     </button>
@@ -668,79 +700,11 @@ Write an appropriate reply.`;
                             })}
                         </div>
                     </div>
-                </div>
-            ) : null}
+                ) : null}
 
-            {actionError ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm">
-                    {actionError}
-                </div>
-            ) : null}
-
-            {filtersOpen ? (
-                <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-                    <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setFiltersOpen(false)} />
-
-                    <div className="relative ml-auto h-full w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="section" className="h-5 w-5 text-slate-700" />
-                                <h3 className="text-base font-semibold text-slate-800">Filters</h3>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setFiltersOpen(false)}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                                Close
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 p-5">
-                            {filterFields.map((field) => (
-                                <div key={field.key}>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        {field.label}
-                                    </label>
-                                    <FilterControl
-                                        field={field}
-                                        value={filters[field.key] ?? ''}
-                                        onChange={(key, val) => setFilters((prev) => ({ ...prev, [key]: val }))}
-                                        relationOptions={field.type === 'relation' ? (relationState?.[field.resource]?.options || []) : undefined}
-                                        relationLoading={field.type === 'relation' ? Boolean(relationState?.[field.resource]?.loading) : false}
-                                        relationHint={field.type === 'relation' && field.resource === 'doctors' && user?.role === 'super_admin' && !filters?.clinic_id ? 'Select Clinic first' : ''}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="sticky bottom-0 border-t border-slate-200 bg-white p-5">
-                            <div className="flex items-center justify-end gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setFilters({})}
-                                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                >
-                                    Reset Filters
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setFiltersOpen(false);
-                                        fetchData(1);
-                                    }}
-                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                                >
-                                    Apply
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-
-            {loading ? <div className="rounded border bg-white p-4">Loading...</div> : (
+            {loading ? <Spinner /> : (
                 <DataTable
+                    framed={false}
                     rows={rows}
                     actionMode="buttons"
                     buttonActions={moduleKey === 'users'
@@ -822,8 +786,8 @@ Write an appropriate reply.`;
                                     <ClinicStatusBadge clinicStatus={value} subscriptionStatus={row?.subscription?.status} />
                                 ),
                                 logo_url: (value) => {
-                                    if (!value) return <span className="text-gray-300">—</span>;
-                                    return <img src={value} alt="Logo" className="h-8 w-8 rounded-lg object-contain border border-gray-200 bg-gray-50" />;
+                                    if (!value) return <span className="text-slate-400">—</span>;
+                                    return <img src={value} alt="Logo" className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-50 object-contain" />;
                                 },
                             }
                         : moduleKey === 'users'
@@ -946,85 +910,135 @@ Write an appropriate reply.`;
                 />
             )}
 
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-sm">
-                <span>Page {meta.current_page} / {Math.max(1, Math.ceil(meta.total / meta.per_page))} • Total {meta.total}</span>
-                <div className="space-x-2">
-                    <button disabled={meta.current_page <= 1} onClick={() => fetchData(meta.current_page - 1)} className="rounded-xl border border-slate-300 px-3 py-1 disabled:opacity-50">Prev</button>
-                    <button disabled={meta.current_page >= Math.ceil(meta.total / meta.per_page)} onClick={() => fetchData(meta.current_page + 1)} className="rounded-xl border border-slate-300 px-3 py-1 disabled:opacity-50">Next</button>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+                    <span>
+                        Page <span className="font-semibold text-slate-900">{meta.current_page}</span> of {totalPages}
+                        <span className="mx-1.5 text-slate-400" aria-hidden="true">·</span>
+                        {meta.total} total
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button type="button" disabled={meta.current_page <= 1} onClick={() => fetchData(meta.current_page - 1)} className={`${btn.secondary} h-9`}>
+                            <span aria-hidden="true">‹</span> Prev
+                        </button>
+                        <button type="button" disabled={meta.current_page >= Math.ceil(meta.total / meta.per_page)} onClick={() => fetchData(meta.current_page + 1)} className={`${btn.secondary} h-9`}>
+                            Next <span aria-hidden="true">›</span>
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </section>
+
+            {filtersOpen ? (
+                <div className="fixed inset-0 z-50 flex bg-slate-950/50" aria-modal="true" role="dialog" aria-label="Filters" onClick={() => setFiltersOpen(false)}>
+                    <div className="relative ml-auto flex h-full w-full max-w-md flex-col bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                            <h3 className="text-base font-semibold text-slate-900">Filters</h3>
+                            <button
+                                type="button"
+                                onClick={() => setFiltersOpen(false)}
+                                aria-label="Close"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                            >
+                                <AppIcon name="close" className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                            {filterFields.map((field) => (
+                                <div key={field.key}>
+                                    <label htmlFor={`filter-${field.key}`} className={labelClass}>
+                                        {field.label}
+                                    </label>
+                                    <FilterControl
+                                        id={`filter-${field.key}`}
+                                        field={field}
+                                        value={filters[field.key] ?? ''}
+                                        onChange={(key, val) => setFilters((prev) => ({ ...prev, [key]: val }))}
+                                        relationOptions={field.type === 'relation' ? (relationState?.[field.resource]?.options || []) : undefined}
+                                        relationLoading={field.type === 'relation' ? Boolean(relationState?.[field.resource]?.loading) : false}
+                                        relationHint={field.type === 'relation' && field.resource === 'doctors' && user?.role === 'super_admin' && !filters?.clinic_id ? 'Select Clinic first' : ''}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4">
+                            <button
+                                type="button"
+                                onClick={() => setFilters({})}
+                                className={btn.secondary}
+                            >
+                                Reset Filters
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setFiltersOpen(false);
+                                    fetchData(1);
+                                }}
+                                className={btn.primary}
+                            >
+                                Apply
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             {moduleKey === 'reviews' ? (
                 viewRecord ? (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setViewRecord(null)}>
-                        <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                                <div className="flex items-center gap-2">
-                                    <AppIcon name="view" className="h-5 w-5" />
-                                    <h3 className="text-lg font-semibold">Review Details</h3>
-                                </div>
-                                <button onClick={() => setViewRecord(null)} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">Close</button>
+                    <DialogShell title="Review details" onClose={() => setViewRecord(null)} maxWidth="max-w-4xl">
+                        <dl className="grid gap-x-6 sm:grid-cols-2">
+                            <div className="border-b border-slate-100 py-3">
+                                <dt className="text-xs font-medium text-slate-600">Reviewer</dt>
+                                <dd className="mt-0.5 text-sm text-slate-900">{viewRecord.reviewer_name || '—'}</dd>
                             </div>
-
-                            <div className="max-h-[72vh] space-y-4 overflow-y-auto p-5">
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reviewer</div>
-                                        <div className="mt-1 text-sm text-slate-800">{viewRecord.reviewer_name || '—'}</div>
-                                    </div>
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rating</div>
-                                        <div className="mt-1 text-sm text-slate-800">{viewRecord.rating ?? '—'}</div>
-                                    </div>
-                                </div>
-
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Review Message</div>
-                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{viewRecord.message || '—'}</div>
-                                </div>
-
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sentiment</div>
-                                        <div className="mt-2">{viewRecord.sentiment ? <StatusBadge status={String(viewRecord.sentiment)} /> : '—'}</div>
-                                        {viewRecord.sentiment_message ? (
-                                            <div className="mt-2 text-sm text-slate-700">{viewRecord.sentiment_message}</div>
-                                        ) : null}
-                                    </div>
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Improvement</div>
-                                        <div className="mt-2 text-sm text-slate-700">{viewRecord.improvement_suggestion || '—'}</div>
-                                    </div>
-                                </div>
-
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div>
-                                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Saved Reply</div>
-                                            <div className="mt-1 text-xs text-slate-500">{viewRecord.replied_at ? `Replied at: ${String(viewRecord.replied_at)}` : 'No reply saved yet.'}</div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            disabled={!String(viewRecord.reply_text || '').trim()}
-                                            onClick={async () => {
-                                                const text = String(viewRecord.reply_text || '').trim();
-                                                if (!text) return;
-                                                try {
-                                                    await navigator.clipboard.writeText(text);
-                                                } catch {
-                                                    // ignore
-                                                }
-                                            }}
-                                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                        >
-                                            Copy Reply
-                                        </button>
-                                    </div>
-                                    <div className="mt-3 whitespace-pre-wrap text-sm text-slate-800">{viewRecord.reply_text || '—'}</div>
-                                </div>
+                            <div className="border-b border-slate-100 py-3">
+                                <dt className="text-xs font-medium text-slate-600">Rating</dt>
+                                <dd className="mt-0.5 text-sm text-slate-900">{viewRecord.rating ?? '—'}</dd>
                             </div>
+                            <div className="border-b border-slate-100 py-3 sm:col-span-2">
+                                <dt className="text-xs font-medium text-slate-600">Review message</dt>
+                                <dd className="mt-0.5 whitespace-pre-wrap text-sm text-slate-900">{viewRecord.message || '—'}</dd>
+                            </div>
+                            <div className="border-b border-slate-100 py-3">
+                                <dt className="text-xs font-medium text-slate-600">Sentiment</dt>
+                                <dd className="mt-1">{viewRecord.sentiment ? <StatusBadge status={String(viewRecord.sentiment)} /> : '—'}</dd>
+                                {viewRecord.sentiment_message ? (
+                                    <dd className="mt-1.5 text-sm text-slate-700">{viewRecord.sentiment_message}</dd>
+                                ) : null}
+                            </div>
+                            <div className="border-b border-slate-100 py-3">
+                                <dt className="text-xs font-medium text-slate-600">Improvement</dt>
+                                <dd className="mt-0.5 text-sm text-slate-700">{viewRecord.improvement_suggestion || '—'}</dd>
+                            </div>
+                        </dl>
+
+                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                    <h4 className="text-sm font-semibold text-slate-900">Saved reply</h4>
+                                    <p className="mt-0.5 text-xs text-slate-600">{viewRecord.replied_at ? `Replied at: ${String(viewRecord.replied_at)}` : 'No reply saved yet.'}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={!String(viewRecord.reply_text || '').trim()}
+                                    onClick={async () => {
+                                        const text = String(viewRecord.reply_text || '').trim();
+                                        if (!text) return;
+                                        try {
+                                            await navigator.clipboard.writeText(text);
+                                        } catch {
+                                            // ignore
+                                        }
+                                    }}
+                                    className={`${btn.secondary} h-9`}
+                                >
+                                    Copy Reply
+                                </button>
+                            </div>
+                            <div className="mt-3 whitespace-pre-wrap text-sm text-slate-800">{viewRecord.reply_text || '—'}</div>
                         </div>
-                    </div>
+                    </DialogShell>
                 ) : null
             ) : (
                 <RecordDialog
@@ -1040,63 +1054,15 @@ Write an appropriate reply.`;
             )}
 
             {reviewCreate.open ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setReviewCreate((p) => ({ ...p, open: false }))}>
-                    <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="module" className="h-5 w-5" />
-                                <h3 className="text-lg font-semibold">Add Review</h3>
-                            </div>
-                            <button onClick={() => setReviewCreate((p) => ({ ...p, open: false }))} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">Close</button>
-                        </div>
-
-                        <div className="space-y-4 p-5">
-                            {reviewCreate.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {reviewCreate.error}
-                                </div>
-                            ) : null}
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reviewer Name</label>
-                                    <input
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                        value={reviewCreate.values.reviewer_name}
-                                        onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, reviewer_name: e.target.value } }))}
-                                        placeholder="e.g. Rahul"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Rating</label>
-                                    <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                        value={reviewCreate.values.rating}
-                                        onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, rating: e.target.value } }))}
-                                    >
-                                        {['5', '4', '3', '2', '1'].map((r) => (
-                                            <option key={r} value={r}>{r} Star{r === '1' ? '' : 's'}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Review Message</label>
-                                <textarea
-                                    className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                    value={reviewCreate.values.message}
-                                    onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, message: e.target.value } }))}
-                                    placeholder="Write the review text here"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
+                <DialogShell
+                    title="Add review"
+                    onClose={() => setReviewCreate((p) => ({ ...p, open: false }))}
+                    footer={(
+                        <>
                             <button
                                 type="button"
                                 onClick={() => setReviewCreate((p) => ({ ...p, open: false }))}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                className={btn.secondary}
                             >
                                 Cancel
                             </button>
@@ -1123,40 +1089,77 @@ Write an appropriate reply.`;
                                         setReviewCreate((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Create failed' }));
                                     }
                                 }}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                                className={btn.primary}
                             >
                                 {reviewCreate.busy ? 'Creating…' : 'Create'}
                             </button>
+                        </>
+                    )}
+                >
+                    <div className="space-y-4">
+                        {reviewCreate.error ? <Alert tone="error">{reviewCreate.error}</Alert> : null}
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label htmlFor="review-name" className={labelClass}>Reviewer name</label>
+                                <input
+                                    id="review-name"
+                                    className={`${inputClass} h-10`}
+                                    value={reviewCreate.values.reviewer_name}
+                                    onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, reviewer_name: e.target.value } }))}
+                                    placeholder="e.g. Rahul"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="review-rating" className={labelClass}>Rating</label>
+                                <select
+                                    id="review-rating"
+                                    className={`${inputClass} h-10`}
+                                    value={reviewCreate.values.rating}
+                                    onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, rating: e.target.value } }))}
+                                >
+                                    {['5', '4', '3', '2', '1'].map((r) => (
+                                        <option key={r} value={r}>{r} Star{r === '1' ? '' : 's'}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label htmlFor="review-message" className={labelClass}>Review message</label>
+                            <textarea
+                                id="review-message"
+                                className={`${inputClass} min-h-[120px]`}
+                                value={reviewCreate.values.message}
+                                onChange={(e) => setReviewCreate((p) => ({ ...p, values: { ...p.values, message: e.target.value } }))}
+                                placeholder="Write the review text here"
+                            />
                         </div>
                     </div>
-                </div>
+                </DialogShell>
             ) : null}
 
             {replyDialog.open ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setReplyDialog((p) => ({ ...p, open: false }))}>
-                    <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="section" className="h-5 w-5" />
-                                <h3 className="text-lg font-semibold">Generate Reply</h3>
-                            </div>
-                            <button onClick={() => setReplyDialog((p) => ({ ...p, open: false }))} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">Close</button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-label="Generate reply" onClick={() => setReplyDialog((p) => ({ ...p, open: false }))}>
+                    <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                            <h3 className="text-base font-semibold text-slate-900">Generate reply</h3>
+                            <button type="button" onClick={() => setReplyDialog((p) => ({ ...p, open: false }))} aria-label="Close" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+                                <AppIcon name="close" className="h-4 w-4" />
+                            </button>
                         </div>
 
-                        <div className="space-y-4 p-5">
-                            {replyDialog.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {replyDialog.error}
-                                </div>
-                            ) : null}
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+                            {replyDialog.error ? <Alert tone="error">{replyDialog.error}</Alert> : null}
 
                             {replyDialog.mode === 'generate' ? (
                                 <>
                                     <div className="grid gap-4 md:grid-cols-3">
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reply Type</label>
+                                    <label htmlFor="reply-type" className={labelClass}>Reply type</label>
                                     <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                                        id="reply-type"
+                                        className={`${inputClass} h-10`}
                                         value={replyDialog.options.reply_type}
                                         onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, reply_type: e.target.value } }))}
                                     >
@@ -1166,9 +1169,10 @@ Write an appropriate reply.`;
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Language</label>
+                                    <label htmlFor="reply-language" className={labelClass}>Language</label>
                                     <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                                        id="reply-language"
+                                        className={`${inputClass} h-10`}
                                         value={replyDialog.options.language}
                                         onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, language: e.target.value } }))}
                                     >
@@ -1178,9 +1182,10 @@ Write an appropriate reply.`;
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tone</label>
+                                    <label htmlFor="reply-tone" className={labelClass}>Tone</label>
                                     <select
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                                        id="reply-tone"
+                                        className={`${inputClass} h-10`}
                                         value={replyDialog.options.tone}
                                         onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, tone: e.target.value } }))}
                                     >
@@ -1193,16 +1198,17 @@ Write an appropriate reply.`;
                             </div>
 
                                     <div>
-                                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Case Data / Context (optional)</label>
+                                        <label htmlFor="reply-context" className={labelClass}>Case data / context (optional)</label>
                                         <textarea
-                                            className="min-h-[90px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                                            id="reply-context"
+                                            className={`${inputClass} min-h-[90px]`}
                                             value={replyDialog.options.case_data}
                                             onChange={(e) => setReplyDialog((p) => ({ ...p, options: { ...p.options, case_data: e.target.value } }))}
                                             placeholder="For low ratings/complaints, add context here (no medical advice)."
                                         />
                                     </div>
 
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div className="text-sm text-slate-600">
                                     Generates a suggested reply using the review text + rating.
                                 </div>
@@ -1222,7 +1228,7 @@ Write an appropriate reply.`;
                                             setReplyDialog((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Generate failed' }));
                                         }
                                     }}
-                                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                                    className={btn.primary}
                                 >
                                     {replyDialog.busy ? 'Generating…' : 'Generate Reply'}
                                 </button>
@@ -1236,18 +1242,18 @@ Write an appropriate reply.`;
                             )}
 
                             {replyDialog.generated?.reply ? (
-                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Generated Reply</div>
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <h4 className="mb-2 text-sm font-semibold text-slate-900">Generated reply</h4>
                                     <div className="whitespace-pre-wrap text-sm text-slate-800">{replyDialog.generated.reply}</div>
                                 </div>
                             ) : null}
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
+                        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-5 py-4">
                             <button
                                 type="button"
                                 onClick={() => setReplyDialog((p) => ({ ...p, open: false }))}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                className={btn.secondary}
                             >
                                 Cancel
                             </button>
@@ -1263,7 +1269,7 @@ Write an appropriate reply.`;
                                         // ignore
                                     }
                                 }}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                className={btn.secondary}
                             >
                                 Copy Reply
                             </button>
@@ -1282,7 +1288,7 @@ Write an appropriate reply.`;
                                             setReplyDialog((p) => ({ ...p, saving: false, error: e?.response?.data?.message || e?.message || 'Save failed' }));
                                         }
                                     }}
-                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                                    className={btn.primary}
                                 >
                                     {replyDialog.saving ? 'Saving…' : 'Save'}
                                 </button>

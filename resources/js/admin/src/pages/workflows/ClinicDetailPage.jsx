@@ -7,58 +7,57 @@ import ClinicStatusBadge from '../../components/billing/ClinicStatusBadge.jsx';
 import SubscriptionCard from '../../components/billing/SubscriptionCard.jsx';
 import { useAssignableRoles } from '../../hooks/useAssignableRoles';
 import { formatDate } from '../../utils/dateFormat';
+import { Alert, btn, Card as UiCard, EmptyState as UiEmptyState, input, PageHeader, Spinner, Tabs } from '../../components/ui';
 
 const TABS = [
     { key: 'overview',  label: 'Overview',       icon: 'dashboard' },
     { key: 'doctors',   label: 'Doctors',         icon: 'stethoscope' },
     { key: 'services',  label: 'Services',        icon: 'clipboard-check' },
-    { key: 'staff',     label: 'Staff Users',     icon: 'users' },
-    { key: 'settings',  label: 'Clinic Settings', icon: 'settings' },
+    { key: 'staff',     label: 'Staff users',     icon: 'users' },
+    { key: 'settings',  label: 'Clinic settings', icon: 'settings' },
 ];
 
 // ── Shared UI helpers ─────────────────────────────────────────────────────────
 
 function Card({ children, className = '' }) {
-    return <div className={`rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}>{children}</div>;
+    return <div className={`rounded-2xl border border-slate-200 bg-white ${className}`}>{children}</div>;
+}
+
+/** A card with the standard header row (title, description, actions). */
+function Panel({ title, subtitle, action, children, bodyClassName = 'px-5 py-2' }) {
+    return <UiCard title={title} description={subtitle} actions={action} bodyClassName={bodyClassName}>{children}</UiCard>;
 }
 
 function InfoRow({ label, value }) {
     if (value == null || value === '') return null;
     return (
-        <div className="flex items-start gap-4 border-b border-gray-100 py-2.5 last:border-0">
-            <span className="w-44 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</span>
-            <span className="text-sm text-gray-800">{value}</span>
+        <div className="flex flex-col gap-0.5 border-b border-slate-100 py-2.5 last:border-0 sm:flex-row sm:items-start sm:gap-4">
+            <span className="text-sm text-slate-600 sm:w-44 sm:shrink-0">{label}</span>
+            <span className="min-w-0 break-words text-sm font-medium text-slate-900">{value}</span>
         </div>
     );
 }
 
-function SectionHeader({ title, subtitle, action }) {
-    return (
-        <div className="flex items-center justify-between gap-4 pb-4">
-            <div>
-                <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-                {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
-            </div>
-            {action}
-        </div>
-    );
+function EmptyNote({ children }) {
+    return <p className="py-3 text-sm text-slate-600">{children}</p>;
 }
 
 function EmptyState({ icon, text }) {
-    return (
-        <div className="flex flex-col items-center justify-center py-14 text-center">
-            <AppIcon name={icon} className="mb-3 h-8 w-8 text-gray-200" />
-            <p className="text-sm text-gray-400">{text}</p>
-        </div>
-    );
+    return <UiEmptyState icon={icon} title={text} />;
 }
 
 function LoadingState() {
-    return (
-        <div className="flex items-center justify-center py-14">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-        </div>
-    );
+    return <Spinner className="py-14" />;
+}
+
+function ErrorBox({ children }) {
+    return <Alert tone="error">{children}</Alert>;
+}
+
+function Avatar({ src, text, tone = 'blue' }) {
+    if (src) return <img src={src} alt="" className="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover" />;
+    const cls = tone === 'blue' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700';
+    return <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${cls}`}>{text}</span>;
 }
 
 // ── Services Tab ─────────────────────────────────────────────────────────────
@@ -143,38 +142,38 @@ function ServicesTab({ clinicId }) {
         }
     };
 
-    if (loading) return <LoadingState />;
-    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+    if (loading) return <Card><LoadingState /></Card>;
+    if (error) return <ErrorBox>{error}</ErrorBox>;
 
     return (
         <>
-            <SectionHeader
+            <Panel
                 title="Services"
                 subtitle="Create services for this clinic."
+                bodyClassName=""
                 action={
                     <Btn variant="primary" onClick={openAdd}>
-                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Service
+                        <AppIcon name="plus" className="h-4 w-4" /> Add service
                     </Btn>
                 }
-            />
-
+            >
             {!services.length ? (
                 <EmptyState icon="clipboard-check" text="No services yet." />
             ) : (
-                <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="divide-y divide-slate-100">
                     {services.map((svc) => {
                         return (
-                            <div key={svc.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5">
+                            <div key={svc.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50">
                                 <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-gray-900">{svc.name}</p>
-                                    <p className="mt-0.5 text-xs text-gray-500">
+                                    <p className="text-sm font-semibold text-slate-900">{svc.name}</p>
+                                    <p className="mt-0.5 text-sm text-slate-600">
                                         {svc.code ? `${svc.code} · ` : ''}
                                         {svc.duration_minutes ? `${svc.duration_minutes} min · ` : ''}
                                         {svc.fee != null && svc.fee !== '' ? `₹${svc.fee}` : ''}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Btn onClick={() => openEdit(svc)}>Edit</Btn>
+                                    <Btn className="h-9" onClick={() => openEdit(svc)}><AppIcon name="edit" className="h-4 w-4" /> Edit</Btn>
                                     <DeleteBtn endpoint={`/super-admin/services/${svc.id}`} onDeleted={load} label="service" />
                                 </div>
                             </div>
@@ -182,26 +181,25 @@ function ServicesTab({ clinicId }) {
                     })}
                 </div>
             )}
+            </Panel>
 
             <Sheet
                 open={sheet.open}
-                title={sheet.mode === 'edit' ? `Edit Service — ${sheet.service?.name}` : 'Add Service'}
+                title={sheet.mode === 'edit' ? `Edit service — ${sheet.service?.name}` : 'Add service'}
                 subtitle="Configure the service details."
                 onClose={() => setSheet({ open: false, mode: 'add', service: null })}
                 footer={
-                    <div className="flex items-center justify-between gap-3">
-                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
-                        <div className="ml-auto flex gap-2">
-                            <Btn onClick={() => setSheet({ open: false, mode: 'add', service: null })} disabled={saving}>Cancel</Btn>
-                            <Btn variant="primary" type="submit" disabled={saving} className="min-w-[110px]">
-                                {saving ? 'Saving…' : 'Save'}
-                            </Btn>
-                        </div>
-                    </div>
+                    <SheetFooter error={saveError}>
+                        <Btn onClick={() => setSheet({ open: false, mode: 'add', service: null })} disabled={saving}>Cancel</Btn>
+                        {/* The footer renders outside the form, so tie the button to it by id. */}
+                        <Btn variant="primary" type="submit" form="service-sheet-form" disabled={saving} className="min-w-[110px]">
+                            {saving ? 'Saving…' : 'Save'}
+                        </Btn>
+                    </SheetFooter>
                 }
             >
-                <form onSubmit={save} className="space-y-4">
-                    <Field label="Service Name" required>
+                <form id="service-sheet-form" onSubmit={save} className="space-y-4">
+                    <Field label="Service name" required>
                         <TextInput value={form.name} onChange={(v) => setForm((p) => ({ ...p, name: v }))} placeholder="Consultation" />
                     </Field>
 
@@ -236,17 +234,17 @@ function DeleteBtn({ endpoint, onDeleted, label = 'item' }) {
             <button
                 type="button"
                 onClick={() => setConfirming(true)}
-                className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                className={`${btn.danger} h-9`}
             >
-                <AppIcon name="trash" className="h-3.5 w-3.5" />
+                <AppIcon name="trash" className="h-4 w-4" />
                 Delete
             </button>
         );
     }
 
     return (
-        <div className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-2.5 py-1.5">
-            <span className="text-xs font-semibold text-red-700">Delete {label}?</span>
+        <div className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2.5">
+            <span className="text-sm font-semibold text-rose-800">Delete {label}?</span>
             <button
                 type="button"
                 disabled={busy}
@@ -262,14 +260,14 @@ function DeleteBtn({ endpoint, onDeleted, label = 'item' }) {
                         setBusy(false);
                     }
                 }}
-                className="rounded px-1.5 py-0.5 text-xs font-bold text-red-700 hover:bg-red-200 disabled:opacity-50"
+                className="rounded-md px-2 py-1 text-sm font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-50"
             >
                 {busy ? '…' : 'Yes'}
             </button>
             <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="rounded px-1.5 py-0.5 text-xs font-semibold text-gray-600 hover:bg-gray-200"
+                className="rounded-md px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-white"
             >
                 No
             </button>
@@ -277,16 +275,15 @@ function DeleteBtn({ endpoint, onDeleted, label = 'item' }) {
     );
 }
 
-function Btn({ onClick, children, variant = 'secondary', disabled, type = 'button', className = '' }) {
-    const base = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50';
+function Btn({ onClick, children, variant = 'secondary', disabled, type = 'button', className = '', form }) {
     const styles = {
-        primary: 'bg-blue-600 text-white hover:bg-blue-700',
-        secondary: 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
-        danger: 'bg-red-600 text-white hover:bg-red-700',
-        ghost: 'text-blue-600 hover:underline text-xs font-medium',
+        primary: btn.primary,
+        secondary: btn.secondary,
+        danger: btn.danger,
+        ghost: btn.link,
     };
     return (
-        <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles[variant]} ${className}`}>
+        <button type={type} form={form} onClick={onClick} disabled={disabled} className={`${styles[variant]} ${className}`}>
             {children}
         </button>
     );
@@ -306,52 +303,65 @@ function Sheet({ open, title, subtitle, onClose, children, footer }) {
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end" aria-modal="true" role="dialog">
+        <div className="fixed inset-0 z-50 flex justify-end" aria-modal="true" role="dialog" aria-label={title}>
             <div
                 ref={overlayRef}
-                className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+                className="absolute inset-0 bg-slate-950/50"
                 onClick={onClose}
             />
             <div className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl">
                 {/* Header */}
-                <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
-                    <div>
-                        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-                        {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+                <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+                        {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                        aria-label="Close"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                     >
                         <AppIcon name="close" className="h-4 w-4" />
                     </button>
                 </div>
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+                <div className="flex-1 overflow-y-auto p-5">{children}</div>
                 {/* Footer */}
-                {footer && <div className="border-t border-gray-200 px-6 py-4">{footer}</div>}
+                {footer && <div className="border-t border-slate-100 px-5 py-4">{footer}</div>}
             </div>
+        </div>
+    );
+}
+
+function SheetFooter({ error, children }) {
+    return (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+            {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+            <div className="ml-auto flex gap-2">{children}</div>
         </div>
     );
 }
 
 // ── Small form helpers ────────────────────────────────────────────────────────
 
-function Field({ label, required, error, hint, children }) {
+// The label wraps the control so text and input stay tied together. Pass
+// `group` when the body holds buttons or several controls.
+function Field({ label, required, error, hint, children, group = false }) {
+    const Tag = group ? 'div' : 'label';
     return (
-        <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
-                {label}{required && <span className="ml-0.5 text-red-500">*</span>}
-            </label>
+        <Tag className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-600">
+                {label}{required && <span className="ml-0.5 text-rose-600" aria-hidden="true">*</span>}
+            </span>
             {children}
-            {hint && !error && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
-            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-        </div>
+            {hint && !error && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+            {error && <span className="mt-1 block text-xs text-rose-700">{error}</span>}
+        </Tag>
     );
 }
 
-function TextInput({ value, onChange, placeholder, type = 'text', disabled = false, readOnly = false }) {
+function TextInput({ value, onChange, placeholder, type = 'text', disabled = false, readOnly = false, className = '' }) {
     return (
         <input
             type={type}
@@ -360,7 +370,7 @@ function TextInput({ value, onChange, placeholder, type = 'text', disabled = fal
             readOnly={readOnly}
             onChange={(e) => (onChange ? onChange(e.target.value) : undefined)}
             placeholder={placeholder}
-            className={`w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-gray-50 text-gray-500' : ''}`}
+            className={`${input} ${className}`}
         />
     );
 }
@@ -371,7 +381,7 @@ function SelectInput({ value, onChange, options, disabled = false }) {
             value={value || ''}
             disabled={disabled}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-gray-50 text-gray-500' : ''}`}
+            className={input}
         >
             {options.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -388,27 +398,27 @@ function DoctorMultiSelect({ options, value, onChange, loading, error }) {
         onChange(next);
     };
 
-    if (loading) return <p className="text-sm text-gray-400">Loading doctors…</p>;
-    if (error) return <p className="text-sm text-red-600">{error}</p>;
-    if (!options.length) return <p className="text-sm text-gray-400">No doctors yet.</p>;
+    if (loading) return <p className="text-sm text-slate-600">Loading doctors…</p>;
+    if (error) return <p className="text-sm text-rose-700">{error}</p>;
+    if (!options.length) return <p className="text-sm text-slate-600">No doctors yet.</p>;
 
     return (
-        <div className="max-h-48 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+        <div className="max-h-48 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
             {options.map((doc) => {
                 const checked = selected.includes(String(doc.id));
                 const name = [doc.title, doc.full_name].filter(Boolean).join(' ').trim() || `Doctor #${doc.id}`;
                 return (
                     <label
                         key={doc.id}
-                        className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors ${checked ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                        className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors ${checked ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
                     >
                         <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => toggle(doc.id)}
-                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="text-gray-800">{name}</span>
+                        <span className="text-slate-800">{name}</span>
                     </label>
                 );
             })}
@@ -418,15 +428,80 @@ function DoctorMultiSelect({ options, value, onChange, loading, error }) {
 
 function Toggle({ checked, onChange, label }) {
     return (
-        <label className="flex cursor-pointer items-center gap-3">
-            <div className="relative">
-                <input type="checkbox" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
-                <div className={`flex h-5 w-9 items-center rounded-full transition-colors ${Boolean(checked) ? 'bg-blue-600' : 'bg-gray-200'}`}>
-                    <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${Boolean(checked) ? 'translate-x-4' : 'translate-x-0.5'}`} />
+        <label className="flex cursor-pointer items-center justify-between gap-4 py-3">
+            <span className="text-sm font-medium text-slate-900">{label}</span>
+            <span className="relative inline-flex shrink-0">
+                <input type="checkbox" role="switch" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+                <span className="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-300" />
+                <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+            </span>
+        </label>
+    );
+}
+
+// ── Theme / branding helpers ──────────────────────────────────────────────────
+
+const DEFAULT_PRIMARY = '#2563EB';
+const DEFAULT_SECONDARY = '#64748B';
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+const safeHex = (value, fallback) => (HEX_RE.test(String(value || '')) ? value : fallback);
+
+/** Colour swatch (opens the native picker) + hex text input. */
+function ColorField({ label, value, fallback, onChange, hint }) {
+    const swatch = safeHex(value, fallback);
+    return (
+        <div>
+            <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
+            <div className="flex items-center gap-2">
+                <label className="relative h-10 w-12 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-blue-300" style={{ backgroundColor: swatch }}>
+                    <span className="sr-only">Pick {label.toLowerCase()}</span>
+                    <input
+                        type="color"
+                        value={swatch}
+                        onChange={(e) => onChange(e.target.value)}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    />
+                </label>
+                <input
+                    type="text"
+                    aria-label={`${label} hex code`}
+                    value={value || ''}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={fallback}
+                    className={`${input} font-mono uppercase`}
+                />
+            </div>
+            {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+        </div>
+    );
+}
+
+/** Small mock of the clinic's patient-facing header in its theme colours. */
+function ThemePreview({ name, logoUrl, primary, secondary }) {
+    const p = safeHex(primary, DEFAULT_PRIMARY);
+    const s = safeHex(secondary, DEFAULT_SECONDARY);
+    return (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50" aria-label="Theme preview">
+            <div className="flex items-center gap-2.5 px-4 py-3" style={{ backgroundColor: p }}>
+                {logoUrl
+                    ? <img src={logoUrl} alt="" className="h-7 w-7 rounded-md bg-white object-contain p-0.5" />
+                    : <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/20 text-xs font-bold text-white">{(name || 'C')[0]}</span>}
+                <span className="truncate text-sm font-semibold text-white">{name || 'Clinic'}</span>
+            </div>
+            <div className="space-y-3 p-4">
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2.5 ring-1 ring-slate-200">
+                    <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-900">Book an appointment</span>
+                        <span className="block text-xs" style={{ color: s }}>Next: today, 4:30 pm</span>
+                    </span>
+                    <span className="shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold text-white" style={{ backgroundColor: p }}>Book</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white" style={{ backgroundColor: s }}>Secondary</span>
+                    <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ borderColor: p, color: p }}>Outline</span>
                 </div>
             </div>
-            <span className="text-sm text-gray-700">{label}</span>
-        </label>
+        </div>
     );
 }
 
@@ -440,8 +515,8 @@ function yesNo(value) {
 function ColorValue({ color }) {
     return (
         <span className="inline-flex items-center gap-2">
-            <span className="h-4 w-4 rounded border border-gray-200" style={{ backgroundColor: color }} />
-            <span className="font-mono text-xs">{color}</span>
+            <span className="h-5 w-5 rounded-md border border-slate-200" style={{ backgroundColor: color }} />
+            <span className="font-mono text-xs uppercase">{color}</span>
         </span>
     );
 }
@@ -464,8 +539,8 @@ function OverviewTab({ clinic, clinicId, onEditClinic, onSubscriptionLoaded }) {
     // Refetch whenever the clinic record changes (e.g. after the Edit sheet saves).
     useEffect(() => { loadOverview(); }, [clinicId, clinic?.updated_at]);
 
-    if (error) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>;
-    if (!overview) return <LoadingState />;
+    if (error) return <ErrorBox>{error}</ErrorBox>;
+    if (!overview) return <Card><LoadingState /></Card>;
 
     const c = overview.clinic || {};
     const s = overview.settings || {};
@@ -479,54 +554,71 @@ function OverviewTab({ clinic, clinicId, onEditClinic, onSubscriptionLoaded }) {
 
             <div className="grid gap-3 sm:grid-cols-3">
                 {[['Doctors', counts.doctors], ['Staff users', counts.staff], ['Services', counts.services]].map(([label, value]) => (
-                    <Card key={label} className="px-5 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-                        <p className="mt-1 text-2xl font-bold text-gray-900 tabular-nums">{value ?? 0}</p>
+                    <Card key={label} className="px-4 py-3">
+                        <p className="text-xs font-medium text-slate-600">{label}</p>
+                        <p className="mt-1 text-2xl font-bold text-slate-900 tabular-nums">{value ?? 0}</p>
                     </Card>
                 ))}
             </div>
 
             <div className="grid gap-5 lg:grid-cols-2">
-                <Card className="p-5">
-                    <SectionHeader
-                        title="Clinic"
-                        action={<Btn onClick={onEditClinic}><AppIcon name="edit" className="h-3.5 w-3.5" /> Edit</Btn>}
-                    />
+                <Panel
+                    title="Clinic"
+                    action={<Btn className="h-9" onClick={onEditClinic}><AppIcon name="edit" className="h-4 w-4" /> Edit</Btn>}
+                >
                     {c.logo_url && (
-                        <div className="mb-3">
-                            <img src={c.logo_url} alt={`${c.name} logo`} className="h-14 w-14 rounded-lg border border-gray-200 object-contain" />
+                        <div className="pt-2">
+                            <img src={c.logo_url} alt={`${c.name} logo`} className="h-14 w-14 rounded-xl border border-slate-200 object-contain" />
                         </div>
                     )}
                     <InfoRow label="Name" value={c.name} />
                     <InfoRow label="Legal name" value={c.legal_name} />
                     <InfoRow label="Slug" value={c.slug} />
                     <InfoRow label="Status" value={c.status && <StatusBadge status={c.status} />} />
-                    <InfoRow label="Primary colour" value={c.primary_color && <ColorValue color={c.primary_color} />} />
-                    <InfoRow label="Secondary colour" value={c.secondary_color && <ColorValue color={c.secondary_color} />} />
                     <InfoRow label="Created" value={formatDate(c.created_at)} />
                     <InfoRow label="Notes" value={c.notes} />
-                </Card>
+                </Panel>
 
-                <div className="space-y-5">
-                    <Card className="p-5">
-                        <SectionHeader title="Owner" />
-                        <InfoRow label="Name" value={c.owner_name} />
-                        <InfoRow label="Email" value={c.owner_email} />
-                        <InfoRow label="Phone" value={c.owner_phone} />
-                        {!c.owner_name && !c.owner_email && !c.owner_phone && <p className="text-sm text-gray-400">No owner details recorded.</p>}
-                    </Card>
+                <Panel
+                    title="Theme and branding"
+                    subtitle="Colours used on this clinic's patient portal, bills and messages."
+                    action={<Btn className="h-9" onClick={onEditClinic}><AppIcon name="edit" className="h-4 w-4" /> Edit theme</Btn>}
+                    bodyClassName="p-5"
+                >
+                    <div className="grid gap-5 sm:grid-cols-2">
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-sm text-slate-600">Primary colour</p>
+                                <p className="mt-1 text-sm font-medium text-slate-900">
+                                    {c.primary_color ? <ColorValue color={c.primary_color} /> : <span className="text-slate-600">Default ({DEFAULT_PRIMARY})</span>}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-slate-600">Secondary colour</p>
+                                <p className="mt-1 text-sm font-medium text-slate-900">
+                                    {c.secondary_color ? <ColorValue color={c.secondary_color} /> : <span className="text-slate-600">Default ({DEFAULT_SECONDARY})</span>}
+                                </p>
+                            </div>
+                        </div>
+                        <ThemePreview name={c.name} logoUrl={c.logo_url} primary={c.primary_color} secondary={c.secondary_color} />
+                    </div>
+                </Panel>
 
-                    <Card className="p-5">
-                        <SectionHeader title="Address and contact" />
-                        <InfoRow label="Address" value={address} />
-                        <InfoRow label="Phone" value={c.phone} />
-                        <InfoRow label="Email" value={c.email} />
-                        {!address && !c.phone && !c.email && <p className="text-sm text-gray-400">No address or contact recorded.</p>}
-                    </Card>
-                </div>
+                <Panel title="Owner">
+                    <InfoRow label="Name" value={c.owner_name} />
+                    <InfoRow label="Email" value={c.owner_email} />
+                    <InfoRow label="Phone" value={c.owner_phone} />
+                    {!c.owner_name && !c.owner_email && !c.owner_phone && <EmptyNote>No owner details recorded.</EmptyNote>}
+                </Panel>
 
-                <Card className="p-5">
-                    <SectionHeader title="Booking settings" />
+                <Panel title="Address and contact">
+                    <InfoRow label="Address" value={address} />
+                    <InfoRow label="Phone" value={c.phone} />
+                    <InfoRow label="Email" value={c.email} />
+                    {!address && !c.phone && !c.email && <EmptyNote>No address or contact recorded.</EmptyNote>}
+                </Panel>
+
+                <Panel title="Booking settings">
                     {overview.settings ? (
                         <>
                             <InfoRow label="Online booking" value={yesNo(s.booking_enabled)} />
@@ -538,28 +630,27 @@ function OverviewTab({ clinic, clinicId, onEditClinic, onSubscriptionLoaded }) {
                             <InfoRow label="Min booking notice" value={s.min_booking_notice_minutes != null && `${s.min_booking_notice_minutes} minutes`} />
                         </>
                     ) : (
-                        <p className="text-sm text-gray-400">No booking settings saved yet.</p>
+                        <EmptyNote>No booking settings saved yet.</EmptyNote>
                     )}
-                </Card>
+                </Panel>
 
-                <Card className="p-5">
-                    <SectionHeader title="Clinic admins" subtitle="Logins created for this clinic's administrators." />
+                <Panel title="Clinic admins" subtitle="Logins created for this clinic's administrators.">
                     {admins.length === 0 ? (
-                        <p className="text-sm text-gray-400">No clinic admin yet. Add one from Staff Users.</p>
+                        <EmptyNote>No clinic admin yet. Add one from Staff users.</EmptyNote>
                     ) : (
-                        <ul className="divide-y divide-gray-100">
+                        <ul className="divide-y divide-slate-100">
                             {admins.map((a) => (
-                                <li key={a.id} className="flex items-start justify-between gap-3 py-2.5">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-900">{a.full_name}</p>
-                                        <p className="text-xs text-gray-500">{[a.email, a.phone].filter(Boolean).join(' · ')}</p>
+                                <li key={a.id} className="flex items-start justify-between gap-3 py-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-slate-900">{a.full_name}</p>
+                                        <p className="truncate text-sm text-slate-600">{[a.email, a.phone].filter(Boolean).join(' · ')}</p>
                                     </div>
                                     {a.status && <StatusBadge status={a.status} />}
                                 </li>
                             ))}
                         </ul>
                     )}
-                </Card>
+                </Panel>
             </div>
         </div>
     );
@@ -679,43 +770,40 @@ function DoctorsTab({ clinicId }) {
         }
     };
 
-    if (loading) return <LoadingState />;
-    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+    if (loading) return <Card><LoadingState /></Card>;
+    if (error) return <ErrorBox>{error}</ErrorBox>;
 
     return (
         <>
-            <SectionHeader
+            <Panel
                 title="Doctors"
                 subtitle="Doctors registered under this clinic."
+                bodyClassName=""
                 action={
                     <Btn variant="primary" onClick={openAdd}>
-                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Doctor
+                        <AppIcon name="plus" className="h-4 w-4" /> Add doctor
                     </Btn>
                 }
-            />
-
+            >
             {!items.length ? <EmptyState icon="stethoscope" text="No doctors yet." /> : (
-                <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="divide-y divide-slate-100">
                     {items.map((doc) => (
-                        <div key={doc.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
-                            <div className="flex items-center gap-3">
-                                {doc.photo_url
-                                    ? <img src={doc.photo_url} alt="" className="h-9 w-9 rounded-full object-cover border border-gray-200" />
-                                    : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600 text-sm font-bold">{(doc.full_name || '?')[0]}</div>
-                                }
-                                <div>
-                                    <p className="text-sm font-semibold text-gray-900">{doc.full_name}</p>
-                                    <p className="text-xs text-gray-500">{[doc.specialization, doc.qualification].filter(Boolean).join(' · ')}</p>
+                        <div key={doc.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <Avatar src={doc.photo_url} text={(doc.full_name || '?')[0]} />
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-slate-900">{doc.full_name}</p>
+                                    <p className="truncate text-sm text-slate-600">{[doc.specialization, doc.qualification].filter(Boolean).join(' · ')}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <StatusBadge status={doc.status} />
-                                <Btn onClick={() => openEdit(doc)}>
-                                    <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
+                                <Btn className="h-9" onClick={() => openEdit(doc)}>
+                                    <AppIcon name="edit" className="h-4 w-4" /> Edit
                                 </Btn>
                                 <Link
                                     to={`/modules/doctors/${doc.id}`}
-                                    className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                    className={`${btn.secondary} h-9`}
                                 >
                                     View
                                 </Link>
@@ -725,48 +813,50 @@ function DoctorsTab({ clinicId }) {
                     ))}
                 </div>
             )}
+            </Panel>
 
             <Sheet
                 open={sheet.open}
-                title={sheet.doctor ? `Edit Doctor — ${sheet.doctor.full_name}` : 'Add Doctor'}
+                title={sheet.doctor ? `Edit doctor — ${sheet.doctor.full_name}` : 'Add doctor'}
                 subtitle="Doctor profile and clinic assignment."
                 onClose={closeSheet}
                 footer={
-                    <div className="flex items-center justify-between gap-3">
-                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
-                        <div className="ml-auto flex gap-2">
-                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
-                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
-                                {saving ? 'Saving…' : 'Save'}
-                            </Btn>
-                        </div>
-                    </div>
+                    <SheetFooter error={saveError}>
+                        <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
+                        <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                            {saving ? 'Saving…' : 'Save'}
+                        </Btn>
+                    </SheetFooter>
                 }
             >
                 <div className="space-y-4">
                     {/* Photo upload */}
-                    <Field label="Profile Photo">
+                    <Field group label="Profile photo">
                         <div className="flex items-center gap-4">
                             <div
-                                className="relative h-24 w-20 flex-shrink-0 cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:border-blue-400"
+                                role="button"
+                                tabIndex={0}
+                                aria-label="Upload profile photo"
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); photoInputRef.current?.click(); } }}
+                                className="relative h-24 w-20 flex-shrink-0 cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:border-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                                 onClick={() => photoInputRef.current?.click()}
                             >
                                 {photoPreview ? (
                                     <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
                                 ) : (
                                     <div className="flex h-full w-full flex-col items-center justify-center gap-1">
-                                        <AppIcon name="plus" className="h-5 w-5 text-gray-400" />
-                                        <span className="text-xs text-gray-400">Photo</span>
+                                        <AppIcon name="plus" className="h-5 w-5 text-slate-500" />
+                                        <span className="text-xs text-slate-500">Photo</span>
                                     </div>
                                 )}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-sm text-slate-600">
                                 <p>Click to upload a portrait photo.</p>
                                 <p className="mt-1">JPG, PNG or WebP · max 2 MB</p>
                                 {photoPreview && (
                                     <button
                                         type="button"
-                                        className="mt-2 text-red-500 hover:underline"
+                                        className="mt-2 text-sm font-semibold text-rose-700 hover:text-rose-900"
                                         onClick={() => { setPhotoFile(null); setPhotoPreview(''); setForm((p) => ({ ...p, photo_url: '' })); }}
                                     >
                                         Remove photo
@@ -776,7 +866,7 @@ function DoctorsTab({ clinicId }) {
                         </div>
                         <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
                     </Field>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                         <Field label="Title">
                             <SelectInput {...f('title')} options={[
                                 { value: 'Dr.', label: 'Dr.' },
@@ -785,13 +875,13 @@ function DoctorsTab({ clinicId }) {
                                 { value: 'Ms.', label: 'Ms.' },
                             ]} />
                         </Field>
-                        <div className="col-span-3">
-                            <Field label="Full Name" required>
+                        <div className="sm:col-span-3">
+                            <Field label="Full name" required>
                                 <TextInput {...f('full_name')} placeholder="Doctor's full name" />
                             </Field>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <Field label="Specialization">
                             <TextInput {...f('specialization')} placeholder="e.g. Cardiologist" />
                         </Field>
@@ -799,8 +889,8 @@ function DoctorsTab({ clinicId }) {
                             <TextInput {...f('qualification')} placeholder="e.g. MBBS, MD" />
                         </Field>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Field label="Experience (Years)">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Experience (years)">
                             <TextInput type="number" {...f('experience_years')} placeholder="0" />
                         </Field>
                         <Field label="Gender">
@@ -812,7 +902,7 @@ function DoctorsTab({ clinicId }) {
                             ]} />
                         </Field>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <Field label="Phone">
                             <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
                         </Field>
@@ -820,24 +910,24 @@ function DoctorsTab({ clinicId }) {
                             <TextInput type="email" {...f('email')} placeholder="doctor@clinic.com" />
                         </Field>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Field label="Consultation Fee (₹)">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Consultation fee (₹)">
                             <TextInput type="number" {...f('consultation_fee')} placeholder="500" />
                         </Field>
-                        <Field label="Follow-up Fee (₹)">
+                        <Field label="Follow-up fee (₹)">
                             <TextInput type="number" {...f('followup_fee')} placeholder="300" />
                         </Field>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Field label="Slot Duration (min)">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Slot duration (min)">
                             <TextInput type="number" {...f('slot_duration_minutes')} placeholder="15" />
                         </Field>
-                        <Field label="Buffer Time (min)">
+                        <Field label="Buffer time (min)">
                             <TextInput type="number" {...f('buffer_time_minutes')} placeholder="5" />
                         </Field>
                     </div>
                     <Field
-                        label="Password (Login)"
+                        label="Password (login)"
                         hint={sheet.doctor ? 'Leave blank to keep the existing password.' : 'Set a password so the doctor can log in to the portal.'}
                     >
                         <TextInput type="password" {...f('password')} placeholder="••••••••" />
@@ -944,40 +1034,38 @@ function StaffTab({ clinicId }) {
         }
     };
 
-    if (loading) return <LoadingState />;
-    if (error) return <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</p>;
+    if (loading) return <Card><LoadingState /></Card>;
+    if (error) return <ErrorBox>{error}</ErrorBox>;
 
     const roleLabel = (r) => String(r || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
     return (
         <>
-            <SectionHeader
-                title="Staff Users"
+            <Panel
+                title="Staff users"
                 subtitle="All staff with access to this clinic."
+                bodyClassName=""
                 action={
                     <Btn variant="primary" onClick={openAdd}>
-                        <AppIcon name="plus" className="h-3.5 w-3.5" /> Add Staff
+                        <AppIcon name="plus" className="h-4 w-4" /> Add staff
                     </Btn>
                 }
-            />
-
+            >
             {!items.length ? <EmptyState icon="users" text="No staff users yet." /> : (
-                <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="divide-y divide-slate-100">
                     {items.map((user) => (
-                        <div key={user.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 text-sm font-bold">
-                                    {(user.full_name || user.email || '?')[0].toUpperCase()}
-                                </div>
-                                <div>
-                                    <p className="text-sm font-semibold text-gray-900">{user.full_name}</p>
-                                    <p className="text-xs text-gray-500">{user.email} · {roleLabel(user.role)}</p>
+                        <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <Avatar tone="slate" text={(user.full_name || user.email || '?')[0].toUpperCase()} />
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-slate-900">{user.full_name}</p>
+                                    <p className="truncate text-sm text-slate-600">{user.email} · {roleLabel(user.role)}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <StatusBadge status={user.status} />
-                                <Btn onClick={() => openEdit(user)}>
-                                    <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
+                                <Btn className="h-9" onClick={() => openEdit(user)}>
+                                    <AppIcon name="edit" className="h-4 w-4" /> Edit
                                 </Btn>
                                 <DeleteBtn endpoint={`/super-admin/users/${user.id}`} onDeleted={load} label="staff user" />
                             </div>
@@ -985,26 +1073,24 @@ function StaffTab({ clinicId }) {
                     ))}
                 </div>
             )}
+            </Panel>
 
             <Sheet
                 open={sheet.open}
-                title={sheet.user ? `Edit Staff — ${sheet.user.full_name}` : 'Add Staff User'}
+                title={sheet.user ? `Edit staff — ${sheet.user.full_name}` : 'Add staff user'}
                 subtitle="Create login credentials and assign a role."
                 onClose={closeSheet}
                 footer={
-                    <div className="flex items-center justify-between gap-3">
-                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
-                        <div className="ml-auto flex gap-2">
-                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
-                            <Btn variant="primary" onClick={handleSave} disabled={saving}>
-                                {saving ? 'Saving…' : 'Save'}
-                            </Btn>
-                        </div>
-                    </div>
+                    <SheetFooter error={saveError}>
+                        <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
+                        <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                            {saving ? 'Saving…' : 'Save'}
+                        </Btn>
+                    </SheetFooter>
                 }
             >
                 <div className="space-y-4">
-                    <Field label="Full Name" required>
+                    <Field label="Full name" required>
                         <TextInput {...f('full_name')} placeholder="Staff Member Name" />
                     </Field>
                     <Field label="Email">
@@ -1013,14 +1099,14 @@ function StaffTab({ clinicId }) {
                     <Field label="Phone">
                         <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
                     </Field>
-                    <Field label={sheet.user ? 'New Password (leave blank to keep)' : 'Password'} required={!sheet.user}>
+                    <Field label={sheet.user ? 'New password (leave blank to keep)' : 'Password'} required={!sheet.user}>
                         <TextInput type="password" {...f('password')} placeholder="••••••••" />
                     </Field>
                     <Field label="Role" required>
                         <SelectInput {...f('role')} options={roleOptions} />
                     </Field>
                     {currentRoleMeta?.limit_to_assigned_doctors ? (
-                        <Field label="Assigned Doctors" hint="Only see these doctors' patients and appointments.">
+                        <Field group label="Assigned doctors" hint="Only see these doctors' patients and appointments.">
                             <DoctorMultiSelect
                                 options={doctorOptions.items}
                                 loading={doctorOptions.loading}
@@ -1078,19 +1164,18 @@ function SettingsTab({ clinicId }) {
         }
     };
 
-    if (loading) return <LoadingState />;
+    if (loading) return <Card><LoadingState /></Card>;
 
     const toggle = (key) => setForm((p) => ({ ...p, [key]: !p[key] }));
 
     return (
-        <div className="max-w-xl space-y-5">
-            {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
-            {success && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{success}</p>}
+        <div className="max-w-3xl space-y-5">
+            {error && <ErrorBox>{error}</ErrorBox>}
+            {success && <Alert tone="success">{success}</Alert>}
 
             <form onSubmit={save} className="space-y-5">
-                <Card className="p-5">
-                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Booking Controls</h3>
-                    <div className="space-y-3">
+                <Panel title="Booking controls" bodyClassName="px-5 py-1">
+                    <div className="divide-y divide-slate-100">
                         {[
                             { key: 'booking_enabled', label: 'Online booking enabled' },
                             { key: 'whatsapp_booking_enabled', label: 'WhatsApp booking enabled' },
@@ -1104,39 +1189,35 @@ function SettingsTab({ clinicId }) {
                             <Toggle key={key} checked={Boolean(form[key])} onChange={() => toggle(key)} label={label} />
                         ))}
                     </div>
-                </Card>
+                </Panel>
 
-                <Card className="p-5">
-                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Cutoff</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-700">Reschedule Cutoff (hours before appointment)</label>
+                <Panel title="Cutoff" bodyClassName="p-5">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Reschedule cutoff (hours before appointment)">
                             <input
                                 type="number"
                                 min={0}
                                 max={8760}
                                 value={form.reschedule_cutoff_hours ?? ''}
                                 onChange={(e) => setForm((p) => ({ ...p, reschedule_cutoff_hours: e.target.value }))}
-                                className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                className={`${input} w-32`}
                             />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-700">Cancel Cutoff (hours before appointment)</label>
+                        </Field>
+                        <Field label="Cancel cutoff (hours before appointment)">
                             <input
                                 type="number"
                                 min={0}
                                 max={8760}
                                 value={form.cancel_cutoff_hours ?? ''}
                                 onChange={(e) => setForm((p) => ({ ...p, cancel_cutoff_hours: e.target.value }))}
-                                className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                className={`${input} w-32`}
                             />
-                        </div>
+                        </Field>
                     </div>
-                </Card>
+                </Panel>
 
-                <Card className="p-5">
-                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Booking Window</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                <Panel title="Booking window" bodyClassName="p-5">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Field label="Max advance booking (days)">
                             <TextInput
                                 type="number"
@@ -1154,23 +1235,22 @@ function SettingsTab({ clinicId }) {
                             />
                         </Field>
                     </div>
-                </Card>
+                </Panel>
 
-                <Card className="p-5">
-                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Reminders</h3>
+                <Panel title="Reminders" bodyClassName="p-5">
                     <Field label="Reminder hours before (0 = off)" hint="How many hours before the appointment a WhatsApp reminder is sent. 0 disables reminders.">
                         <TextInput
                             type="number"
                             value={form.reminder_hours_before ?? ''}
                             onChange={(v) => setForm((p) => ({ ...p, reminder_hours_before: v }))}
                             placeholder="24"
+                            className="max-w-[10rem]"
                         />
                     </Field>
-                </Card>
+                </Panel>
 
-                <Card className="p-5">
-                    <h3 className="mb-4 text-sm font-semibold text-gray-900">Waitlist</h3>
-                    <div className="space-y-4">
+                <Panel title="Waitlist" bodyClassName="px-5 pb-5">
+                    <div className="space-y-3">
                         <Toggle checked={form.waitlist_enabled ?? true} onChange={() => setForm((p) => ({ ...p, waitlist_enabled: !(p.waitlist_enabled ?? true) }))} label="Waitlist enabled" />
                         <Field label="Waitlist hold (minutes)" hint="How long a freed slot is held for the next patient in line (5–240).">
                             <input
@@ -1180,19 +1260,19 @@ function SettingsTab({ clinicId }) {
                                 value={form.waitlist_hold_minutes ?? ''}
                                 onChange={(e) => setForm((p) => ({ ...p, waitlist_hold_minutes: e.target.value }))}
                                 placeholder="30"
-                                className="w-32 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                className={`${input} w-32`}
                             />
                         </Field>
                     </div>
-                </Card>
+                </Panel>
 
                 <div className="flex justify-end">
                     <button
                         type="submit"
                         disabled={saving}
-                        className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                        className={btn.primary}
                     >
-                        {saving ? 'Saving…' : 'Save Clinic Settings'}
+                        {saving ? 'Saving…' : 'Save clinic settings'}
                     </button>
                 </div>
             </form>
@@ -1232,99 +1312,110 @@ function EditClinicSheet({ open, clinic, onClose, onSaved }) {
     return (
         <Sheet
             open={open}
-            title="Edit Clinic"
-            subtitle="Update clinic details and status."
+            title="Edit clinic"
+            subtitle="Update clinic details, status and theme."
             onClose={onClose}
             footer={
-                <div className="flex items-center justify-between gap-3">
-                    {error && <p className="text-sm text-red-600">{error}</p>}
-                    <div className="ml-auto flex gap-2">
-                        <Btn onClick={onClose} disabled={saving}>Cancel</Btn>
-                        <Btn variant="primary" onClick={handleSave} disabled={saving}>
-                            {saving ? 'Saving…' : 'Save'}
-                        </Btn>
-                    </div>
-                </div>
+                <SheetFooter error={error}>
+                    <Btn onClick={onClose} disabled={saving}>Cancel</Btn>
+                    <Btn variant="primary" onClick={handleSave} disabled={saving}>
+                        {saving ? 'Saving…' : 'Save'}
+                    </Btn>
+                </SheetFooter>
             }
         >
-            <div className="space-y-4">
-                <Field label="Clinic Name" required>
-                    <TextInput {...f('name')} placeholder="Clinic Name" />
-                </Field>
-                <Field label="Slug">
-                    <TextInput {...f('slug')} placeholder="my-clinic" />
-                </Field>
-                <Field label="Legal Name">
-                    <TextInput {...f('legal_name')} placeholder="Registered legal name" />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label="Owner Name">
-                        <TextInput {...f('owner_name')} placeholder="Owner" />
+            <div className="space-y-6">
+                <section className="space-y-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Clinic</h3>
+                    <Field label="Clinic name" required>
+                        <TextInput {...f('name')} placeholder="Clinic Name" />
                     </Field>
-                    <Field label="Owner Phone">
-                        <TextInput {...f('owner_phone')} placeholder="+91 XXXXXXXXXX" />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Slug">
+                            <TextInput {...f('slug')} placeholder="my-clinic" />
+                        </Field>
+                        <Field label="Status">
+                            <SelectInput {...f('status')} options={[
+                                { value: 'active', label: 'Active' },
+                                { value: 'suspended', label: 'Suspended' },
+                            ]} />
+                        </Field>
+                    </div>
+                    <Field label="Legal name">
+                        <TextInput {...f('legal_name')} placeholder="Registered legal name" />
                     </Field>
-                </div>
-                <Field label="Owner Email">
-                    <TextInput type="email" {...f('owner_email')} placeholder="owner@clinic.com" />
-                </Field>
-                <Field label="Address Line 1">
-                    <TextInput {...f('address_line_1')} placeholder="Street address" />
-                </Field>
-                <Field label="Address Line 2">
-                    <TextInput {...f('address_line_2')} placeholder="Area, landmark (optional)" />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label="City">
-                        <TextInput {...f('city')} placeholder="City" />
+                </section>
+
+                <section className="space-y-4 border-t border-slate-100 pt-5">
+                    <div>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Theme and branding</h3>
+                        <p className="mt-1 text-sm text-slate-600">Clinics can&rsquo;t change these themselves. Leave blank to use the default.</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <ColorField
+                            label="Primary colour"
+                            value={form.primary_color}
+                            fallback={DEFAULT_PRIMARY}
+                            onChange={(v) => setForm((p) => ({ ...p, primary_color: v }))}
+                            hint={`Default: ${DEFAULT_PRIMARY}`}
+                        />
+                        <ColorField
+                            label="Secondary colour"
+                            value={form.secondary_color}
+                            fallback={DEFAULT_SECONDARY}
+                            onChange={(v) => setForm((p) => ({ ...p, secondary_color: v }))}
+                            hint={`Default: ${DEFAULT_SECONDARY}`}
+                        />
+                    </div>
+                    <div>
+                        <p className="mb-1 text-xs font-medium text-slate-600">Live preview</p>
+                        <ThemePreview name={form.name} logoUrl={form.logo_url} primary={form.primary_color} secondary={form.secondary_color} />
+                    </div>
+                </section>
+
+                <section className="space-y-4 border-t border-slate-100 pt-5">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Owner</h3>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Owner name">
+                            <TextInput {...f('owner_name')} placeholder="Owner" />
+                        </Field>
+                        <Field label="Owner phone">
+                            <TextInput {...f('owner_phone')} placeholder="+91 XXXXXXXXXX" />
+                        </Field>
+                    </div>
+                    <Field label="Owner email">
+                        <TextInput type="email" {...f('owner_email')} placeholder="owner@clinic.com" />
                     </Field>
-                    <Field label="State">
-                        <TextInput {...f('state')} placeholder="State" />
+                </section>
+
+                <section className="space-y-4 border-t border-slate-100 pt-5">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Address and contact</h3>
+                    <Field label="Address line 1">
+                        <TextInput {...f('address_line_1')} placeholder="Street address" />
                     </Field>
-                </div>
-                <Field label="Pincode">
-                    <TextInput {...f('pincode')} placeholder="560001" />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label="Phone">
-                        <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
+                    <Field label="Address line 2">
+                        <TextInput {...f('address_line_2')} placeholder="Area, landmark (optional)" />
                     </Field>
-                    <Field label="Email">
-                        <TextInput type="email" {...f('email')} placeholder="clinic@clinic.com" />
-                    </Field>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label="Status">
-                        <SelectInput {...f('status')} options={[
-                            { value: 'active', label: 'Active' },
-                            { value: 'suspended', label: 'Suspended' },
-                        ]} />
-                    </Field>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label="Primary Color" hint="Default: #2563EB">
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="color"
-                                value={form.primary_color || '#2563EB'}
-                                onChange={(e) => setForm((p) => ({ ...p, primary_color: e.target.value }))}
-                                className="h-9 w-12 cursor-pointer rounded-lg border border-gray-300 p-0.5"
-                            />
-                            <TextInput value={form.primary_color || ''} onChange={(v) => setForm((p) => ({ ...p, primary_color: v }))} placeholder="#2563EB" />
-                        </div>
-                    </Field>
-                    <Field label="Secondary Color" hint="Default: #64748B">
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="color"
-                                value={form.secondary_color || '#64748B'}
-                                onChange={(e) => setForm((p) => ({ ...p, secondary_color: e.target.value }))}
-                                className="h-9 w-12 cursor-pointer rounded-lg border border-gray-300 p-0.5"
-                            />
-                            <TextInput value={form.secondary_color || ''} onChange={(v) => setForm((p) => ({ ...p, secondary_color: v }))} placeholder="#64748B" />
-                        </div>
-                    </Field>
-                </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <Field label="City">
+                            <TextInput {...f('city')} placeholder="City" />
+                        </Field>
+                        <Field label="State">
+                            <TextInput {...f('state')} placeholder="State" />
+                        </Field>
+                        <Field label="Pincode">
+                            <TextInput {...f('pincode')} placeholder="560001" />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Phone">
+                            <TextInput {...f('phone')} placeholder="+91 XXXXXXXXXX" />
+                        </Field>
+                        <Field label="Email">
+                            <TextInput type="email" {...f('email')} placeholder="clinic@clinic.com" />
+                        </Field>
+                    </div>
+                </section>
             </div>
         </Sheet>
     );
@@ -1353,58 +1444,42 @@ export default function ClinicDetailPage() {
     useEffect(() => { loadClinic(); }, [id]);
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center py-20">
-                <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-            </div>
-        );
+        return <Spinner className="py-20" />;
     }
 
     if (error) {
         return (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-5">
-                <p className="text-sm text-red-700">{error}</p>
-                <button onClick={() => navigate('/workflows/clinics')} className="mt-3 text-sm font-semibold text-blue-600 hover:underline">
-                    ← Back to Clinics
+            <div className="mx-auto max-w-[1400px] space-y-3">
+                <Alert tone="error">{error}</Alert>
+                <button type="button" onClick={() => navigate('/workflows/clinics')} className={btn.secondary}>
+                    ‹ Back to clinics
                 </button>
             </div>
         );
     }
 
     return (
-        <div className="space-y-5">
-            {/* Breadcrumb + title */}
-            <div className="flex flex-wrap items-center gap-3">
-                <button
-                    onClick={() => navigate('/workflows/clinics')}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-                >
-                    <AppIcon name="chevron-right" className="h-3.5 w-3.5 rotate-180" />
-                    All Clinics
-                </button>
-                <AppIcon name="chevron-right" className="h-3.5 w-3.5 text-gray-300" />
-                <h1 className="text-xl font-bold text-gray-900">{clinic?.name || `Clinic #${id}`}</h1>
-                {clinic && subscription !== undefined && (
-                    <ClinicStatusBadge clinicStatus={clinic.status} subscriptionStatus={subscription?.status} />
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <PageHeader
+                back={{ to: '/workflows/clinics', label: 'All clinics' }}
+                title={(
+                    <span className="flex flex-wrap items-center gap-3">
+                        <span>{clinic?.name || `Clinic #${id}`}</span>
+                        {clinic && subscription !== undefined && (
+                            <ClinicStatusBadge clinicStatus={clinic.status} subscriptionStatus={subscription?.status} />
+                        )}
+                    </span>
                 )}
-            </div>
+                subtitle={[clinic?.slug, clinic?.city].filter(Boolean).join(' · ') || null}
+            />
 
-            {/* Tab bar */}
-            <div className="flex overflow-x-auto rounded-xl border border-gray-200 bg-gray-100 p-1 gap-1">
-                {TABS.map((tab) => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                            activeTab === tab.key
-                                ? 'bg-white text-gray-900 shadow-sm'
-                                : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        <AppIcon name={tab.icon} className="h-4 w-4" />
-                        {tab.label}
-                    </button>
-                ))}
+            <div className="overflow-x-auto">
+                <Tabs
+                    label="Clinic sections"
+                    tabs={TABS.map((tab) => ({ value: tab.key, label: tab.label }))}
+                    value={activeTab}
+                    onChange={setActiveTab}
+                />
             </div>
 
             {/* Tab content */}

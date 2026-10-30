@@ -2,19 +2,23 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
+import { Alert, btn, Card, input, PageHeader, Spinner } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { formatINR, toPaise } from '../../utils/money';
 import { offlineAmountForCycle, offlinePeriodMonthsForCycle } from '../../utils/planDefaults';
 
-function Field({ label, required, children, hint }) {
+// Label wraps its control so text and input stay tied together. Pass
+// `group` for fields whose body holds buttons (logo picker).
+function Field({ label, required, children, hint, group = false }) {
+    const Tag = group ? 'div' : 'label';
     return (
-        <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
-                {label}{required && <span className="ml-0.5 text-red-500">*</span>}
-            </label>
+        <Tag className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-600">
+                {label}{required && <span className="ml-0.5 text-rose-600" aria-hidden="true">*</span>}
+            </span>
             {children}
-            {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
-        </div>
+            {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+        </Tag>
     );
 }
 
@@ -26,34 +30,64 @@ function TextInput({ value, onChange, placeholder, type = 'text', disabled }) {
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             disabled={disabled}
-            className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
+            className={input}
         />
     );
 }
 
-
 function Toggle({ checked, onChange, label }) {
     return (
-        <label className="flex cursor-pointer items-center gap-3">
-            <div className="relative flex-shrink-0">
-                <input type="checkbox" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
-                <div className={`flex h-5 w-9 items-center rounded-full transition-colors ${Boolean(checked) ? 'bg-blue-600' : 'bg-gray-200'}`}>
-                    <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${Boolean(checked) ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </div>
-            </div>
-            <span className="text-sm text-gray-700">{label}</span>
+        <label className="flex cursor-pointer items-center justify-between gap-4 py-1">
+            <span className="text-sm font-medium text-slate-900">{label}</span>
+            <span className="relative inline-flex shrink-0">
+                <input type="checkbox" role="switch" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+                <span className="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-300" />
+                <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+            </span>
         </label>
     );
 }
 
 function SectionCard({ title, subtitle, children }) {
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-5 border-b border-gray-100 pb-4">
-                <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-                {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
-            </div>
+        <Card title={title} description={subtitle}>
             <div className="space-y-4">{children}</div>
+        </Card>
+    );
+}
+
+function SubHeading({ children }) {
+    return <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">{children}</h3>;
+}
+
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+
+/** Colour swatch + hex input. Empty value means "use the default". */
+function ColorField({ label, value, fallback, onChange, hint }) {
+    const swatch = HEX_RE.test(value || '') ? value : fallback;
+    return (
+        <div>
+            <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
+            <div className="flex items-center gap-2">
+                <label className="relative h-10 w-12 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-slate-300" style={{ backgroundColor: swatch }}>
+                    <span className="sr-only">{label} picker</span>
+                    <input
+                        type="color"
+                        value={swatch}
+                        onChange={(e) => onChange(e.target.value)}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    />
+                </label>
+                <input
+                    type="text"
+                    aria-label={`${label} hex`}
+                    value={value ?? ''}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={fallback}
+                    className={`${input} font-mono uppercase`}
+                />
+            </div>
+            {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
         </div>
     );
 }
@@ -110,9 +144,7 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
     if (plansLoading) {
         return (
             <SectionCard title="Plan" subtitle="Choose a subscription plan for this clinic.">
-                <div className="flex justify-center py-10">
-                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                </div>
+                <Spinner className="py-10" />
             </SectionCard>
         );
     }
@@ -120,9 +152,9 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
     if (plansError) {
         return (
             <SectionCard title="Plan" subtitle="Choose a subscription plan for this clinic.">
-                <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{plansError}</p>
-                <div className="flex justify-between pt-2">
-                    <button type="button" onClick={onBack} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">← Back</button>
+                <Alert tone="error">{plansError}</Alert>
+                <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
+                    <button type="button" onClick={onBack} className={btn.secondary}>‹ Back</button>
                 </div>
             </SectionCard>
         );
@@ -131,24 +163,24 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
     if (!plans.length) {
         return (
             <SectionCard title="Plan" subtitle="Choose a subscription plan for this clinic.">
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                <Alert tone="warn">
                     <p className="font-semibold">No active plans yet.</p>
                     <p className="mt-1">
                         Create a plan first, then come back here. Or continue without assigning a plan — you can attach one later from the clinic's subscription card.
                     </p>
-                    <Link to="/billing/plans" className="mt-2 inline-block text-sm font-semibold text-blue-700 hover:underline">
-                        Create a plan →
+                    <Link to="/billing/plans" className={`${btn.link} mt-2 inline-block`}>
+                        Create a plan ›
                     </Link>
-                </div>
-                {continueError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{continueError}</div>}
-                <div className="flex justify-between pt-2">
-                    <button type="button" onClick={onBack} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">← Back</button>
+                </Alert>
+                {continueError && <Alert tone="error">{continueError}</Alert>}
+                <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
+                    <button type="button" onClick={onBack} className={btn.secondary}>‹ Back</button>
                     <button
                         type="button"
                         onClick={() => onContinue(true)}
-                        className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                        className={btn.primary}
                     >
-                        Skip for now →
+                        Skip for now ›
                     </button>
                 </div>
             </SectionCard>
@@ -165,20 +197,21 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
                             type="button"
                             key={plan.id}
                             onClick={() => selectPlan(plan)}
-                            className={`rounded-xl border p-4 text-left transition-colors ${active ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                            aria-pressed={active}
+                            className={`rounded-2xl border p-4 text-left transition-colors ${active ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
                         >
                             <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-gray-900">{plan.name}</p>
-                                {active && <AppIcon name="check" className="h-4 w-4 text-blue-600" />}
+                                <p className="text-[15px] font-semibold text-slate-900">{plan.name}</p>
+                                {active && <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white"><AppIcon name="check" className="h-3 w-3" /></span>}
                             </div>
-                            {plan.description && <p className="mt-0.5 text-xs text-gray-500">{plan.description}</p>}
-                            <p className="mt-2 text-sm text-gray-800">
-                                {formatINR(plan.monthly_price)} <span className="text-xs text-gray-400">/ month</span>
+                            {plan.description && <p className="mt-0.5 text-sm text-slate-600">{plan.description}</p>}
+                            <p className="mt-2 text-sm font-semibold text-slate-900 tabular-nums">
+                                {formatINR(plan.monthly_price)} <span className="text-xs font-normal text-slate-500">/ month</span>
                                 {plan.yearly_price != null && (
-                                    <span className="ml-2 text-gray-800">{formatINR(plan.yearly_price)} <span className="text-xs text-gray-400">/ year</span></span>
+                                    <span className="ml-2">{formatINR(plan.yearly_price)} <span className="text-xs font-normal text-slate-500">/ year</span></span>
                                 )}
                             </p>
-                            <p className="mt-1 text-xs text-gray-500">
+                            <p className="mt-1 text-xs text-slate-600">
                                 {limitLabel(plan.max_doctors)} doctors · {limitLabel(plan.max_staff)} staff · {limitLabel(plan.max_appointments_per_month)} appts/mo
                             </p>
                         </button>
@@ -188,13 +221,15 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
 
             {selectedPlan && (
                 <>
-                    <div className="border-t border-gray-100 pt-4">
-                        <h4 className="mb-3 text-sm font-semibold text-gray-900">Billing cycle</h4>
-                        <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
+                    <div className="border-t border-slate-100 pt-4">
+                        <SubHeading>Billing cycle</SubHeading>
+                        <div role="tablist" aria-label="Billing cycle" className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
                             <button
                                 type="button"
                                 onClick={() => setCycle('monthly')}
-                                className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${subscription.billing_cycle === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                role="tab"
+                                aria-selected={subscription.billing_cycle === 'monthly'}
+                                className={`h-8 rounded-lg px-4 text-sm ${subscription.billing_cycle === 'monthly' ? 'bg-slate-900 font-semibold text-white' : 'text-slate-700 hover:bg-slate-100'}`}
                             >
                                 Monthly
                             </button>
@@ -203,20 +238,22 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
                                 disabled={!selectedPlan.yearly_price}
                                 onClick={() => setCycle('yearly')}
                                 title={!selectedPlan.yearly_price ? 'This plan has no yearly price' : undefined}
-                                className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ${subscription.billing_cycle === 'yearly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                role="tab"
+                                aria-selected={subscription.billing_cycle === 'yearly'}
+                                className={`h-8 rounded-lg px-4 text-sm disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent ${subscription.billing_cycle === 'yearly' ? 'bg-slate-900 font-semibold text-white' : 'text-slate-700 hover:bg-slate-100'}`}
                             >
                                 Yearly
                             </button>
                         </div>
                     </div>
 
-                    <div className="border-t border-gray-100 pt-4">
-                        <h4 className="mb-3 text-sm font-semibold text-gray-900">Start mode</h4>
+                    <div className="border-t border-slate-100 pt-4">
+                        <SubHeading>Start mode</SubHeading>
                         <div className="space-y-3">
-                            <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-3 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">
-                                <input type="radio" className="mt-1" checked={subscription.start_mode === 'trial'} onChange={() => setStartMode('trial')} />
+                            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50 has-[:checked]:ring-1 has-[:checked]:ring-blue-600">
+                                <input type="radio" name="start_mode" className="mt-1 h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" checked={subscription.start_mode === 'trial'} onChange={() => setStartMode('trial')} />
                                 <div className="flex-1">
-                                    <p className="text-sm font-semibold text-gray-900">Start a free trial</p>
+                                    <p className="text-sm font-semibold text-slate-900">Start a free trial</p>
                                     {subscription.start_mode === 'trial' && (
                                         <div className="mt-2 max-w-[160px]">
                                             <Field label="Trial length (days)">
@@ -231,20 +268,20 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
                                 </div>
                             </label>
 
-                            <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-3 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">
-                                <input type="radio" className="mt-1" checked={subscription.start_mode === 'pending_payment'} onChange={() => setStartMode('pending_payment')} />
+                            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50 has-[:checked]:ring-1 has-[:checked]:ring-blue-600">
+                                <input type="radio" name="start_mode" className="mt-1 h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" checked={subscription.start_mode === 'pending_payment'} onChange={() => setStartMode('pending_payment')} />
                                 <div className="flex-1">
-                                    <p className="text-sm font-semibold text-gray-900">Payment pending</p>
-                                    <p className="mt-0.5 text-xs text-gray-500">The clinic admin pays on first login.</p>
+                                    <p className="text-sm font-semibold text-slate-900">Payment pending</p>
+                                    <p className="mt-0.5 text-sm text-slate-600">The clinic admin pays on first login.</p>
                                 </div>
                             </label>
 
-                            <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-3 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">
-                                <input type="radio" className="mt-1" checked={subscription.start_mode === 'paid_offline'} onChange={() => setStartMode('paid_offline')} />
+                            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50 has-[:checked]:ring-1 has-[:checked]:ring-blue-600">
+                                <input type="radio" name="start_mode" className="mt-1 h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" checked={subscription.start_mode === 'paid_offline'} onChange={() => setStartMode('paid_offline')} />
                                 <div className="flex-1">
-                                    <p className="text-sm font-semibold text-gray-900">Paid offline</p>
+                                    <p className="text-sm font-semibold text-slate-900">Paid offline</p>
                                     {subscription.start_mode === 'paid_offline' && (
-                                        <div className="mt-2 grid grid-cols-2 gap-3">
+                                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                             <Field label="Amount (₹)" required>
                                                 <TextInput
                                                     type="number"
@@ -259,7 +296,7 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
                                                     onChange={(v) => setSubscription((p) => ({ ...p, offline_period_months: v }))}
                                                 />
                                             </Field>
-                                            <div className="col-span-2">
+                                            <div className="sm:col-span-2">
                                                 <Field label="Notes">
                                                     <TextInput
                                                         value={subscription.offline_notes}
@@ -277,26 +314,26 @@ function PlanStep({ plans, plansLoading, plansError, skipPlan, setSkipPlan, subs
                 </>
             )}
 
-            {continueError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{continueError}</div>}
+            {continueError && <Alert tone="error">{continueError}</Alert>}
 
-            <div className="flex justify-between pt-2">
-                <button type="button" onClick={onBack} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                    ← Back
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                <button type="button" onClick={onBack} className={btn.secondary}>
+                    ‹ Back
                 </button>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                     <button
                         type="button"
                         onClick={() => onContinue(true)}
-                        className="text-sm font-medium text-gray-500 hover:text-gray-700"
+                        className={btn.ghost}
                     >
                         Skip — assign a plan later
                     </button>
                     <button
                         type="button"
                         onClick={() => onContinue(false)}
-                        className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                        className={btn.primary}
                     >
-                        Continue →
+                        Continue ›
                     </button>
                 </div>
             </div>
@@ -369,11 +406,11 @@ export default function OnboardClinicWizardPage() {
 
     if (!isSuperAdmin) {
         return (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900">Not allowed</h2>
-                <p className="mt-1 text-sm text-gray-500">This workflow is available only to Super Admin.</p>
-                <Link to="/dashboard" className="mt-4 inline-block rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                    Go to Dashboard
+            <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6">
+                <h2 className="text-lg font-semibold text-slate-900">Not allowed</h2>
+                <p className="mt-1 text-sm text-slate-600">This workflow is available only to Super Admin.</p>
+                <Link to="/dashboard" className={`${btn.primary} mt-4`}>
+                    Go to dashboard
                 </Link>
             </div>
         );
@@ -503,129 +540,113 @@ export default function OnboardClinicWizardPage() {
     const a = (key) => ({ value: admin[key], onChange: (v) => setAdmin((p) => ({ ...p, [key]: v })) });
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">Onboard New Clinic</h2>
-                    <p className="mt-0.5 text-sm text-gray-500">Create a clinic and its admin account.</p>
-                </div>
-                <Link to="/workflows/clinics" className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-                    ← Back to Clinics
-                </Link>
-            </div>
+        <div className="mx-auto max-w-3xl space-y-5">
+            <PageHeader
+                title="Onboard new clinic"
+                subtitle="Create a clinic and its admin account."
+                back={{ to: '/workflows/clinics', label: 'Clinics' }}
+            />
 
             {/* Step indicators */}
-            <div className="flex items-center gap-0 rounded-xl border border-gray-200 bg-white px-5 py-3 shadow-sm">
+            <ol aria-label="Steps" className="flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
                 {STEPS.map((s, i) => (
                     <React.Fragment key={s.num}>
-                        <div className="flex items-center gap-2">
-                            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                        <li className="flex items-center gap-2" aria-current={step === s.num ? 'step' : undefined}>
+                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                                 step === s.num ? 'bg-blue-600 text-white'
-                                : step > s.num ? 'bg-emerald-500 text-white'
-                                : 'bg-gray-100 text-gray-400'
+                                : step > s.num ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-100 text-slate-500'
                             }`}>
                                 {step > s.num ? <AppIcon name="check" className="h-3.5 w-3.5" /> : s.num}
-                            </div>
-                            <span className={`text-sm font-semibold ${step === s.num ? 'text-gray-900' : step > s.num ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            </span>
+                            <span className={`text-sm font-semibold ${step === s.num ? 'text-slate-900' : step > s.num ? 'text-emerald-700' : 'text-slate-500'}`}>
                                 {s.label}
                             </span>
-                        </div>
-                        {i < STEPS.length - 1 && <div className="mx-3 h-px flex-1 bg-gray-200" />}
+                        </li>
+                        {i < STEPS.length - 1 && <li aria-hidden="true" className="mx-3 h-px flex-1 bg-slate-200" />}
                     </React.Fragment>
                 ))}
-            </div>
+            </ol>
 
-            {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-            )}
+            {error && <Alert tone="error">{error}</Alert>}
 
             {/* Step 1 — Clinic */}
             {step === 1 && (
-                <SectionCard title="Clinic Details" subtitle="Basic information about the clinic.">
-                    <Field label="Clinic Name" required>
+                <SectionCard title="Clinic details" subtitle="Basic information about the clinic.">
+                    <Field label="Clinic name" required>
                         <TextInput value={clinic.name} onChange={handleClinicName} placeholder="e.g. Sunrise Healthcare" />
                     </Field>
-                    <Field label="Slug" hint="Auto-generated from the name. Used in URLs.">
-                        <TextInput {...c('slug')} placeholder="sunrise-healthcare" />
-                    </Field>
-                    <Field label="Legal Name">
-                        <TextInput {...c('legal_name')} placeholder="Registered legal entity name" />
-                    </Field>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Slug" hint="Auto-generated from the name. Used in URLs.">
+                            <TextInput {...c('slug')} placeholder="sunrise-healthcare" />
+                        </Field>
+                        <Field label="Legal name">
+                            <TextInput {...c('legal_name')} placeholder="Registered legal entity name" />
+                        </Field>
+                    </div>
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                        <Field label="Owner Name">
+                        <Field label="Owner name">
                             <TextInput {...c('owner_name')} placeholder="Full name" />
                         </Field>
-                        <Field label="Owner Email">
+                        <Field label="Owner email">
                             <TextInput type="email" {...c('owner_email')} placeholder="owner@clinic.com" />
                         </Field>
-                        <Field label="Owner Phone">
+                        <Field label="Owner phone">
                             <TextInput {...c('owner_phone')} placeholder="+91 XXXXXXXXXX" />
                         </Field>
                     </div>
 
-                    <Field label="Clinic Logo" hint="Optional. PNG, JPG or SVG. Shown in the clinic header.">
-                        <div className="flex items-center gap-4">
-                            {logoPreview ? (
-                                <img src={logoPreview} alt="Logo preview" className="h-14 w-14 rounded-xl border border-gray-200 object-contain bg-gray-50" />
-                            ) : (
-                                <div className="flex h-14 w-14 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 text-xs text-gray-400">Logo</div>
-                            )}
-                            <div className="flex gap-2">
-                                <button type="button" onClick={() => logoInputRef.current?.click()} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
-                                    {logoPreview ? 'Change' : 'Upload'}
-                                </button>
-                                {logoPreview && (
-                                    <button type="button" onClick={() => { setLogoFile(null); setLogoPreview(''); }} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50">
-                                        Remove
-                                    </button>
-                                )}
-                            </div>
-                            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-                        </div>
-                    </Field>
+                    <div className="border-t border-slate-100 pt-4">
+                        <SubHeading>Branding</SubHeading>
+                        <div className="space-y-4">
+                            <Field group label="Clinic logo" hint="Optional. PNG, JPG or SVG. Shown in the clinic header.">
+                                <div className="flex flex-wrap items-center gap-4">
+                                    {logoPreview ? (
+                                        <img src={logoPreview} alt="Logo preview" className="h-14 w-14 rounded-xl border border-slate-200 bg-slate-50 object-contain" />
+                                    ) : (
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-xs text-slate-500">Logo</div>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={() => logoInputRef.current?.click()} className={`${btn.secondary} h-9`}>
+                                            {logoPreview ? 'Change' : 'Upload'}
+                                        </button>
+                                        {logoPreview && (
+                                            <button type="button" onClick={() => { setLogoFile(null); setLogoPreview(''); }} className={`${btn.danger} h-9`}>
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+                                    <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                                </div>
+                            </Field>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Primary Color" hint="Optional. Default: #2563EB">
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    value={clinic.primary_color || '#2563EB'}
-                                    onChange={(e) => setClinic((p) => ({ ...p, primary_color: e.target.value }))}
-                                    className="h-9 w-12 cursor-pointer rounded-lg border border-gray-300 p-0.5"
-                                />
-                                <TextInput
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <ColorField
+                                    label="Primary colour"
                                     value={clinic.primary_color}
+                                    fallback="#2563EB"
                                     onChange={(v) => setClinic((p) => ({ ...p, primary_color: v }))}
-                                    placeholder="#2563EB"
+                                    hint="Optional. Default: #2563EB"
                                 />
-                            </div>
-                        </Field>
-                        <Field label="Secondary Color" hint="Optional. Default: #64748B">
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    value={clinic.secondary_color || '#64748B'}
-                                    onChange={(e) => setClinic((p) => ({ ...p, secondary_color: e.target.value }))}
-                                    className="h-9 w-12 cursor-pointer rounded-lg border border-gray-300 p-0.5"
-                                />
-                                <TextInput
+                                <ColorField
+                                    label="Secondary colour"
                                     value={clinic.secondary_color}
+                                    fallback="#64748B"
                                     onChange={(v) => setClinic((p) => ({ ...p, secondary_color: v }))}
-                                    placeholder="#64748B"
+                                    hint="Optional. Default: #64748B"
                                 />
                             </div>
-                        </Field>
+                        </div>
                     </div>
 
-                    <div className="border-t border-gray-100 pt-4">
-                        <h4 className="mb-3 text-sm font-semibold text-gray-900">Address and contact</h4>
+                    <div className="border-t border-slate-100 pt-4">
+                        <SubHeading>Address and contact</SubHeading>
                         <div className="space-y-4">
-                            <Field label="Address Line 1">
+                            <Field label="Address line 1">
                                 <TextInput {...c('address_line_1')} placeholder="Street address" />
                             </Field>
-                            <Field label="Address Line 2">
+                            <Field label="Address line 2">
                                 <TextInput {...c('address_line_2')} placeholder="Area, landmark (optional)" />
                             </Field>
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -639,7 +660,7 @@ export default function OnboardClinicWizardPage() {
                                     <TextInput {...c('pincode')} placeholder="560001" />
                                 </Field>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <Field label="Phone">
                                     <TextInput {...c('phone')} placeholder="+91 XXXXXXXXXX" />
                                 </Field>
@@ -650,12 +671,14 @@ export default function OnboardClinicWizardPage() {
                         </div>
                     </div>
 
-                    <div className="border-t border-gray-100 pt-4">
-                        <h4 className="mb-3 text-sm font-semibold text-gray-900">Booking</h4>
-                        <div className="space-y-4">
-                            <Toggle checked={clinic.walkin_enabled} onChange={(v) => setClinic((p) => ({ ...p, walkin_enabled: v }))} label="Walk-in enabled" />
-                            <Toggle checked={clinic.token_system_enabled} onChange={(v) => setClinic((p) => ({ ...p, token_system_enabled: v }))} label="Token system enabled" />
-                            <div className="grid grid-cols-2 gap-4">
+                    <div className="border-t border-slate-100 pt-4">
+                        <SubHeading>Booking</SubHeading>
+                        <div className="space-y-3">
+                            <div className="divide-y divide-slate-100">
+                                <Toggle checked={clinic.walkin_enabled} onChange={(v) => setClinic((p) => ({ ...p, walkin_enabled: v }))} label="Walk-in enabled" />
+                                <Toggle checked={clinic.token_system_enabled} onChange={(v) => setClinic((p) => ({ ...p, token_system_enabled: v }))} label="Token system enabled" />
+                            </div>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <Field label="Max advance booking days">
                                     <TextInput type="number" {...c('max_advance_booking_days')} placeholder="30" />
                                 </Field>
@@ -666,14 +689,14 @@ export default function OnboardClinicWizardPage() {
                         </div>
                     </div>
 
-                    <div className="flex justify-end pt-2">
+                    <div className="flex justify-end border-t border-slate-100 pt-4">
                         <button
                             type="button"
                             onClick={continueToPlan}
                             disabled={saving}
-                            className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            className={btn.primary}
                         >
-                            {saving ? 'Continuing…' : 'Continue →'}
+                            {saving ? 'Continuing…' : 'Continue ›'}
                         </button>
                     </div>
                 </SectionCard>
@@ -697,11 +720,11 @@ export default function OnboardClinicWizardPage() {
 
             {/* Step 3 — Clinic Admin */}
             {step === 3 && (
-                <SectionCard title="Clinic Admin Account" subtitle="This person will manage the clinic and have full access.">
-                    <Field label="Full Name" required>
+                <SectionCard title="Clinic admin account" subtitle="This person will manage the clinic and have full access.">
+                    <Field label="Full name" required>
                         <TextInput {...a('full_name')} placeholder="Clinic Admin Name" />
                     </Field>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Field label="Email">
                             <TextInput type="email" {...a('email')} placeholder="admin@clinic.com" />
                         </Field>
@@ -713,17 +736,17 @@ export default function OnboardClinicWizardPage() {
                         <TextInput type="password" {...a('password')} placeholder="••••••••" />
                     </Field>
 
-                    <div className="flex justify-between pt-2">
-                        <button type="button" onClick={() => { setError(''); setStep(2); }} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                            ← Back
+                    <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
+                        <button type="button" onClick={() => { setError(''); setStep(2); }} className={btn.secondary}>
+                            ‹ Back
                         </button>
                         <button
                             type="button"
                             onClick={createAdmin}
                             disabled={saving}
-                            className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            className={btn.primary}
                         >
-                            {saving ? 'Finishing…' : 'Finish Onboarding ✓'}
+                            {saving ? 'Finishing…' : 'Finish onboarding'}
                         </button>
                     </div>
                 </SectionCard>

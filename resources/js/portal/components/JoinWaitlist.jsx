@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { formatDate, formatTime } from '../lib/format';
-import { Button, ErrorText } from './ui';
+import { Alert, Button, ErrorText } from './ui';
 
 /**
  * Inline "join the waitlist for this taken time?" confirm, shared by the
@@ -43,10 +43,10 @@ export default function JoinWaitlist({ date, slot, onJoin, onClose }) {
     if (joined) {
         return (
             <div className="space-y-2">
-                <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                <Alert tone="success">
                     You're on the waitlist for {formatDate(date)} &middot; {formatTime(slot.start_time)}. We'll message you on
                     WhatsApp if it frees up.
-                </div>
+                </Alert>
                 <Button variant="ghost" onClick={onClose}>
                     Done
                 </Button>
@@ -55,8 +55,8 @@ export default function JoinWaitlist({ date, slot, onJoin, onClose }) {
     }
 
     return (
-        <div className="space-y-2 rounded-xl bg-slate-50 p-3">
-            <p className="text-sm text-slate-700">
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm leading-relaxed text-slate-700">
                 {formatDate(date)} &middot; {formatTime(slot.start_time)} is taken. Join the waitlist? If it frees up we'll hold
                 it for you and message you on WhatsApp.
             </p>

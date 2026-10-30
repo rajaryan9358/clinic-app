@@ -2,12 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import AppIcon from '../../components/AppIcon';
+import { useScope } from '../../context/ScopeContext';
+import { PageHeader, Card, Alert, Spinner, EmptyState, btn } from '../../components/ui';
 import StatusBadge from '../../components/StatusBadge';
 
 export default function CommunicationDeliveryIssuesPage() {
     const { user } = useAuth();
+    const scope = useScope() || {};
     const base = useMemo(() => (user?.role === 'super_admin' ? '/super-admin' : '/clinic'), [user]);
+    // Each list needs its own permission; the super admin sees both.
+    const allowed = (perm) => user?.role === 'super_admin' || Boolean(scope.can?.(perm));
+    const canReminders = allowed('reminders.view');
+    const canMessages = allowed('whatsapp.view');
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -19,13 +25,11 @@ export default function CommunicationDeliveryIssuesPage() {
         setLoading(true);
         setError('');
         try {
+            const params = { delivery_status: 'failed', per_page: 50, sort_by: 'id', sort_dir: 'desc' };
+            const none = Promise.resolve({ data: { data: [] } });
             const [remRes, msgRes] = await Promise.all([
-                client.get(`${base}/reminders`, {
-                    params: { delivery_status: 'failed', per_page: 50, sort_by: 'id', sort_dir: 'desc' },
-                }),
-                client.get(`${base}/whatsapp/messages`, {
-                    params: { delivery_status: 'failed', per_page: 50, sort_by: 'id', sort_dir: 'desc' },
-                }),
+                canReminders ? client.get(`${base}/reminders`, { params }) : none,
+                canMessages ? client.get(`${base}/whatsapp/messages`, { params }) : none,
             ]);
 
             setFailedReminders(remRes.data?.data || []);
@@ -40,80 +44,80 @@ export default function CommunicationDeliveryIssuesPage() {
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [base]);
+    }, [base, canReminders, canMessages]);
 
-    if (user?.role !== 'super_admin') {
+    if (!canReminders && !canMessages) {
         return (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-lg font-semibold">Not available</h2>
-                <p className="mt-1 text-sm text-slate-600">Delivery issues are available for Super Admin only.</p>
-                <Link to="/dashboard" className="mt-4 inline-block rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white">Back to Dashboard</Link>
+            <div className="mx-auto max-w-3xl">
+                <Card>
+                    <EmptyState icon="shield" title="Not available">
+                        <p>Your role can’t view reminders or WhatsApp messages.</p>
+                        <Link to="/dashboard" className={`${btn.secondary} mt-4`}>Back to dashboard</Link>
+                    </EmptyState>
+                </Card>
             </div>
         );
     }
 
     return (
-        <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="module" className="h-5 w-5 text-slate-700" />
-                    <div>
-                        <h2 className="text-xl font-semibold text-slate-900">Delivery Issues</h2>
-                        <p className="mt-0.5 text-sm text-slate-600">Failed reminders and WhatsApp messages across the network.</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button type="button" onClick={load} disabled={loading} className="rounded-xl border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <PageHeader
+                title="Delivery issues"
+                subtitle={user?.role === 'super_admin' ? 'Failed reminders and WhatsApp messages across the network.' : 'Reminders and WhatsApp messages that did not reach the patient.'}
+                back={{ to: '/dashboard', label: 'Back' }}
+                actions={(
+                    <button type="button" onClick={load} disabled={loading} className={btn.secondary}>
                         {loading ? 'Refreshing…' : 'Refresh'}
                     </button>
-                    <Link to="/dashboard" className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white">Back</Link>
-                </div>
-            </div>
+                )}
+            />
 
-            {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+            {error ? <Alert>{error}</Alert> : null}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="text-lg font-semibold">Failed Reminders</h3>
-                    <p className="mt-1 text-sm text-slate-600">Source: reminder logs.</p>
+            <div className="grid gap-5 lg:grid-cols-2">
+                <Card title="Failed reminders" description="Source: reminder logs." bodyClassName="">
+                    {loading ? <Spinner className="py-10" /> : null}
+                    {!loading && !failedReminders.length ? <EmptyState icon="bell" title="No failed reminders" /> : null}
 
-                    {loading ? <div className="mt-3 text-sm text-slate-600">Loading…</div> : null}
-                    {!loading && !failedReminders.length ? <div className="mt-3 text-sm text-slate-600">No failed reminders.</div> : null}
+                    {!loading && failedReminders.length ? (
+                        <ul className="divide-y divide-slate-100">
+                            {failedReminders.map((r) => (
+                                <li key={r.id}>
+                                    <Link to={`/modules/reminders/${r.id}`} className="block px-5 py-3 hover:bg-slate-50">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                                            <div className="font-semibold text-slate-900">{r.channel} · {r.reminder_type}</div>
+                                            <StatusBadge status={r.delivery_status} />
+                                        </div>
+                                        <div className="mt-1 text-xs text-slate-600">Clinic #{r.clinic_id} · Appointment #{r.appointment_id} · Patient #{r.patient_id}</div>
+                                        {r.failure_reason ? <div className="mt-1 text-xs text-rose-700">{r.failure_reason}</div> : null}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : null}
+                </Card>
 
-                    <div className="mt-3 space-y-2">
-                        {failedReminders.map((r) => (
-                            <Link key={r.id} to={`/modules/reminders/${r.id}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
-                                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                                    <div className="font-semibold text-slate-900">{r.channel} · {r.reminder_type}</div>
-                                    <StatusBadge status={r.delivery_status} />
-                                </div>
-                                <div className="mt-1 text-xs text-slate-500">Clinic #{r.clinic_id} · Appointment #{r.appointment_id} · Patient #{r.patient_id}</div>
-                                {r.failure_reason ? <div className="mt-1 text-xs text-rose-700">{r.failure_reason}</div> : null}
-                            </Link>
-                        ))}
-                    </div>
-                </div>
+                <Card title="Failed WhatsApp messages" description="Source: WhatsApp messages." bodyClassName="">
+                    {loading ? <Spinner className="py-10" /> : null}
+                    {!loading && !failedWhatsappMessages.length ? <EmptyState icon="share" title="No failed messages" /> : null}
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="text-lg font-semibold">Failed WhatsApp Messages</h3>
-                    <p className="mt-1 text-sm text-slate-600">Source: WhatsApp messages.</p>
-
-                    {loading ? <div className="mt-3 text-sm text-slate-600">Loading…</div> : null}
-                    {!loading && !failedWhatsappMessages.length ? <div className="mt-3 text-sm text-slate-600">No failed messages.</div> : null}
-
-                    <div className="mt-3 space-y-2">
-                        {failedWhatsappMessages.map((m) => (
-                            <Link key={m.id} to={`/modules/whatsappConversations/${m.conversation_id}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
-                                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                                    <div className="font-semibold text-slate-900">{m.direction} · {m.message_type}</div>
-                                    <StatusBadge status={m.delivery_status} />
-                                </div>
-                                <div className="mt-1 text-xs text-slate-500">Clinic #{m.clinic_id} · Conversation #{m.conversation_id}</div>
-                                <div className="mt-1 text-xs text-slate-600 break-words">{m.error_message || m.content_text || '—'}</div>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
+                    {!loading && failedWhatsappMessages.length ? (
+                        <ul className="divide-y divide-slate-100">
+                            {failedWhatsappMessages.map((m) => (
+                                <li key={m.id}>
+                                    <Link to={`/modules/whatsappConversations/${m.conversation_id}`} className="block px-5 py-3 hover:bg-slate-50">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                                            <div className="font-semibold text-slate-900">{m.direction} · {m.message_type}</div>
+                                            <StatusBadge status={m.delivery_status} />
+                                        </div>
+                                        <div className="mt-1 text-xs text-slate-600">Clinic #{m.clinic_id} · Conversation #{m.conversation_id}</div>
+                                        <div className="mt-1 break-words text-xs text-slate-700">{m.error_message || m.content_text || '—'}</div>
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : null}
+                </Card>
             </div>
         </div>
     );

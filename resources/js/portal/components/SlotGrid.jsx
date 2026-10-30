@@ -24,18 +24,18 @@ export default function SlotGrid({ loading, error, slots, taken = [], date, sele
     return (
         <Card>
             {loading && (
-                <div className="flex justify-center py-6">
-                    <Spinner className="h-5 w-5 text-[var(--accent)]" />
+                <div className="flex justify-center py-8">
+                    <Spinner className="h-6 w-6 text-[var(--accent)]" />
                 </div>
             )}
             {!loading && error && <ErrorText>{error}</ErrorText>}
             {!loading && !error && items.length === 0 && !joinSlot && (
-                <p className="py-4 text-center text-sm text-slate-500">No times available on this date.</p>
+                <p className="py-6 text-center text-sm text-slate-600">No times available on this date. Try another day.</p>
             )}
             {!loading && !error && items.length > 0 && (
                 <>
                     {slots.length === 0 && (
-                        <p className="mb-3 text-sm text-slate-500">
+                        <p className="mb-3 text-sm text-slate-600">
                             Every time is taken on this date — you can join the waitlist for one.
                         </p>
                     )}
@@ -47,14 +47,14 @@ export default function SlotGrid({ loading, error, slots, taken = [], date, sele
                                     type="button"
                                     onClick={() => setJoinSlot(slot)}
                                     aria-label={`${formatTime(slot.start_time)} taken — join waitlist`}
-                                    className={`flex flex-col items-center rounded-xl px-2 py-1.5 text-sm ${
+                                    className={`flex min-h-[52px] flex-col items-center justify-center rounded-xl border border-dashed px-2 py-1.5 text-sm ${
                                         joinSlot?.start_time === slot.start_time
-                                            ? 'bg-slate-200 text-slate-700 ring-2 ring-slate-300'
-                                            : 'bg-slate-50 text-slate-400 ring-1 ring-slate-200'
+                                            ? 'border-slate-400 bg-slate-100 text-slate-700'
+                                            : 'border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100'
                                     }`}
                                 >
-                                    <span className="font-medium line-through">{formatTime(slot.start_time)}</span>
-                                    <span className="text-[11px] font-medium text-[var(--accent)]">Join waitlist</span>
+                                    <span className="font-medium tabular-nums line-through">{formatTime(slot.start_time)}</span>
+                                    <span className="text-[11px] font-semibold text-[var(--accent)]">Join waitlist</span>
                                 </button>
                             ) : (
                                 <button
@@ -64,10 +64,11 @@ export default function SlotGrid({ loading, error, slots, taken = [], date, sele
                                         setJoinSlot(null);
                                         onSelect(slot);
                                     }}
-                                    className={`rounded-xl px-2 py-2 text-sm font-medium ${
+                                    aria-pressed={selectedSlot?.start_time === slot.start_time}
+                                    className={`min-h-[52px] rounded-xl border px-2 py-2 text-sm font-semibold tabular-nums transition ${
                                         selectedSlot?.start_time === slot.start_time
-                                            ? 'bg-[var(--accent)] text-white'
-                                            : 'bg-slate-100 text-slate-700'
+                                            ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                                            : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
                                     }`}
                                 >
                                     {formatTime(slot.start_time)}
@@ -78,7 +79,7 @@ export default function SlotGrid({ loading, error, slots, taken = [], date, sele
                 </>
             )}
             {!loading && !error && joinSlot && (
-                <div className="mt-3">
+                <div className="mt-4">
                     <JoinWaitlist
                         key={joinSlot.start_time}
                         date={date}

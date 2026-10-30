@@ -7,12 +7,10 @@ import AppointmentDetailDrawer from '../../components/AppointmentDetailDrawer';
 import StatusBadge from '../../components/StatusBadge';
 import AppIcon from '../../components/AppIcon';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { PageHeader, Tabs, Alert, Spinner, EmptyState, Badge, btn, input, label } from '../../components/ui';
 
-function modeButton(active) {
-    return active
-        ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white'
-        : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50';
-}
+const toolbarInput = 'h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const smallBtn = 'inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 
 export default function AppointmentsFlowPage({ embedded = false }) {
     const { user } = useAuth();
@@ -406,8 +404,8 @@ export default function AppointmentsFlowPage({ embedded = false }) {
     ];
 
     const statusTabClass = (active) => (active
-        ? 'rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white'
-        : 'rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50'
+        ? 'h-8 shrink-0 whitespace-nowrap rounded-full bg-slate-900 px-3 text-sm font-semibold text-white'
+        : 'h-8 shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50'
     );
 
     useEffect(() => {
@@ -872,141 +870,149 @@ export default function AppointmentsFlowPage({ embedded = false }) {
     };
 
     return (
-        <div className="space-y-4">
+        <div className={embedded ? 'space-y-4' : 'mx-auto max-w-[1400px] space-y-5'}>
             <style>{`
                 @keyframes rxbar { 0%, 100% { transform: scaleY(0.35); opacity: .55; } 50% { transform: scaleY(1); opacity: 1; } }
             `}</style>
-            {embedded ? (
-                <div className="flex justify-end">
-                    <button
-                        type="button"
-                        onClick={downloadAppointmentsPdf}
-                        disabled={pdfBusy}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-500"
-                    >
-                        Download PDF report
-                    </button>
-                </div>
-            ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="module" className="h-5 w-5 text-slate-700" />
-                    <div>
-                        <h2 className="text-xl font-semibold text-slate-900">Appointments</h2>
-                        <p className="mt-0.5 text-sm text-slate-600">Flow-based view with a detail drawer.</p>
-                    </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={downloadAppointmentsPdf}
-                        disabled={pdfBusy}
-                        className={pdfBusy
-                            ? 'rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500'
-                            : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50'
-                        }
-                    >
-                        Download PDF report
-                    </button>
-                    {scope?.can?.('appointments.create') ? (
-                        <Link
-                            to="/workflows/appointments/new"
-                            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        >
-                            New Appointment
-                        </Link>
-                    ) : null}
-                </div>
-            </div>
+            {embedded ? null : (
+                <PageHeader
+                    title="Appointments"
+                    subtitle="Flow-based view with a detail drawer."
+                    actions={(
+                        <>
+                            <button
+                                type="button"
+                                onClick={downloadAppointmentsPdf}
+                                disabled={pdfBusy}
+                                className={btn.secondary}
+                            >
+                                <AppIcon name="download" className="h-4 w-4" />
+                                Download PDF report
+                            </button>
+                            {scope?.can?.('appointments.create') ? (
+                                <Link to="/workflows/appointments/new" className={btn.primary}>
+                                    <AppIcon name="plus" className="h-4 w-4" />
+                                    New appointment
+                                </Link>
+                            ) : null}
+                        </>
+                    )}
+                />
             )}
 
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={() => setMode('today')} className={modeButton(mode === 'today')}>Today</button>
-                    <button type="button" onClick={() => setMode('upcoming')} className={modeButton(mode === 'upcoming')}>Upcoming</button>
-                    <button type="button" onClick={() => setMode('calendar')} className={modeButton(mode === 'calendar')}>Calendar</button>
-                    <button type="button" onClick={() => setMode('range')} className={modeButton(mode === 'range')}>Range</button>
-                    <button type="button" onClick={() => setMode('list')} className={modeButton(mode === 'list')}>List</button>
-                </div>
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+                <Tabs
+                    label="Date range"
+                    value={mode}
+                    onChange={setMode}
+                    tabs={[
+                        { value: 'today', label: 'Today' },
+                        { value: 'upcoming', label: 'Upcoming' },
+                        { value: 'calendar', label: 'Calendar' },
+                        { value: 'range', label: 'Range' },
+                        { value: 'list', label: 'List' },
+                    ]}
+                />
 
                 {mode === 'calendar' ? (
-                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
+                    <>
+                        <label htmlFor="appt-flow-date" className="sr-only">Date</label>
+                        <input id="appt-flow-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={toolbarInput} />
+                    </>
                 ) : mode === 'range' ? (
                     <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor="appt-flow-from" className="sr-only">From</label>
                         <input
+                            id="appt-flow-from"
                             type="date"
                             value={range.from}
                             onChange={(e) => setRange((prev) => ({ ...prev, from: e.target.value }))}
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                            className={toolbarInput}
                         />
-                        <span className="text-sm text-slate-500">to</span>
+                        <span className="text-sm text-slate-600">to</span>
+                        <label htmlFor="appt-flow-to" className="sr-only">To</label>
                         <input
+                            id="appt-flow-to"
                             type="date"
                             value={range.to}
                             onChange={(e) => setRange((prev) => ({ ...prev, to: e.target.value }))}
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                            className={toolbarInput}
                         />
                     </div>
                 ) : (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                        Showing: <span className="font-semibold">{showingLabel}</span>
+                    <div className="px-1 text-sm text-slate-600">
+                        Showing <span className="font-semibold text-slate-900">{showingLabel}</span>
                     </div>
                 )}
 
-                <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search patient / doctor / type"
-                    className="min-w-[240px] flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                />
+                <div className="relative min-w-[200px] flex-1">
+                    <AppIcon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search patient / doctor / type"
+                        aria-label="Search appointments"
+                        className={`${toolbarInput} w-full pl-9`}
+                    />
+                </div>
 
                 {(mode === 'today' || mode === 'calendar') ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {scope?.can?.('appointments.edit') ? (
                             <button
                                 type="button"
                                 onClick={generateTokens}
                                 disabled={tokenGenerating || loading}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                className={btn.secondary}
                             >
-                                {tokenGenerating ? 'Generating…' : hasTokens ? 'Regenerate Tokens' : 'Generate Tokens'}
+                                {tokenGenerating ? 'Generating…' : hasTokens ? 'Regenerate tokens' : 'Generate tokens'}
                             </button>
                         ) : null}
                         {hasTokens ? (
                             <button
                                 type="button"
+                                aria-pressed={sortByToken}
                                 onClick={() => setSortByToken((p) => !p)}
                                 className={sortByToken
-                                    ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white'
-                                    : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50'
+                                    ? 'inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-3.5 text-sm font-semibold text-white'
+                                    : btn.secondary
                                 }
                             >
-                                Sort by Token
+                                Sort by token
                             </button>
                         ) : null}
                     </div>
                 ) : null}
 
+                {embedded ? (
+                    <button
+                        type="button"
+                        onClick={downloadAppointmentsPdf}
+                        disabled={pdfBusy}
+                        className={btn.secondary}
+                    >
+                        <AppIcon name="download" className="h-4 w-4" />
+                        Download PDF report
+                    </button>
+                ) : null}
             </div>
 
-            {error ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm">{error}</div>
-            ) : null}
+            {error ? <Alert>{error}</Alert> : null}
 
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-5 py-3">
-                    <p className="text-sm font-semibold text-slate-900">Queue</p>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-100 px-5 py-4">
+                    <h2 className="text-base font-semibold text-slate-900">Queue</h2>
                     <p className="mt-0.5 text-sm text-slate-600">Use the row actions to open details or change status.</p>
                 </div>
 
-                <div className="border-b border-slate-200 px-5 py-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex gap-2 overflow-x-auto py-1">
+                <div className="border-b border-slate-100 px-5 py-3">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        <div className="flex max-w-full gap-1.5 overflow-x-auto py-1">
                             {statusTabs.map((t) => (
                                 <button
                                     key={t.value || 'all'}
                                     type="button"
+                                    aria-pressed={status === t.value}
                                     onClick={() => {
                                         setStatus(t.value);
                                         fetchList({ status: t.value });
@@ -1017,46 +1023,40 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                 </button>
                             ))}
                         </div>
-                        <div className="h-5 w-px bg-slate-200" />
-                        <div className="flex gap-2 overflow-x-auto py-1">
+                        <div className="flex max-w-full gap-1.5 overflow-x-auto py-1">
                             {[
-                                { value: '', label: 'All Types' },
+                                { value: '', label: 'All types' },
                                 { value: 'new', label: 'New' },
                                 { value: 'followup', label: 'Follow-up' },
                             ].map((t) => (
                                 <button
                                     key={t.value || 'all-types'}
                                     type="button"
+                                    aria-pressed={visitType === t.value}
                                     onClick={() => {
                                         setVisitType(t.value);
                                         fetchList({ visitType: t.value });
                                     }}
-                                    className={visitType === t.value
-                                        ? 'whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white'
-                                        : 'whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50'
-                                    }
+                                    className={statusTabClass(visitType === t.value)}
                                 >
                                     {t.label}
                                 </button>
                             ))}
                         </div>
-                        <div className="h-5 w-px bg-slate-200" />
-                        <div className="flex gap-2 overflow-x-auto py-1">
+                        <div className="flex max-w-full gap-1.5 overflow-x-auto py-1">
                             {[
-                                { value: '', label: 'All Channels' },
+                                { value: '', label: 'All channels' },
                                 { value: 'portal', label: 'Portal' },
                             ].map((t) => (
                                 <button
                                     key={t.value || 'all-channels'}
                                     type="button"
+                                    aria-pressed={channel === t.value}
                                     onClick={() => {
                                         setChannel(t.value);
                                         fetchList({ channel: t.value });
                                     }}
-                                    className={channel === t.value
-                                        ? 'whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white'
-                                        : 'whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50'
-                                    }
+                                    className={statusTabClass(channel === t.value)}
                                 >
                                     {t.label}
                                 </button>
@@ -1066,21 +1066,21 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                 </div>
 
                 {loading ? (
-                    <div className="p-5 text-sm text-slate-600">Loading…</div>
+                    <Spinner className="py-12" />
                 ) : !rows.length ? (
-                    <div className="p-5 text-sm text-slate-600">No appointments found.</div>
+                    <EmptyState icon="calendar" title="No appointments found" />
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-left text-sm">
-                            <thead className="bg-slate-50 text-slate-600">
+                            <thead className="bg-slate-50 text-xs font-medium text-slate-600">
                                 <tr>
-                                    {hasTokens ? <th className="px-4 py-3 font-semibold">Token</th> : null}
-                                    <th className="px-4 py-3 font-semibold">Time</th>
-                                    <th className="px-4 py-3 font-semibold">Patient</th>
-                                    <th className="px-4 py-3 font-semibold">Type</th>
-                                    <th className="px-4 py-3 font-semibold">Doctor</th>
-                                    <th className="px-4 py-3 font-semibold">Status</th>
-                                    <th className="px-4 py-3 font-semibold">Actions</th>
+                                    {hasTokens ? <th className="px-4 py-3 font-medium">Token</th> : null}
+                                    <th className="px-4 py-3 font-medium">Time</th>
+                                    <th className="px-4 py-3 font-medium">Patient</th>
+                                    <th className="px-4 py-3 font-medium">Type</th>
+                                    <th className="px-4 py-3 font-medium">Doctor</th>
+                                    <th className="px-4 py-3 font-medium">Status</th>
+                                    <th className="px-4 py-3 text-right font-medium">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1092,19 +1092,19 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     <tr
                                         key={r.id}
                                         className={String(selectedId) === String(r.id)
-                                            ? 'border-t border-slate-100 bg-slate-50/70 cursor-pointer'
-                                            : 'border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer'
+                                            ? 'cursor-pointer border-t border-slate-100 bg-blue-50/50'
+                                            : 'cursor-pointer border-t border-slate-100 hover:bg-slate-50'
                                         }
                                         onClick={() => setSelectedId(r.id)}
                                     >
                                         {hasTokens ? (
-                                            <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                                                 {r.token_number != null ? (
-                                                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-lg font-bold text-white shadow">
+                                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-800 tabular-nums">
                                                         {r.token_number}
                                                     </div>
                                                 ) : (
-                                                    <div className="flex h-11 w-11 items-center justify-center rounded-full border border-dashed border-slate-300 text-sm text-slate-400">
+                                                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-dashed border-slate-300 text-sm text-slate-500">
                                                         —
                                                     </div>
                                                 )}
@@ -1124,18 +1124,18 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                     else if (diffMin < 30) urgency = 'soon';
                                                 }
                                                 return (
-                                                    <div className="flex flex-col">
+                                                    <div className="flex flex-col whitespace-nowrap">
                                                         <span className={
-                                                            urgency === 'overdue' ? 'text-sm font-semibold text-rose-600'
-                                                            : urgency === 'soon' ? 'text-sm font-semibold text-amber-500'
-                                                            : 'text-sm font-medium text-slate-900'
+                                                            urgency === 'overdue' ? 'text-sm font-semibold tabular-nums text-rose-700'
+                                                            : urgency === 'soon' ? 'text-sm font-semibold tabular-nums text-amber-700'
+                                                            : 'text-sm font-medium tabular-nums text-slate-900'
                                                         }>
                                                             {timeStr || '—'}
                                                         </span>
                                                         <span className={
-                                                            urgency === 'overdue' ? 'text-xs font-medium text-rose-500'
-                                                            : urgency === 'soon' ? 'text-xs font-medium text-amber-400'
-                                                            : 'text-xs text-slate-500'
+                                                            urgency === 'overdue' ? 'text-xs font-medium text-rose-700'
+                                                            : urgency === 'soon' ? 'text-xs font-medium text-amber-700'
+                                                            : 'text-xs text-slate-600'
                                                         }>
                                                             {dateYMD ? prettyDateLabel(dateYMD) : '—'}
                                                         </span>
@@ -1150,13 +1150,14 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                     e.stopPropagation();
                                                     if (r.patient_id) openEntityDialog('patient', r.patient_id);
                                                 }}
-                                                className="text-left font-medium text-slate-900 hover:underline"
+                                                className="whitespace-nowrap text-left font-medium text-slate-900 hover:text-blue-700 hover:underline"
                                             >
                                                 {r?.patient?.full_name || (r.patient_id ? `Patient #${r.patient_id}` : '—')}
                                             </button>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                                            <span className="inline-flex gap-1">
+                                            <Badge tone="slate">
                                                 {r.visit_type === 'new'
                                                     ? 'New'
                                                     : r.visit_type === 'followup'
@@ -1164,12 +1165,11 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                         : r.visit_type
                                                             ? String(r.visit_type).replace('_', ' ')
                                                             : '—'}
-                                            </span>
+                                            </Badge>
                                             {r.booking_channel === 'portal' ? (
-                                                <span className="ml-1 inline-flex rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-                                                    Portal
-                                                </span>
+                                                <Badge tone="blue">Portal</Badge>
                                             ) : null}
+                                            </span>
                                         </td>
                                         <td className="px-4 py-3 text-slate-700">
                                             <button
@@ -1178,7 +1178,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                     e.stopPropagation();
                                                     if (r.doctor_id) openEntityDialog('doctor', r.doctor_id);
                                                 }}
-                                                className="text-left font-medium text-slate-900 hover:underline"
+                                                className="whitespace-nowrap text-left text-slate-700 hover:text-blue-700 hover:underline"
                                             >
                                                 {r?.doctor?.full_name || (r.doctor_id ? `Doctor #${r.doctor_id}` : '—')}
                                             </button>
@@ -1191,7 +1191,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                 <button
                                                     type="button"
                                                     onClick={() => setDrawer({ open: true, id: r.id })}
-                                                    className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                                                    className={smallBtn}
                                                 >
                                                     <AppIcon name="view" className="h-3.5 w-3.5" />
                                                     Details
@@ -1201,10 +1201,10 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                     <Link
                                                         to={`/workflows/appointments/${r.id}/prescription`}
                                                         onClick={(e) => e.stopPropagation()}
-                                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                                        className={smallBtn}
                                                     >
                                                         <AppIcon name="view" className="h-3.5 w-3.5" />
-                                                        View Prescription
+                                                        View prescription
                                                     </Link>
                                                 ) : (
                                                     <button
@@ -1213,10 +1213,10 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                             e.stopPropagation();
                                                             openRxVoice(r.id);
                                                         }}
-                                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                                        className={smallBtn}
                                                     >
                                                         <AppIcon name="section" className="h-3.5 w-3.5" />
-                                                        Generate Prescription
+                                                        Generate prescription
                                                     </button>
                                                 ))}
 
@@ -1245,7 +1245,8 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                                 left,
                                                             });
                                                         }}
-                                                        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-base font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                        aria-label="More actions"
                                                         aria-haspopup="menu"
                                                         aria-expanded={menu.open && String(menu.id) === String(r.id)}
                                                     >
@@ -1266,13 +1267,13 @@ export default function AppointmentsFlowPage({ embedded = false }) {
 
             {menu.open ? (
                 <div
-                    className="fixed z-[60] w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                    className="fixed z-[60] w-60 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
                     role="menu"
                     style={{ top: `${menu.top}px`, left: `${menu.left}px` }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="p-2">
+                    <div className="p-1.5">
                         {(() => { const menuRow = rows.find((r) => String(r.id) === String(menu.id)); return rowLifecycleActions(menuRow?.status, menuRow); })().map((a) => (
                             <button
                                 key={`${a.kind}:${a.next || a.label}`}
@@ -1280,9 +1281,9 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                 role="menuitem"
                                 disabled={menuSavingId === menu.id}
                                 onClick={() => handleMenuAction(menu.id, a)}
-                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 disabled:opacity-50"
                             >
-                                <span className={`h-2.5 w-2.5 rounded-full ${actionDotClass(a.next || a.kind)}`} />
+                                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${actionDotClass(a.next || a.kind)}`} />
                                 <span className="flex-1">{a.label}</span>
                             </button>
                         ))}
@@ -1344,45 +1345,45 @@ export default function AppointmentsFlowPage({ embedded = false }) {
             />
 
             {cancelDialog.open ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" aria-modal="true" role="dialog" onClick={() => !cancelDialog.busy && setCancelDialog({ open: false, appointmentId: null, reason: '', busy: false, error: '' })}>
-                    <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" aria-modal="true" role="dialog" onClick={() => !cancelDialog.busy && setCancelDialog({ open: false, appointmentId: null, reason: '', busy: false, error: '' })}>
+                    <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                             <div className="flex items-center gap-2">
-                                <AppIcon name="section" className="h-5 w-5 text-slate-700" />
-                                <h3 className="text-base font-semibold text-slate-900">Cancel Appointment</h3>
+                                <h3 className="text-lg font-semibold text-slate-900">Cancel appointment</h3>
                             </div>
                             <button
                                 type="button"
                                 disabled={cancelDialog.busy}
                                 onClick={() => setCancelDialog({ open: false, appointmentId: null, reason: '', busy: false, error: '' })}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                aria-label="Close"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                             >
-                                Close
+                                <AppIcon name="close" className="h-5 w-5" />
                             </button>
                         </div>
 
-                        <div className="space-y-3 px-5 py-4">
+                        <div className="space-y-3 p-5">
                             {cancelDialog.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{cancelDialog.error}</div>
+                                <Alert>{cancelDialog.error}</Alert>
                             ) : null}
                             <div>
-                                <label className="text-sm font-semibold text-slate-900">Reason (optional)</label>
+                                <label className={label}>Reason (optional)</label>
                                 <textarea
                                     value={cancelDialog.reason}
                                     onChange={(e) => setCancelDialog((p) => ({ ...p, reason: e.target.value }))}
                                     rows={3}
-                                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                                    className={input}
                                     placeholder="Add a cancellation reason…"
                                 />
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
+                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
                             <button
                                 type="button"
                                 disabled={cancelDialog.busy}
                                 onClick={() => setCancelDialog({ open: false, appointmentId: null, reason: '', busy: false, error: '' })}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                className={btn.secondary}
                             >
                                 Back
                             </button>
@@ -1401,9 +1402,9 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                         setCancelDialog((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Failed to cancel' }));
                                     }
                                 }}
-                                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
                             >
-                                {cancelDialog.busy ? 'Cancelling…' : 'Confirm Cancel'}
+                                {cancelDialog.busy ? 'Cancelling…' : 'Confirm cancel'}
                             </button>
                         </div>
                     </div>
@@ -1411,8 +1412,8 @@ export default function AppointmentsFlowPage({ embedded = false }) {
             ) : null}
 
             {rescheduleDialog.open ? (
-                <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-                    <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => !rescheduleDialog.busy && setRescheduleDialog({
+                <div className="fixed inset-0 z-50 flex p-4" aria-modal="true" role="dialog">
+                    <div className="absolute inset-0 bg-slate-950/50" onClick={() => !rescheduleDialog.busy && setRescheduleDialog({
                         open: false,
                         appointmentId: null,
                         busy: false,
@@ -1423,12 +1424,11 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                         selection: { appointment_date: '', start_time: '', end_time: '' },
                     })} />
 
-                    <div className="relative m-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                    <div className="relative m-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
                         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <AppIcon name="calendar" className="h-5 w-5 text-slate-700" />
-                                    <h3 className="text-base font-semibold text-slate-900">Mark Rescheduled</h3>
+                                    <h3 className="text-lg font-semibold text-slate-900">Mark rescheduled</h3>
                                 </div>
                                 <p className="mt-1 text-sm text-slate-600">Pick a new slot. This will update the appointment time and set status to Confirmed.</p>
                             </div>
@@ -1446,21 +1446,22 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     slotDate: '',
                                     selection: { appointment_date: '', start_time: '', end_time: '' },
                                 })}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                aria-label="Close"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                             >
-                                Close
+                                <AppIcon name="close" className="h-5 w-5" />
                             </button>
                         </div>
 
-                        <div className="space-y-4 px-5 py-4">
+                        <div className="space-y-4 p-5">
                             {rescheduleDialog.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{rescheduleDialog.error}</div>
+                                <Alert>{rescheduleDialog.error}</Alert>
                             ) : null}
                             {rescheduleDialog.availability.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{rescheduleDialog.availability.error}</div>
+                                <Alert>{rescheduleDialog.availability.error}</Alert>
                             ) : null}
 
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                 <div ref={rescheduleChipStripRef} className="flex flex-nowrap gap-2 overflow-x-auto pb-2 whitespace-nowrap">
                                     {rescheduleDialog.availability.loading ? (
                                         <div className="text-sm text-slate-600">Loading slots…</div>
@@ -1476,8 +1477,8 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                         type="button"
                                                         onClick={() => setRescheduleDialog((p) => ({ ...p, slotDate: d.date }))}
                                                         className={active
-                                                            ? 'min-w-[84px] rounded-xl bg-slate-900 px-3 py-2 text-left text-white'
-                                                            : 'min-w-[84px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 hover:bg-slate-50'
+                                                            ? 'min-w-[84px] shrink-0 rounded-xl border border-blue-600 bg-blue-600 px-3 py-2 text-left text-white'
+                                                            : 'min-w-[84px] shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 hover:bg-slate-50'
                                                         }
                                                     >
                                                         <div className="flex items-baseline justify-between">
@@ -1513,10 +1514,10 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                     }));
                                                 }}
                                                 className={disabled
-                                                    ? 'rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400'
+                                                    ? 'h-9 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-500 line-through'
                                                     : isSelected
-                                                        ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white'
-                                                        : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50'
+                                                        ? 'h-9 rounded-xl border border-blue-600 bg-blue-600 px-3 text-sm font-semibold text-white'
+                                                        : 'h-9 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50'
                                                 }
                                             >
                                                 {String(s.start_time || '').slice(0, 5)}–{String(s.end_time || '').slice(0, 5)}
@@ -1526,19 +1527,19 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                 </div>
 
                                 <div className="mt-3">
-                                    <label className="text-sm font-semibold text-slate-900">Reason (optional)</label>
+                                    <label className={label}>Reason (optional)</label>
                                     <textarea
                                         value={rescheduleDialog.reason}
                                         onChange={(e) => setRescheduleDialog((p) => ({ ...p, reason: e.target.value }))}
                                         rows={2}
-                                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                                        className={input}
                                         placeholder="Add a reschedule reason…"
                                     />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
+                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
                             <button
                                 type="button"
                                 disabled={rescheduleDialog.busy}
@@ -1553,7 +1554,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     slotDate: '',
                                     selection: { appointment_date: '', start_time: '', end_time: '' },
                                 })}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                className={btn.secondary}
                             >
                                 Cancel
                             </button>
@@ -1601,9 +1602,9 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                         setRescheduleDialog((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Failed to reschedule' }));
                                     }
                                 }}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                className={btn.primary}
                             >
-                                {rescheduleDialog.busy ? 'Saving…' : 'Confirm Reschedule'}
+                                {rescheduleDialog.busy ? 'Saving…' : 'Confirm reschedule'}
                             </button>
                         </div>
                     </div>
@@ -1611,8 +1612,8 @@ export default function AppointmentsFlowPage({ embedded = false }) {
             ) : null}
 
             {completeDialog.open ? (
-                <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-                    <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => !completeDialog.busy && setCompleteDialog({
+                <div className="fixed inset-0 z-50 flex p-4" aria-modal="true" role="dialog">
+                    <div className="absolute inset-0 bg-slate-950/50" onClick={() => !completeDialog.busy && setCompleteDialog({
                         open: false,
                         appointmentId: null,
                         busy: false,
@@ -1627,12 +1628,11 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                         selection: { appointment_date: '', start_time: '', end_time: '' },
                     })} />
 
-                    <div className="relative m-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                    <div className="relative m-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
                         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <AppIcon name="section" className="h-5 w-5 text-slate-700" />
-                                    <h3 className="text-base font-semibold text-slate-900">Complete Appointment</h3>
+                                    <h3 className="text-lg font-semibold text-slate-900">Complete appointment</h3>
                                 </div>
                                 <p className="mt-1 text-sm text-slate-600">Optionally schedule a follow-up before completing.</p>
                             </div>
@@ -1653,15 +1653,16 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     slotDate: '',
                                     selection: { appointment_date: '', start_time: '', end_time: '' },
                                 })}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                aria-label="Close"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                             >
-                                Close
+                                <AppIcon name="close" className="h-5 w-5" />
                             </button>
                         </div>
 
-                        <div className="space-y-4 px-5 py-4">
+                        <div className="space-y-4 p-5">
                             {completeDialog.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{completeDialog.error}</div>
+                                <Alert>{completeDialog.error}</Alert>
                             ) : null}
 
                             <label className="flex items-center gap-2 text-sm font-medium text-slate-900">
@@ -1689,14 +1690,14 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                             </label>
 
                             {completeDialog.setFollowUp ? (
-                                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="flex flex-wrap items-center gap-2">
+                                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-white p-1">
                                         <button
                                             type="button"
                                             onClick={() => setCompleteDialog((p) => ({ ...p, followMode: 'days' }))}
                                             className={completeDialog.followMode === 'days'
-                                                ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white'
-                                                : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50'
+                                                ? 'h-8 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white'
+                                                : 'h-8 rounded-lg px-3 text-sm text-slate-700 hover:bg-slate-100'
                                             }
                                         >
                                             X days
@@ -1705,8 +1706,8 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                             type="button"
                                             onClick={() => setCompleteDialog((p) => ({ ...p, followMode: 'date' }))}
                                             className={completeDialog.followMode === 'date'
-                                                ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white'
-                                                : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50'
+                                                ? 'h-8 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white'
+                                                : 'h-8 rounded-lg px-3 text-sm text-slate-700 hover:bg-slate-100'
                                             }
                                         >
                                             Pick date
@@ -1715,7 +1716,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
 
                                     {completeDialog.followMode === 'days' ? (
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <label className="text-sm font-semibold text-slate-900">After</label>
+                                            <label className={label}>After</label>
                                             <input
                                                 type="number"
                                                 min={0}
@@ -1736,7 +1737,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                         };
                                                     });
                                                 }}
-                                                className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                                                className="h-10 w-24 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                             />
                                             <span className="text-sm text-slate-600">days</span>
                                         </div>
@@ -1747,7 +1748,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     )}
 
                                     {completeDialog.availability.error ? (
-                                        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{completeDialog.availability.error}</div>
+                                        <Alert>{completeDialog.availability.error}</Alert>
                                     ) : null}
 
                                     <div ref={followChipStripRef} className="flex gap-2 overflow-x-auto pb-2">
@@ -1765,8 +1766,8 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                             type="button"
                                                             onClick={() => setCompleteDialog((p) => ({ ...p, slotDate: d.date, followDate: d.date }))}
                                                             className={active
-                                                                ? 'min-w-[84px] rounded-xl bg-slate-900 px-3 py-2 text-left text-white'
-                                                                : 'min-w-[84px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 hover:bg-slate-50'
+                                                                ? 'min-w-[84px] shrink-0 rounded-xl border border-blue-600 bg-blue-600 px-3 py-2 text-left text-white'
+                                                                : 'min-w-[84px] shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-slate-700 hover:bg-slate-50'
                                                             }
                                                         >
                                                             <div className="flex items-baseline justify-between">
@@ -1800,10 +1801,10 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                         selection: { appointment_date: completeDialog.slotDate, start_time: s.start_time, end_time: s.end_time },
                                                     }))}
                                                     className={disabled
-                                                        ? 'rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400'
+                                                        ? 'h-9 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-500 line-through'
                                                         : isSelected
-                                                            ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white'
-                                                            : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50'
+                                                            ? 'h-9 rounded-xl border border-blue-600 bg-blue-600 px-3 text-sm font-semibold text-white'
+                                                            : 'h-9 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50'
                                                     }
                                                 >
                                                     {String(s.start_time || '').slice(0, 5)}–{String(s.end_time || '').slice(0, 5)}
@@ -1815,7 +1816,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                             ) : null}
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
+                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
                             <button
                                 type="button"
                                 disabled={completeDialog.busy}
@@ -1833,7 +1834,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     slotDate: '',
                                     selection: { appointment_date: '', start_time: '', end_time: '' },
                                 })}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                className={btn.secondary}
                             >
                                 Back
                             </button>
@@ -1869,7 +1870,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                 setCompleteDialog((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Failed to complete' }));
                                             }
                                         }}
-                                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                        className={btn.secondary}
                                     >
                                         {completeDialog.busy ? 'Working…' : 'Complete without Follow-up'}
                                     </button>
@@ -1928,7 +1929,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                                 setCompleteDialog((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Failed to set follow-up/complete' }));
                                             }
                                         }}
-                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                        className={btn.primary}
                                     >
                                         {completeDialog.busy ? 'Working…' : 'Set Follow-up & Complete'}
                                     </button>
@@ -1963,7 +1964,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                             setCompleteDialog((p) => ({ ...p, busy: false, error: e?.response?.data?.message || e?.message || 'Failed to complete' }));
                                         }
                                     }}
-                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                    className={btn.primary}
                                 >
                                     {completeDialog.busy ? 'Completing…' : 'Complete'}
                                 </button>
@@ -1974,16 +1975,15 @@ export default function AppointmentsFlowPage({ embedded = false }) {
             ) : null}
 
             {detailDialog.open ? (
-                <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-                    <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setDetailDialog({ open: false, type: '', id: null, loading: false, error: '', record: null })} />
+                <div className="fixed inset-0 z-50 flex p-4" aria-modal="true" role="dialog">
+                    <div className="absolute inset-0 bg-slate-950/50" onClick={() => setDetailDialog({ open: false, type: '', id: null, loading: false, error: '', record: null })} />
 
-                    <div className="relative m-auto w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                    <div className="relative m-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
                         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <AppIcon name="view" className="h-5 w-5 text-slate-700" />
-                                    <h3 className="text-base font-semibold text-slate-900">
-                                        {detailDialog.type === 'patient' ? 'Patient' : 'Doctor'} Detail
+                                    <h3 className="text-lg font-semibold text-slate-900">
+                                        {detailDialog.type === 'patient' ? 'Patient' : 'Doctor'} details
                                     </h3>
                                 </div>
                                 <p className="mt-1 text-sm text-slate-600">Quick view in dialog.</p>
@@ -1991,18 +1991,19 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                             <button
                                 type="button"
                                 onClick={() => setDetailDialog({ open: false, type: '', id: null, loading: false, error: '', record: null })}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                aria-label="Close"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                             >
-                                Close
+                                <AppIcon name="close" className="h-5 w-5" />
                             </button>
                         </div>
 
-                        <div className="space-y-3 px-5 py-4">
+                        <div className="space-y-3 p-5">
                             {detailDialog.loading ? (
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">Loading…</div>
+                                <Spinner className="py-6" />
                             ) : null}
                             {detailDialog.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{detailDialog.error}</div>
+                                <Alert>{detailDialog.error}</Alert>
                             ) : null}
 
                             {!detailDialog.loading && detailDialog.record ? (
@@ -2010,9 +2011,9 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     <div className="text-sm font-semibold text-slate-900">
                                         {detailDialog.record.full_name || detailDialog.record.name || `${detailDialog.type} #${detailDialog.id}`}
                                     </div>
-                                    <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-700">
-                                        <div><span className="text-slate-500">Phone:</span> {detailDialog.record.phone || '—'}</div>
-                                        <div><span className="text-slate-500">Email:</span> {detailDialog.record.email || '—'}</div>
+                                    <div className="mt-2 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                                        <div><span className="text-slate-600">Phone:</span> {detailDialog.record.phone || '—'}</div>
+                                        <div><span className="text-slate-600">Email:</span> {detailDialog.record.email || '—'}</div>
                                     </div>
                                 </div>
                             ) : null}
@@ -2020,7 +2021,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                             <div className="flex justify-end">
                                 <Link
                                     to={detailDialog.type === 'patient' ? `/modules/patients/${detailDialog.id}` : `/modules/doctors/${detailDialog.id}`}
-                                    className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                                    className={btn.primary}
                                     onClick={() => setDetailDialog({ open: false, type: '', id: null, loading: false, error: '', record: null })}
                                 >
                                     View detailed profile
@@ -2033,7 +2034,7 @@ export default function AppointmentsFlowPage({ embedded = false }) {
 
             {rxVoice.open ? (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
                     onClick={() => {
                         if (rxVoice.phase === 'recording' || rxVoice.phase === 'processing' || rxVoice.phase === 'stopping') return;
                         cleanupRxRecorder();
@@ -2041,14 +2042,11 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                     }}
                 >
                     <div
-                        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                        className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="section" className="h-5 w-5" />
-                                <h3 className="text-lg font-semibold">Voice Prescription</h3>
-                            </div>
+                        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                            <h3 className="text-lg font-semibold text-slate-900">Voice prescription</h3>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -2056,28 +2054,27 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     cleanupRxRecorder();
                                     setRxVoice((p) => ({ ...p, open: false, appointmentId: null }));
                                 }}
-                                className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
+                                aria-label="Close"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                             >
-                                Close
+                                <AppIcon name="close" className="h-5 w-5" />
                             </button>
                         </div>
 
                         <div className="space-y-4 p-5">
                             {rxVoice.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {rxVoice.error}
-                                </div>
+                                <Alert>{rxVoice.error}</Alert>
                             ) : null}
 
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recording</div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="text-xs font-medium text-slate-600">Recording</div>
                                 <div className="mt-3 flex items-center justify-center gap-2">
                                     {[0, 1, 2, 3, 4, 5, 6].map((i) => {
                                         const active = rxVoice.phase === 'recording' || rxVoice.phase === 'stopping';
                                         return (
                                             <div
                                                 key={i}
-                                                className={active ? 'h-8 w-1 rounded bg-slate-700/70' : 'h-2 w-1 rounded bg-slate-400/60'}
+                                                className={active ? 'h-8 w-1 rounded bg-blue-600/80' : 'h-2 w-1 rounded bg-slate-400/60'}
                                                 style={active ? { animation: `rxbar 0.9s ${i * 0.08}s infinite ease-in-out`, transformOrigin: 'center' } : undefined}
                                             />
                                         );
@@ -2091,20 +2088,20 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                 ) : null}
                             </div>
 
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
                                 {rxVoice.phase === 'recording' ? (
                                     <button
                                         type="button"
                                         onClick={stopRxRecording}
-                                        className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700"
                                     >
-                                        Stop Recording
+                                        Stop recording
                                     </button>
                                 ) : rxVoice.phase === 'processing' || rxVoice.phase === 'stopping' ? (
                                     <button
                                         type="button"
                                         disabled
-                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white opacity-60"
+                                        className={btn.primary}
                                     >
                                         Processing…
                                     </button>
@@ -2112,9 +2109,9 @@ export default function AppointmentsFlowPage({ embedded = false }) {
                                     <button
                                         type="button"
                                         onClick={startRxRecording}
-                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                                        className={btn.primary}
                                     >
-                                        Start Recording
+                                        Start recording
                                     </button>
                                 )}
                             </div>

@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
+import { PageHeader, Alert, Spinner, btn } from '../../components/ui';
 
 function prettyDate(ymd) {
     try {
@@ -221,8 +222,12 @@ export default function PrescriptionPage() {
         ? String(appointment.visit_type).replace('_', ' ')
         : '—';
 
+    const isBusyVoice = voice.phase === 'recording' || voice.phase === 'processing' || voice.phase === 'stopping';
+    const fieldBox = 'min-h-[56px] whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800';
+    const sectionTitle = 'mb-2 text-sm font-semibold text-slate-900';
+
     return (
-        <div className="mx-auto w-full max-w-4xl px-4 py-6">
+        <div className="mx-auto w-full max-w-4xl space-y-5">
             <style>{`
                 @media print {
                     .no-print { display: none !important; }
@@ -236,153 +241,134 @@ export default function PrescriptionPage() {
                 @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } 80%, 100% { content: ''; } }
             `}</style>
 
-            <div className="no-print mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="section" className="h-5 w-5 text-slate-700" />
-                    <h1 className="text-lg font-semibold text-slate-900">Prescription</h1>
-                    {prescription ? <StatusBadge status={prescription.status || 'draft'} /> : null}
-                </div>
-                <div className="flex items-center gap-2">
-                    <Link
-                        to="/workflows/appointments"
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                        Back
-                    </Link>
-                            <button
-                                type="button"
-                                onClick={downloadPrescriptionPdf}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                            >
+            <div className="no-print space-y-3">
+                <PageHeader
+                    back={{ to: '/workflows/appointments', label: 'Back' }}
+                    title={(
+                        <span className="inline-flex flex-wrap items-center gap-2">
+                            Prescription
+                            {prescription ? <StatusBadge status={prescription.status || 'draft'} /> : null}
+                        </span>
+                    )}
+                    subtitle={appointment ? `${patientName} · ${prettyDate(appointment?.appointment_date)}` : undefined}
+                    actions={(
+                        <>
+                            <button type="button" onClick={downloadPrescriptionPdf} className={btn.secondary}>
+                                <AppIcon name="download" className="h-4 w-4" />
                                 Download PDF
                             </button>
-                    <button
-                        type="button"
-                        onClick={() => window.print()}
-                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    >
-                        Print
-                    </button>
-                    {!prescription && canPrescribe ? (
-                        <button
-                            type="button"
-                            onClick={() => setVoice((p) => ({ ...p, open: true, error: '' }))}
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                            Start Recording
-                        </button>
-                    ) : null}
-                    {prescription && canPrescribe && prescription.status !== 'final' ? (
-                        finalize.confirming ? (
-                            <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2">
-                                <span className="text-sm font-medium text-indigo-800">Finalize this prescription?</span>
-                                <button
-                                    type="button"
-                                    disabled={finalize.saving}
-                                    onClick={finalizePrescription}
-                                    className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
-                                >
-                                    {finalize.saving ? 'Finalizing…' : 'Yes, finalize'}
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={finalize.saving}
-                                    onClick={() => setFinalize((p) => ({ ...p, confirming: false }))}
-                                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => setFinalize({ confirming: true, saving: false, message: '', isError: false })}
-                                className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                            >
-                                Finalize
+                            <button type="button" onClick={() => window.print()} className={btn.secondary}>
+                                Print
                             </button>
-                        )
-                    ) : null}
-                    {prescription && canPrescribe ? (
-                        prescription.status === 'final' ? (
-                            send.confirming ? (
-                                <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2">
-                                    <span className="text-sm font-medium text-emerald-800">Send via WhatsApp?</span>
-                                    <button
-                                        type="button"
-                                        disabled={send.sending}
-                                        onClick={sendToPatient}
-                                        className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-                                    >
-                                        {send.sending ? 'Sending…' : 'Yes, send'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={send.sending}
-                                        onClick={() => setSend((p) => ({ ...p, confirming: false }))}
-                                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            ) : (
+                            {!prescription && canPrescribe ? (
                                 <button
                                     type="button"
-                                    onClick={() => setSend({ confirming: true, sending: false, message: '', isError: false })}
-                                    className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                    onClick={() => setVoice((p) => ({ ...p, open: true, error: '' }))}
+                                    className={btn.primary}
                                 >
-                                    Send to Patient (WhatsApp)
+                                    Start recording
                                 </button>
-                            )
-                        ) : (
-                            <span title="Finalize the prescription first." className="inline-flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    disabled
-                                    className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400"
-                                >
-                                    Send to Patient (WhatsApp)
-                                </button>
-                            </span>
-                        )
-                    ) : null}
-                </div>
+                            ) : null}
+                            {prescription && canPrescribe && prescription.status !== 'final' ? (
+                                finalize.confirming ? (
+                                    <div className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5">
+                                        <span className="text-sm font-medium text-blue-900">Finalize this prescription?</span>
+                                        <button
+                                            type="button"
+                                            disabled={finalize.saving}
+                                            onClick={finalizePrescription}
+                                            className="inline-flex h-8 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                        >
+                                            {finalize.saving ? 'Finalizing…' : 'Yes, finalize'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={finalize.saving}
+                                            onClick={() => setFinalize((p) => ({ ...p, confirming: false }))}
+                                            className="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold text-slate-700 hover:bg-white"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setFinalize({ confirming: true, saving: false, message: '', isError: false })}
+                                        className={btn.primary}
+                                    >
+                                        Finalize
+                                    </button>
+                                )
+                            ) : null}
+                            {prescription && canPrescribe ? (
+                                prescription.status === 'final' ? (
+                                    send.confirming ? (
+                                        <div className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5">
+                                            <span className="text-sm font-medium text-blue-900">Send via WhatsApp?</span>
+                                            <button
+                                                type="button"
+                                                disabled={send.sending}
+                                                onClick={sendToPatient}
+                                                className="inline-flex h-8 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                            >
+                                                {send.sending ? 'Sending…' : 'Yes, send'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={send.sending}
+                                                onClick={() => setSend((p) => ({ ...p, confirming: false }))}
+                                                className="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold text-slate-700 hover:bg-white"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSend({ confirming: true, sending: false, message: '', isError: false })}
+                                            className={btn.primary}
+                                        >
+                                            Send to patient (WhatsApp)
+                                        </button>
+                                    )
+                                ) : (
+                                    <span title="Finalize the prescription first." className="inline-flex items-center gap-2">
+                                        <button type="button" disabled className={`${btn.secondary} cursor-not-allowed`}>
+                                            Send to patient (WhatsApp)
+                                        </button>
+                                    </span>
+                                )
+                            ) : null}
+                        </>
+                    )}
+                />
+
+                {prescription && canPrescribe && prescription.status !== 'final' ? (
+                    <p className="text-sm text-slate-600">Finalize the prescription before sending it to the patient.</p>
+                ) : null}
+
+                {finalize.message ? <Alert tone={finalize.isError ? 'error' : 'success'}>{finalize.message}</Alert> : null}
+                {send.message ? <Alert tone={send.isError ? 'error' : 'success'}>{send.message}</Alert> : null}
             </div>
 
-            {prescription && canPrescribe && prescription.status !== 'final' ? (
-                <p className="no-print -mt-2 mb-4 text-right text-xs text-slate-500">Finalize the prescription before sending it to the patient.</p>
-            ) : null}
-
-            {finalize.message ? (
-                <div className={`no-print mb-4 rounded-xl border px-4 py-2.5 text-sm ${finalize.isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-                    {finalize.message}
-                </div>
-            ) : null}
-
-            {send.message ? (
-                <div className={`no-print mb-4 rounded-xl border px-4 py-2.5 text-sm ${send.isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-                    {send.message}
-                </div>
-            ) : null}
-
             {loading ? (
-                <div className="rx-surface rounded-2xl bg-white p-5 text-sm text-slate-600">Loading…</div>
+                <div className="rx-surface rounded-2xl border border-slate-200 bg-white"><Spinner /></div>
             ) : error ? (
-                <div className="rx-surface rounded-2xl bg-rose-50 p-5 text-sm text-rose-700">{error}</div>
+                <div className="rx-surface"><Alert>{error}</Alert></div>
             ) : (
-                <div id="rx-print" className="rx-surface rounded-2xl bg-white p-6">
+                <div id="rx-print" className="rx-surface rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
                     <div className="hidden print:block">
                         <div className="text-lg font-semibold text-slate-900">Prescription</div>
                         <div className="mt-2 border-t border-slate-200" />
                     </div>
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <div className="text-sm text-slate-600">Patient</div>
+                            <div className="text-xs font-medium text-slate-600">Patient</div>
                             <div className="text-xl font-semibold text-slate-900">{patientName}</div>
-                            <div className="mt-1 text-sm text-slate-600">Visit: <span className="font-semibold text-slate-900">{visitType}</span></div>
+                            <div className="mt-1 text-sm text-slate-600">Visit: <span className="font-semibold capitalize text-slate-900">{visitType}</span></div>
                         </div>
-                        <div className="text-right">
-                            <div className="text-sm text-slate-600">Doctor</div>
+                        <div className="sm:text-right">
+                            <div className="text-xs font-medium text-slate-600">Doctor</div>
                             <div className="text-base font-semibold text-slate-900">{doctorName}</div>
                             <div className="mt-1 text-sm text-slate-600">
                                 {prettyDate(appointment?.appointment_date)}
@@ -391,12 +377,12 @@ export default function PrescriptionPage() {
                         </div>
                     </div>
 
-                    <div className="my-5 border-t border-slate-200" />
+                    <div className="my-5 border-t border-slate-100" />
 
                     <div className="grid grid-cols-1 gap-5">
                         <section>
-                            <div className="text-sm font-semibold text-slate-900">Complaints</div>
-                            <div className="mt-2 min-h-[56px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 whitespace-pre-wrap">
+                            <h2 className={sectionTitle}>Complaints</h2>
+                            <div className={fieldBox}>
                                 {complaints.length ? complaints.map((c, idx) => (
                                     <div key={idx}>• {c}</div>
                                 )) : ''}
@@ -404,16 +390,16 @@ export default function PrescriptionPage() {
                         </section>
 
                         <section>
-                            <div className="text-sm font-semibold text-slate-900">Diagnosis</div>
-                            <div className="mt-2 min-h-[56px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 whitespace-pre-wrap">
+                            <h2 className={sectionTitle}>Diagnosis</h2>
+                            <div className={fieldBox}>
                                 {diagnosis || ''}
                             </div>
                         </section>
 
                         <section>
-                            <div className="text-sm font-semibold text-slate-900">Medicines</div>
-                            <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
-                                <div className="grid grid-cols-12 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                            <h2 className={sectionTitle}>Medicines</h2>
+                            <div className="overflow-hidden rounded-xl border border-slate-200">
+                                <div className="grid grid-cols-12 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
                                     <div className="col-span-6">Medicine</div>
                                     <div className="col-span-3">Dosage</div>
                                     <div className="col-span-3">Duration</div>
@@ -425,10 +411,10 @@ export default function PrescriptionPage() {
                                     return Array.from({ length: total }).map((_, i) => {
                                         const m = rows[i];
                                         return (
-                                            <div key={i} className="grid grid-cols-12 border-t border-slate-200 px-3 py-3 text-sm text-slate-800">
-                                                <div className="col-span-6">{m?.name ? String(m.name) : ' '}</div>
-                                                <div className="col-span-3">{m?.dosage ? String(m.dosage) : ' '}</div>
-                                                <div className="col-span-3">{m?.duration ? String(m.duration) : ' '}</div>
+                                            <div key={i} className="grid min-h-[44px] grid-cols-12 gap-2 border-t border-slate-100 px-3 py-3 text-sm text-slate-800">
+                                                <div className="col-span-6 break-words">{m?.name ? String(m.name) : ' '}</div>
+                                                <div className="col-span-3 break-words">{m?.dosage ? String(m.dosage) : ' '}</div>
+                                                <div className="col-span-3 break-words">{m?.duration ? String(m.duration) : ' '}</div>
                                             </div>
                                         );
                                     });
@@ -437,22 +423,22 @@ export default function PrescriptionPage() {
                         </section>
 
                         <section>
-                            <div className="text-sm font-semibold text-slate-900">Advice</div>
-                            <div className="mt-2 min-h-[56px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 whitespace-pre-wrap">
+                            <h2 className={sectionTitle}>Advice</h2>
+                            <div className={fieldBox}>
                                 {advice.length ? advice.map((a, idx) => (
                                     <div key={idx}>• {a}</div>
                                 )) : ''}
                             </div>
                         </section>
 
-                        <div className="flex items-end justify-between gap-4">
-                            <div>
-                                <div className="text-sm font-semibold text-slate-900">Follow-up</div>
-                                <div className="mt-2 min-h-[40px] w-64 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 whitespace-pre-wrap">
+                        <div className="flex flex-wrap items-end justify-between gap-4">
+                            <div className="w-full sm:w-64">
+                                <h2 className={sectionTitle}>Follow-up</h2>
+                                <div className="min-h-[40px] whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
                                     {followUp || ''}
                                 </div>
                             </div>
-                            <div className="text-right">
+                            <div className="sm:text-right">
                                 <div className="text-sm font-semibold text-slate-900">Signature</div>
                                 <div className="mt-10 w-56 border-t border-slate-300" />
                             </div>
@@ -462,44 +448,38 @@ export default function PrescriptionPage() {
             )}
 
             {voice.open ? (
-                <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => {
-                    if (voice.phase === 'recording' || voice.phase === 'processing' || voice.phase === 'stopping') return;
+                <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => {
+                    if (isBusyVoice) return;
                     setVoice((p) => ({ ...p, open: false }));
                 }}>
-                    <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 text-white">
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="section" className="h-5 w-5" />
-                                <h3 className="text-lg font-semibold">Voice Prescription</h3>
-                            </div>
+                    <div role="dialog" aria-modal="true" aria-labelledby="rx-voice-title" className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                            <h2 id="rx-voice-title" className="text-lg font-semibold text-slate-900">Voice prescription</h2>
                             <button
                                 type="button"
+                                aria-label="Close"
                                 onClick={() => {
-                                    if (voice.phase === 'recording' || voice.phase === 'processing' || voice.phase === 'stopping') return;
+                                    if (isBusyVoice) return;
                                     setVoice((p) => ({ ...p, open: false }));
                                 }}
-                                className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                             >
-                                Close
+                                <AppIcon name="close" className="h-5 w-5" />
                             </button>
                         </div>
 
                         <div className="space-y-4 p-5">
-                            {voice.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {voice.error}
-                                </div>
-                            ) : null}
+                            {voice.error ? <Alert>{voice.error}</Alert> : null}
 
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recording</div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="text-xs font-medium text-slate-600">Recording</div>
                                 <div className="mt-3 flex items-center justify-center gap-2">
                                     {[0, 1, 2, 3, 4, 5, 6].map((i) => {
                                         const active = voice.phase === 'recording' || voice.phase === 'stopping';
                                         return (
                                             <div
                                                 key={i}
-                                                className={active ? 'h-8 w-1 rounded bg-slate-700/70' : 'h-2 w-1 rounded bg-slate-400/60'}
+                                                className={active ? 'h-8 w-1 rounded bg-blue-600/80' : 'h-2 w-1 rounded bg-slate-400/60'}
                                                 style={active ? { animation: `rxbar 0.9s ${i * 0.08}s infinite ease-in-out`, transformOrigin: 'center' } : undefined}
                                             />
                                         );
@@ -514,34 +494,26 @@ export default function PrescriptionPage() {
                                     <div className="mt-3 text-center text-sm text-slate-700">Requesting microphone…</div>
                                 ) : null}
                             </div>
+                        </div>
 
-                            <div className="flex items-center justify-center gap-2">
-                                {voice.phase === 'recording' ? (
-                                    <button
-                                        type="button"
-                                        onClick={stopRecording}
-                                        className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
-                                    >
-                                        Stop Recording
-                                    </button>
-                                ) : voice.phase === 'processing' || voice.phase === 'stopping' ? (
-                                    <button
-                                        type="button"
-                                        disabled
-                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white opacity-60"
-                                    >
-                                        Processing…
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={startRecording}
-                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                                    >
-                                        Start Recording
-                                    </button>
-                                )}
-                            </div>
+                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+                            {voice.phase === 'recording' ? (
+                                <button
+                                    type="button"
+                                    onClick={stopRecording}
+                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700"
+                                >
+                                    Stop recording
+                                </button>
+                            ) : voice.phase === 'processing' || voice.phase === 'stopping' ? (
+                                <button type="button" disabled className={btn.primary}>
+                                    Processing…
+                                </button>
+                            ) : (
+                                <button type="button" onClick={startRecording} className={btn.primary}>
+                                    Start recording
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

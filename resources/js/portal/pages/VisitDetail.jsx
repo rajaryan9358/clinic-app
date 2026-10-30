@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import AppointmentCard from '../components/AppointmentCard';
-import { Button, Card, ErrorText, Spinner } from '../components/ui';
+import { Alert, Button, Card, CardTitle, ErrorText, Loading, PageHeader, inputClass, labelClass } from '../components/ui';
+import { MapPinIcon, PhoneIcon } from '../components/icons';
 
 /**
  * `GET appointments/{id}` detail: clinic/maps link, cancel (with an inline
@@ -91,11 +92,7 @@ export default function VisitDetail() {
     }
 
     if (loading) {
-        return (
-            <div className="flex justify-center py-12">
-                <Spinner className="h-6 w-6 text-[var(--accent)]" />
-            </div>
-        );
+        return <Loading />;
     }
 
     if (loadError || !appointment) {
@@ -115,44 +112,49 @@ export default function VisitDetail() {
             : null;
 
     return (
-        <div className="space-y-4">
-            <button
-                type="button"
-                onClick={() => navigate('/visits')}
-                className="text-sm font-medium text-[var(--accent)]"
-            >
-                &larr; Back to visits
-            </button>
+        <div className="space-y-5">
+            <PageHeader title="Visit details" back={{ label: 'Back to visits', onClick: () => navigate('/visits') }} />
 
-            {banner && <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{banner}</div>}
+            {banner && <Alert tone="success">{banner}</Alert>}
 
             <Card>
                 <AppointmentCard appointment={appointment} />
-                <dl className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-sm">
-                    <div className="flex justify-between">
-                        <dt className="text-slate-500">Visit type</dt>
-                        <dd className="capitalize text-slate-900">{appointment.visit_type}</dd>
+                <dl className="mt-4 divide-y divide-slate-100 border-t border-slate-100 text-sm">
+                    <div className="flex justify-between gap-4 py-2.5">
+                        <dt className="text-slate-600">Visit type</dt>
+                        <dd className="font-medium capitalize text-slate-900">{appointment.visit_type}</dd>
                     </div>
-                    <div className="flex justify-between">
-                        <dt className="text-slate-500">Mode</dt>
-                        <dd className="capitalize text-slate-900">{(appointment.consultation_mode || '').replace(/_/g, ' ')}</dd>
+                    <div className="flex justify-between gap-4 pt-2.5">
+                        <dt className="text-slate-600">Mode</dt>
+                        <dd className="font-medium capitalize text-slate-900">{(appointment.consultation_mode || '').replace(/_/g, ' ')}</dd>
                     </div>
                 </dl>
             </Card>
 
             {appointment.clinic && (appointment.clinic.address || appointment.clinic.phone) && (
                 <Card>
-                    <h2 className="mb-2 text-sm font-medium text-slate-500">Clinic</h2>
-                    <p className="text-sm font-medium text-slate-900">{appointment.clinic.name}</p>
-                    {appointment.clinic.address && <p className="text-sm text-slate-600">{appointment.clinic.address}</p>}
-                    {appointment.clinic.phone && <p className="text-sm text-slate-600">{appointment.clinic.phone}</p>}
+                    <CardTitle>Clinic</CardTitle>
+                    <p className="text-sm font-semibold text-slate-900">{appointment.clinic.name}</p>
+                    {appointment.clinic.address && (
+                        <p className="mt-1 flex items-start gap-2 text-sm text-slate-600">
+                            <MapPinIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                            <span>{appointment.clinic.address}</span>
+                        </p>
+                    )}
+                    {appointment.clinic.phone && (
+                        <p className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+                            <PhoneIcon className="h-4 w-4 shrink-0 text-slate-500" />
+                            <span>{appointment.clinic.phone}</span>
+                        </p>
+                    )}
                     {appointment.clinic.maps_url && (
                         <a
                             href={appointment.clinic.maps_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-2 inline-block text-sm font-medium text-[var(--accent)]"
+                            className="mt-3 inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"
                         >
+                            <MapPinIcon className="h-4 w-4 text-[var(--accent)]" />
                             View on map
                         </a>
                     )}
@@ -161,17 +163,17 @@ export default function VisitDetail() {
 
             {appointment.status === 'cancelled' && appointment.cancellation_reason && (
                 <Card>
-                    <h2 className="mb-1 text-sm font-medium text-slate-500">Cancellation reason</h2>
+                    <CardTitle className="mb-1">Cancellation reason</CardTitle>
                     <p className="text-sm text-slate-700">{appointment.cancellation_reason}</p>
                 </Card>
             )}
 
             {sharedBlockedReason ? (
-                <ErrorText>{sharedBlockedReason}</ErrorText>
+                <Alert tone="warn">{sharedBlockedReason}</Alert>
             ) : (
                 <>
-                    {cancelBlockedReason ? <ErrorText>Cancel: {cancelBlockedReason}</ErrorText> : null}
-                    {rescheduleBlockedReason ? <ErrorText>Reschedule: {rescheduleBlockedReason}</ErrorText> : null}
+                    {cancelBlockedReason ? <Alert tone="warn">Cancel: {cancelBlockedReason}</Alert> : null}
+                    {rescheduleBlockedReason ? <Alert tone="warn">Reschedule: {rescheduleBlockedReason}</Alert> : null}
                 </>
             )}
 
@@ -189,15 +191,21 @@ export default function VisitDetail() {
                 )}
 
                 {cancelling && (
-                    <Card>
-                        <p className="mb-2 text-sm text-slate-600">Cancel this visit?</p>
-                        <textarea
-                            value={cancelReason}
-                            onChange={(e) => setCancelReason(e.target.value)}
-                            placeholder="Reason (optional)"
-                            rows={2}
-                            className="mb-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                        />
+                    <Card className="space-y-3 border-rose-200">
+                        <p className="text-base font-semibold text-slate-900">Cancel this visit?</p>
+                        <div>
+                            <label htmlFor="cancel-reason" className={labelClass}>
+                                Reason (optional)
+                            </label>
+                            <textarea
+                                id="cancel-reason"
+                                value={cancelReason}
+                                onChange={(e) => setCancelReason(e.target.value)}
+                                placeholder="Reason (optional)"
+                                rows={2}
+                                className={inputClass}
+                            />
+                        </div>
                         <ErrorText>{cancelError}</ErrorText>
                         <div className="space-y-2">
                             <Button variant="danger" onClick={submitCancel} loading={cancelSubmitting}>

@@ -5,14 +5,13 @@ import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
+import { Alert, Badge, Card, EmptyState, Spinner, btn, input as inputCls, label as labelCls } from '../../components/ui';
 
 function tabButton(active) {
-    return active
-        ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white'
-        : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50';
+    return `h-11 whitespace-nowrap border-b-2 px-3 text-sm ${active ? 'border-blue-600 font-semibold text-slate-900' : 'border-transparent text-slate-600 hover:text-slate-900'}`;
 }
 
-const inputBase = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200';
+const inputBase = inputCls;
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -186,10 +185,19 @@ function layoutOverlapping(items) {
 }
 
 function modeChipClass(mode) {
-    if (mode === 'video') return 'bg-purple-100 text-purple-700 border-purple-200';
-    if (mode === 'both') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (mode === 'video') return 'bg-violet-50 text-violet-800 border-violet-200';
+    if (mode === 'both') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    return 'bg-blue-50 text-blue-800 border-blue-200';
 }
+
+function modeTone(mode) {
+    if (mode === 'video') return 'violet';
+    if (mode === 'both') return 'green';
+    return 'blue';
+}
+
+const REMOVE_BTN = 'inline-flex h-8 items-center rounded-lg px-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50';
+const CHECKBOX = 'h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500';
 
 function modeLabel(mode) {
     if (mode === 'in_person') return 'Walk-in';
@@ -942,116 +950,111 @@ function DoctorSetupFlowPageInner() {
             const elNow = calendarScrollRef.current;
             if (!elNow) return;
             const safeIdx = idx >= 0 ? idx : Math.min(CALENDAR_PAST_DAYS, Math.floor(calendarVisibleDays / 2));
-            const target = Math.max(0, CALENDAR_TIME_COL_WIDTH + safeIdx * CALENDAR_DAY_COL_WIDTH);
+            // The sticky time column overlays the left edge, so scrolling by whole day
+            // columns lands today right beside it rather than half under it.
+            const target = Math.max(0, safeIdx * CALENDAR_DAY_COL_WIDTH);
             elNow.scrollLeft = target;
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab, calendarDays]);
 
+    const doctorName = doctor ? [doctor?.title, doctor?.full_name].filter(Boolean).join(' ') : '';
+
     return (
-        <div className="space-y-4">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="module" className="h-5 w-5 text-slate-700" />
-                    <div>
-                        <h2 className="text-xl font-semibold text-slate-900">Doctor Setup</h2>
-                        <p className="mt-0.5 text-sm text-slate-600">Profile, services, schedules and exceptions.</p>
-                    </div>
-                </div>
-                <Link to="/modules/doctors" className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back to Doctors</Link>
-            </div>
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
+                <Link to="/modules/doctors" className="font-medium text-blue-700 hover:text-blue-900">Doctors</Link>
+                <span className="mx-1.5" aria-hidden="true">/</span>
+                <span className="text-slate-700">{doctorName || 'Doctor setup'}</span>
+            </nav>
 
-            {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+            {error ? <Alert>{error}</Alert> : null}
 
-            {/* Doctor summary card */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                {loading ? (
-                    <div className="text-sm text-slate-600">Loading…</div>
-                ) : doctor ? (
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex items-start gap-4">
-                            {doctor.photo_url ? (
-                                <img src={doctor.photo_url} alt={doctor.full_name} className="h-16 w-14 rounded-xl border border-slate-200 object-cover" />
-                            ) : (
-                                <div className="flex h-16 w-14 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-2xl font-bold text-slate-400">
-                                    {(doctor.full_name || '?')[0]}
+            {/* Doctor header + section tabs */}
+            <section aria-label="Doctor" className="rounded-2xl border border-slate-200 bg-white">
+                <div className="px-5 py-4">
+                    {loading ? (
+                        <Spinner className="py-6" />
+                    ) : doctor ? (
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex min-w-0 items-center gap-4">
+                                {doctor.photo_url ? (
+                                    <img src={doctor.photo_url} alt={doctor.full_name} className="h-14 w-14 shrink-0 rounded-full border border-slate-200 object-cover" />
+                                ) : (
+                                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-800" aria-hidden="true">
+                                        {(doctor.full_name || '?')[0]}
+                                    </span>
+                                )}
+                                <div className="min-w-0">
+                                    <h1 className="truncate text-xl font-bold tracking-tight text-slate-900">{doctorName}</h1>
+                                    {doctor.specialization && <p className="mt-0.5 text-sm text-slate-600">{doctor.specialization}{doctor.qualification ? ` · ${doctor.qualification}` : ''}</p>}
+                                    <div className="mt-1.5"><StatusBadge status={doctor.status} /></div>
                                 </div>
-                            )}
-                            <div>
-                                <div className="text-lg font-semibold text-slate-900">{[doctor?.title, doctor?.full_name].filter(Boolean).join(' ')}</div>
-                                {doctor.specialization && <div className="mt-0.5 text-sm text-slate-500">{doctor.specialization}{doctor.qualification ? ` · ${doctor.qualification}` : ''}</div>}
-                                <div className="mt-1"><StatusBadge status={doctor.status} /></div>
                             </div>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                            {[
-                                { label: 'Services', ok: setup.has_services },
-                                { label: 'Schedule', ok: setup.has_schedules },
-                            ].map(({ label, ok }) => (
-                                <div key={label} className={`rounded-xl border px-3 py-2 ${ok ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                                    <div className={`text-xs font-semibold uppercase tracking-wide ${ok ? 'text-emerald-600' : 'text-amber-600'}`}>{label}</div>
-                                    <div className={`mt-0.5 text-sm font-semibold ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>{ok ? '✓ Ready' : '✗ Missing'}</div>
-                                </div>
-                            ))}
+                            <dl className="flex flex-wrap gap-2 text-sm">
+                                {[
+                                    { label: 'Services', ok: setup.has_services },
+                                    { label: 'Schedule', ok: setup.has_schedules },
+                                ].map(({ label, ok }) => (
+                                    <div key={label} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                                        <dt className="font-medium text-slate-700">{label}</dt>
+                                        <dd><Badge tone={ok ? 'green' : 'amber'}>{ok ? 'Ready' : 'Missing'}</Badge></dd>
+                                    </div>
+                                ))}
+                            </dl>
                         </div>
-                    </div>
-                ) : (
-                    <div className="text-sm text-slate-600">Doctor not found.</div>
-                )}
-            </div>
+                    ) : (
+                        <p className="text-sm text-slate-600">Doctor not found.</p>
+                    )}
+                </div>
 
-            {/* Tabs */}
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                {[
-                    { key: 'calendar',     label: 'Calendar' },
-                    { key: 'availability', label: 'Availability' },
-                    { key: 'summary',      label: 'Summary' },
-                    { key: 'profile',      label: 'Profile' },
-                    { key: 'services',     label: 'Services' },
-                ].filter(({ key }) => allowedTabs.has(key)).map(({ key, label }) => (
-                    <button key={key} type="button" onClick={() => setTab(key)} className={tabButton(tab === key)}>
-                        {label}
-                    </button>
-                ))}
-            </div>
+                <div role="tablist" aria-label="Doctor sections" className="flex gap-1 overflow-x-auto border-t border-slate-100 px-3">
+                    {[
+                        { key: 'calendar',     label: 'Calendar' },
+                        { key: 'availability', label: 'Availability' },
+                        { key: 'summary',      label: 'Summary' },
+                        { key: 'profile',      label: 'Profile' },
+                        { key: 'services',     label: 'Services' },
+                    ].filter(({ key }) => allowedTabs.has(key)).map(({ key, label }) => (
+                        <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={tabButton(tab === key)}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </section>
 
             {/* ── Summary Tab ── */}
             {tab === 'summary' && (
-                <div className="grid gap-4 lg:grid-cols-2">
-                    {/* Services summary */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
-                        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Services</h3>
+                <div className="space-y-5">
+                    <Card title="Services" bodyClassName={(data?.doctor?.services || []).length ? 'p-5' : ''}>
                         {!(data?.doctor?.services || []).length ? (
-                            <p className="text-sm text-slate-400">No services assigned.</p>
+                            <EmptyState icon="module" title="No services assigned" />
                         ) : (
                             <div className="flex flex-wrap gap-2">
                                 {data.doctor.services.map((s) => (
-                                    <span key={s.id} className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                                    <span key={s.id} className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
                                         {s.name || `#${s.id}`}
                                     </span>
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </Card>
 
-                    {/* Schedules summary */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
-                        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Weekly Schedule</h3>
+                    <Card title="Weekly schedule" bodyClassName={Object.keys(schedulesByDay).length === 0 ? '' : 'p-5'}>
                         {Object.keys(schedulesByDay).length === 0 ? (
-                            <p className="text-sm text-slate-400">No schedules yet.</p>
+                            <EmptyState icon="calendar" title="No schedules yet" />
                         ) : (
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 {Object.entries(schedulesByDay).sort(([a], [b]) => Number(a) - Number(b)).map(([day, daySchedules]) => (
                                     <div key={day} className="rounded-xl border border-slate-200 p-3">
-                                        <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{dayLabel(day)}</div>
+                                        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">{dayLabel(day)}</div>
                                         <div className="space-y-1.5">
                                             {daySchedules.map((s) => (
-                                                <div key={s.id} className={`rounded-lg border px-2.5 py-1.5 text-xs ${modeChipClass(s.consultation_mode)}`}>
-                                                    <span className="font-semibold">{fmtTime(s.start_time)}–{fmtTime(s.end_time)}</span>
-                                                    <span className="ml-2 opacity-75">{modeLabel(s.consultation_mode)}</span>
-                                                    {!s.is_active && <span className="ml-1 opacity-60">(inactive)</span>}
+                                                <div key={s.id} className="flex flex-wrap items-center gap-2 text-sm">
+                                                    <span className="font-semibold tabular-nums text-slate-900">{fmtTime(s.start_time)}–{fmtTime(s.end_time)}</span>
+                                                    <Badge tone={modeTone(s.consultation_mode)}>{modeLabel(s.consultation_mode)}</Badge>
+                                                    {!s.is_active && <Badge>Inactive</Badge>}
                                                 </div>
                                             ))}
                                         </div>
@@ -1059,34 +1062,32 @@ function DoctorSetupFlowPageInner() {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </Card>
                 </div>
             )}
 
             {/* ── Profile Tab ── */}
             {tab === 'profile' && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-lg font-semibold">Profile</h3>
-                        {canEditDoctorProfile && (
-                            <button
-                                type="button"
-                                onClick={saveProfile}
-                                disabled={savingProfile}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                            >
-                                {savingProfile ? 'Saving…' : 'Save Changes'}
-                            </button>
-                        )}
-                    </div>
-
+                <Card
+                    title="Profile"
+                    actions={canEditDoctorProfile ? (
+                        <button
+                            type="button"
+                            onClick={saveProfile}
+                            disabled={savingProfile}
+                            className={btn.primary}
+                        >
+                            {savingProfile ? 'Saving…' : 'Save changes'}
+                        </button>
+                    ) : null}
+                >
                     {/* Photo */}
-                    <div className="mt-4 mb-5 flex items-center gap-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-5 flex flex-wrap items-center gap-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <div className="relative h-28 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
                             {photoPreview ? (
-                                <img src={photoPreview} alt="profile" className="h-full w-full object-cover" />
+                                <img src={photoPreview} alt="Doctor photo" className="h-full w-full object-cover" />
                             ) : (
-                                <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-slate-400">
+                                <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-slate-500">
                                     <AppIcon name="user" className="h-6 w-6" />
                                     <span className="text-xs">No photo</span>
                                 </div>
@@ -1094,21 +1095,21 @@ function DoctorSetupFlowPageInner() {
                         </div>
                         {canEditDoctorProfile && (
                             <div>
-                                <p className="text-sm font-medium text-slate-700">Doctor Photo</p>
-                                <p className="mt-0.5 text-xs text-slate-500">Portrait or square · JPG, PNG, WebP · max 2 MB</p>
-                                <div className="mt-2 flex gap-2">
+                                <p className="text-sm font-medium text-slate-900">Doctor photo</p>
+                                <p className="mt-0.5 text-sm text-slate-600">Portrait or square · JPG, PNG, WebP · max 2 MB</p>
+                                <div className="mt-3 flex gap-2">
                                     <button
                                         type="button"
                                         onClick={() => photoInputRef.current?.click()}
-                                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                        className={btn.secondary}
                                     >
-                                        {photoPreview ? 'Change Photo' : 'Upload Photo'}
+                                        {photoPreview ? 'Change photo' : 'Upload photo'}
                                     </button>
                                     {photoPreview && (
                                         <button
                                             type="button"
                                             onClick={() => { setPhotoFile(null); setPhotoPreview(''); setProfileDraft((p) => ({ ...p, photo_url: '' })); }}
-                                            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                                            className={btn.danger}
                                         >
                                             Remove
                                         </button>
@@ -1120,126 +1121,123 @@ function DoctorSetupFlowPageInner() {
                     </div>
 
                     {roleKind === 'doctor' ? (
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <dl className="grid gap-4 sm:grid-cols-2">
                             {[
                                 { label: 'Title',               value: profileDraft.title },
-                                { label: 'Doctor Name',         value: profileDraft.full_name },
+                                { label: 'Doctor name',         value: profileDraft.full_name },
                                 { label: 'Specialization',      value: profileDraft.specialization },
                                 { label: 'Qualification',       value: profileDraft.qualification },
-                                { label: 'Experience Years',    value: profileDraft.experience_years },
+                                { label: 'Experience (years)',  value: profileDraft.experience_years },
                                 { label: 'Gender',              value: profileDraft.gender },
                                 { label: 'Phone',               value: profileDraft.phone },
                                 { label: 'Email',               value: profileDraft.email },
-                                { label: 'Consultation Fee (₹)',value: profileDraft.consultation_fee },
-                                { label: 'Follow-up Fee (₹)',   value: profileDraft.followup_fee },
-                                { label: 'Slot Duration (min)', value: profileDraft.slot_duration_minutes },
-                                { label: 'Buffer Time (min)',   value: profileDraft.buffer_time_minutes },
+                                { label: 'Consultation fee (₹)',value: profileDraft.consultation_fee },
+                                { label: 'Follow-up fee (₹)',   value: profileDraft.followup_fee },
+                                { label: 'Slot duration (min)', value: profileDraft.slot_duration_minutes },
+                                { label: 'Buffer time (min)',   value: profileDraft.buffer_time_minutes },
                                 { label: 'Status',              value: profileDraft.status },
                             ].map(({ label, value }) => (
-                                <div key={label} className="space-y-1">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-                                    <p className="text-sm text-slate-900">{value !== '' && value != null ? String(value) : '—'}</p>
+                                <div key={label}>
+                                    <dt className="text-xs font-medium text-slate-600">{label}</dt>
+                                    <dd className="mt-0.5 text-sm text-slate-900">{value !== '' && value != null ? String(value) : '—'}</dd>
                                 </div>
                             ))}
-                        </div>
+                        </dl>
                     ) : (
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Title</label>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <label className="block">
+                                <span className={labelCls}>Title</span>
                                 <select className={inputBase} value={profileDraft.title} onChange={(e) => setProfileDraft((p) => ({ ...p, title: e.target.value }))}>
                                     <option value="Dr.">Dr.</option>
                                     <option value="Prof.">Prof.</option>
                                     <option value="Mr.">Mr.</option>
                                     <option value="Ms.">Ms.</option>
                                 </select>
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Doctor Name</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Doctor name</span>
                                 <input className={inputBase} value={profileDraft.full_name} onChange={(e) => setProfileDraft((p) => ({ ...p, full_name: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Specialization</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Specialization</span>
                                 <input className={inputBase} value={profileDraft.specialization} onChange={(e) => setProfileDraft((p) => ({ ...p, specialization: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Qualification</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Qualification</span>
                                 <input className={inputBase} value={profileDraft.qualification} onChange={(e) => setProfileDraft((p) => ({ ...p, qualification: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Experience Years</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Experience (years)</span>
                                 <input className={inputBase} type="number" value={profileDraft.experience_years} onChange={(e) => setProfileDraft((p) => ({ ...p, experience_years: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Gender</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Gender</span>
                                 <select className={inputBase} value={profileDraft.gender} onChange={(e) => setProfileDraft((p) => ({ ...p, gender: e.target.value }))}>
                                     <option value="">Select…</option>
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
                                     <option value="other">Other</option>
                                 </select>
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Phone</span>
                                 <input className={inputBase} value={profileDraft.phone} onChange={(e) => setProfileDraft((p) => ({ ...p, phone: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Email</span>
                                 <input className={inputBase} type="email" value={profileDraft.email} onChange={(e) => setProfileDraft((p) => ({ ...p, email: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Consultation Fee (₹)</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Consultation fee (₹)</span>
                                 <input className={inputBase} type="number" value={profileDraft.consultation_fee} onChange={(e) => setProfileDraft((p) => ({ ...p, consultation_fee: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Follow-up Fee (₹)</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Follow-up fee (₹)</span>
                                 <input className={inputBase} type="number" value={profileDraft.followup_fee} onChange={(e) => setProfileDraft((p) => ({ ...p, followup_fee: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Slot Duration (min)</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Slot duration (min)</span>
                                 <input className={inputBase} type="number" value={profileDraft.slot_duration_minutes} onChange={(e) => setProfileDraft((p) => ({ ...p, slot_duration_minutes: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Buffer Time (min)</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Buffer time (min)</span>
                                 <input className={inputBase} type="number" value={profileDraft.buffer_time_minutes} onChange={(e) => setProfileDraft((p) => ({ ...p, buffer_time_minutes: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Status</label>
+                            </label>
+                            <label className="block">
+                                <span className={labelCls}>Status</span>
                                 <select className={inputBase} value={profileDraft.status} onChange={(e) => setProfileDraft((p) => ({ ...p, status: e.target.value }))}>
                                     <option value="active">Active</option>
                                     <option value="inactive">Inactive</option>
                                 </select>
-                            </div>
+                            </label>
                         </div>
                     )}
-                </div>
+                </Card>
             )}
 
             {/* ── Services Tab ── */}
             {tab === 'services' && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                        <div>
-                            <h3 className="text-lg font-semibold">Service Assignment</h3>
-                            <p className="mt-0.5 text-sm text-slate-500">
-                                {mappingDraft.service_ids.length
-                                    ? `${mappingDraft.service_ids.length} service${mappingDraft.service_ids.length > 1 ? 's' : ''} selected`
-                                    : 'No services selected'}
-                            </p>
-                        </div>
+                <Card
+                    title="Service assignment"
+                    description={mappingDraft.service_ids.length
+                        ? `${mappingDraft.service_ids.length} service${mappingDraft.service_ids.length > 1 ? 's' : ''} selected`
+                        : 'No services selected'}
+                    actions={(
                         <button
                             type="button"
                             onClick={saveMappings}
                             disabled={savingMappings}
-                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            className={btn.primary}
                         >
                             {savingMappings ? 'Saving…' : 'Save'}
                         </button>
-                    </div>
-
+                    )}
+                    bodyClassName={services.length ? 'p-5' : ''}
+                >
                     {!services.length ? (
-                        <p className="mt-4 text-sm text-slate-400">No services available.</p>
+                        <EmptyState icon="module" title="No services available" />
                     ) : (
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                             {services.map((s) => {
                                 const selected = mappingDraft.service_ids.includes(String(s.id));
                                 return (
@@ -1247,24 +1245,25 @@ function DoctorSetupFlowPageInner() {
                                         key={s.id}
                                         type="button"
                                         onClick={() => toggleService(s.id)}
+                                        aria-pressed={selected}
                                         className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
                                             selected
-                                                ? 'border-slate-700 bg-slate-900 text-white'
-                                                : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50'
+                                                ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600'
+                                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                                         }`}
                                     >
-                                        <div className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-xs ${
-                                            selected ? 'border-white bg-white text-slate-900' : 'border-slate-300 bg-white'
-                                        }`}>
-                                            {selected && '✓'}
-                                        </div>
+                                        <span className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border ${
+                                            selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'
+                                        }`} aria-hidden="true">
+                                            {selected && <AppIcon name="check" className="h-3.5 w-3.5" />}
+                                        </span>
                                         <div className="min-w-0">
-                                            <div className="text-sm font-medium leading-tight">{s.name}</div>
+                                            <div className="text-sm font-medium leading-tight text-slate-900">{s.name}</div>
                                             {s.description && (
-                                                <div className={`mt-0.5 truncate text-xs ${selected ? 'text-slate-300' : 'text-slate-500'}`}>{s.description}</div>
+                                                <div className="mt-0.5 truncate text-xs text-slate-600">{s.description}</div>
                                             )}
                                             {s.price != null && (
-                                                <div className={`mt-1 text-xs font-semibold ${selected ? 'text-slate-200' : 'text-slate-600'}`}>₹{s.price}</div>
+                                                <div className="mt-1 text-xs font-semibold text-slate-700">₹{s.price}</div>
                                             )}
                                         </div>
                                     </button>
@@ -1272,72 +1271,63 @@ function DoctorSetupFlowPageInner() {
                             })}
                         </div>
                     )}
-                </div>
+                </Card>
             )}
 
             {/* ── Schedules Tab ── */}
             {tab === 'availability' && (
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid items-start gap-5 xl:grid-cols-2">
 
                     {/* ── LEFT: Schedules ── */}
-                    <div className="space-y-3">
+                    <div className="space-y-5">
                         {/* Add schedule form */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <div className="flex items-center justify-between gap-2">
-                                <div>
-                                    <h3 className="text-lg font-semibold">Add Schedule</h3>
-                                    <p className="mt-0.5 text-xs text-slate-500">Recurring weekly working hours per day</p>
-                                </div>
-                                {canAddSchedule ? (
-                                    <button
-                                        type="button"
-                                        onClick={addSchedule}
-                                        disabled={scheduleSaving}
-                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                    >
-                                        {scheduleSaving ? 'Saving…' : 'Add'}
-                                    </button>
-                                ) : null}
-                            </div>
-
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Day</label>
+                        <Card
+                            title="Add schedule"
+                            description="Recurring weekly working hours per day."
+                            actions={canAddSchedule ? (
+                                <button type="button" onClick={addSchedule} disabled={scheduleSaving} className={btn.primary}>
+                                    {scheduleSaving ? 'Saving…' : 'Add'}
+                                </button>
+                            ) : null}
+                        >
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                    <span className={labelCls}>Day</span>
                                     <select className={inputBase} value={scheduleDraft.day_of_week} onChange={(e) => setScheduleDraft((p) => ({ ...p, day_of_week: e.target.value }))}>
                                         {DAY_NAMES.map((name, i) => <option key={i} value={String(i)}>{name}</option>)}
                                     </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Start Time</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Start time</span>
                                     <input type="time" className={inputBase} value={scheduleDraft.start_time} onChange={(e) => setScheduleDraft((p) => ({ ...p, start_time: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">End Time</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>End time</span>
                                     <input type="time" className={inputBase} value={scheduleDraft.end_time} onChange={(e) => setScheduleDraft((p) => ({ ...p, end_time: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Mode</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Mode</span>
                                     <select className={inputBase} value={scheduleDraft.consultation_mode} onChange={(e) => setScheduleDraft((p) => ({ ...p, consultation_mode: e.target.value }))}>
-                                        <option value="in_person">Walk-in (In Person)</option>
+                                        <option value="in_person">Walk-in (in person)</option>
                                         <option value="video">Video</option>
                                         <option value="both">Both</option>
                                     </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Slot Duration (min)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Slot duration (min)</span>
                                     <input type="number" className={inputBase} placeholder={`Default: ${data?.doctor?.slot_duration_minutes ?? 15}`} value={scheduleDraft.slot_duration_minutes} onChange={(e) => setScheduleDraft((p) => ({ ...p, slot_duration_minutes: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Buffer Time (min)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Buffer time (min)</span>
                                     <input type="number" className={inputBase} placeholder={`Default: ${data?.doctor?.buffer_time_minutes ?? 0}`} value={scheduleDraft.buffer_time_minutes} onChange={(e) => setScheduleDraft((p) => ({ ...p, buffer_time_minutes: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Max Patients (optional)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Max patients (optional)</span>
                                     <input type="number" className={inputBase} value={scheduleDraft.max_patients} onChange={(e) => setScheduleDraft((p) => ({ ...p, max_patients: e.target.value }))} />
-                                </div>
+                                </label>
                                 <div className="flex items-end">
-                                    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                                        <input type="checkbox" checked={Boolean(scheduleDraft.is_active)} onChange={(e) => setScheduleDraft((p) => ({ ...p, is_active: e.target.checked }))} />
+                                    <label className="inline-flex h-10 cursor-pointer items-center gap-2 text-sm font-medium text-slate-900">
+                                        <input type="checkbox" className={CHECKBOX} checked={Boolean(scheduleDraft.is_active)} onChange={(e) => setScheduleDraft((p) => ({ ...p, is_active: e.target.checked }))} />
                                         Active
                                     </label>
                                 </div>
@@ -1345,59 +1335,59 @@ function DoctorSetupFlowPageInner() {
 
                             {/* Slot preview */}
                             {scheduleDraft.start_time && scheduleDraft.end_time && (scheduleDraft.slot_duration_minutes || profileDraft.slot_duration_minutes) && (
-                                <div className="mt-3">
-                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Slot Preview</p>
+                                <div className="mt-5 border-t border-slate-100 pt-4">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Slot preview</p>
                                     <div className="flex flex-wrap gap-1.5">
                                         {generateSlots(
                                             scheduleDraft.start_time,
                                             scheduleDraft.end_time,
                                             Number(scheduleDraft.slot_duration_minutes || profileDraft.slot_duration_minutes)
                                         ).map((slot) => (
-                                            <span key={slot} className={`rounded-lg border px-2 py-1 text-xs font-medium ${modeChipClass(scheduleDraft.consultation_mode)}`}>
+                                            <span key={slot} className={`rounded-lg border px-2 py-1 text-xs font-medium tabular-nums ${modeChipClass(scheduleDraft.consultation_mode)}`}>
                                                 {fmtTime(slot)}
                                             </span>
                                         ))}
                                     </div>
                                 </div>
                             )}
-                        </div>
+                        </Card>
 
                         {/* Current schedules grouped by day */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <h3 className="mb-4 text-lg font-semibold">Current Schedules</h3>
+                        <Card title="Current schedules" bodyClassName={Object.keys(schedulesByDay).length === 0 ? '' : 'p-5'}>
                             {Object.keys(schedulesByDay).length === 0 ? (
-                                <p className="text-sm text-slate-400">No schedules yet.</p>
+                                <EmptyState icon="calendar" title="No schedules yet" />
                             ) : (
-                                <div className="space-y-4">
+                                <div className="space-y-5">
                                     {Object.entries(schedulesByDay)
                                         .sort(([a], [b]) => Number(a) - Number(b))
                                         .map(([day, daySchedules]) => {
                                             const slotDur = Number(profileDraft.slot_duration_minutes) || 0;
                                             return (
                                                 <div key={day}>
-                                                    <div className="mb-2 flex items-center gap-2">
-                                                        <span className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-bold text-white">{dayLabel(day)}</span>
+                                                    <div className="mb-2 flex items-center gap-3">
+                                                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{dayLabel(day)}</span>
+                                                        <div className="h-px flex-1 bg-slate-100" />
                                                     </div>
                                                     <div className="space-y-2">
                                                         {daySchedules.map((s) => {
                                                             const effectiveDur = s.slot_duration_minutes || slotDur;
                                                             const slots = generateSlots(s.start_time, s.end_time, effectiveDur);
                                                             return (
-                                                                <div key={s.id} className={`rounded-xl border p-3 ${modeChipClass(s.consultation_mode)}`}>
-                                                                    <div className="flex items-center justify-between gap-2">
+                                                                <div key={s.id} className="rounded-xl border border-slate-200 p-3">
+                                                                    <div className="flex flex-wrap items-center justify-between gap-2">
                                                                         <div className="flex flex-wrap items-center gap-2">
-                                                                            <span className="font-semibold text-sm">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</span>
-                                                                            <span className="rounded-full border px-2 py-0.5 text-xs font-medium opacity-80">{modeLabel(s.consultation_mode)}</span>
-                                                                            {!s.is_active && <span className="text-xs opacity-60">(inactive)</span>}
+                                                                            <span className="text-sm font-semibold tabular-nums text-slate-900">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</span>
+                                                                            <Badge tone={modeTone(s.consultation_mode)}>{modeLabel(s.consultation_mode)}</Badge>
+                                                                            {!s.is_active && <Badge>Inactive</Badge>}
                                                                         </div>
                                                                         {canRemoveSchedule ? (
-                                                                            <button type="button" onClick={() => removeSchedule(s.id)} className="rounded-lg border border-current px-2 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                                            <button type="button" onClick={() => removeSchedule(s.id)} className={REMOVE_BTN}>Remove</button>
                                                                         ) : null}
                                                                     </div>
                                                                     {slots.length > 0 && (
                                                                         <div className="mt-2 flex flex-wrap gap-1">
                                                                             {slots.map((slot) => (
-                                                                                <span key={slot} className="rounded border border-current bg-white/40 px-1.5 py-0.5 text-xs">{fmtTime(slot)}</span>
+                                                                                <span key={slot} className={`rounded-md border px-1.5 py-0.5 text-xs tabular-nums ${modeChipClass(s.consultation_mode)}`}>{fmtTime(slot)}</span>
                                                                             ))}
                                                                         </div>
                                                                     )}
@@ -1410,103 +1400,83 @@ function DoctorSetupFlowPageInner() {
                                         })}
                                 </div>
                             )}
-                        </div>
+                        </Card>
                     </div>
 
                     {/* ── RIGHT: Exceptions ── */}
-                    <div className="space-y-3">
+                    <div className="space-y-5">
                         {/* Add exception form */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <div className="flex items-center justify-between gap-2">
-                                <div>
-                                    <h3 className="text-lg font-semibold">Add Exception</h3>
-                                    <p className="mt-0.5 text-xs text-slate-500">One-off overrides: leave, block or special hours</p>
-                                </div>
-                                {canAddSchedule ? (
-                                    <button
-                                        type="button"
-                                        onClick={addException}
-                                        disabled={exceptionSaving}
-                                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                    >
-                                        {exceptionSaving ? 'Saving…' : 'Add'}
-                                    </button>
-                                ) : null}
-                            </div>
-
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date</label>
+                        <Card
+                            title="Add exception"
+                            description="One-off overrides: leave, block or special hours."
+                            actions={canAddSchedule ? (
+                                <button type="button" onClick={addException} disabled={exceptionSaving} className={btn.primary}>
+                                    {exceptionSaving ? 'Saving…' : 'Add'}
+                                </button>
+                            ) : null}
+                        >
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                    <span className={labelCls}>Date</span>
                                     <input type="date" className={inputBase} value={exceptionDraft.exception_date} onChange={(e) => setExceptionDraft((p) => ({ ...p, exception_date: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Type</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Type</span>
                                     <select className={inputBase} value={exceptionDraft.type} onChange={(e) => setExceptionDraft((p) => ({ ...p, type: e.target.value }))}>
-                                        <option value="leave">Leave (Full Day Off)</option>
+                                        <option value="leave">Leave (full day off)</option>
                                         <option value="blocked">Blocked</option>
-                                        <option value="special_hours">Special Hours</option>
+                                        <option value="special_hours">Special hours</option>
                                     </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reason (optional)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Reason (optional)</span>
                                     <input className={inputBase} value={exceptionDraft.reason} onChange={(e) => setExceptionDraft((p) => ({ ...p, reason: e.target.value }))} placeholder="e.g. Public holiday" />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Start Time <span className="font-normal normal-case text-slate-400">(partial day)</span>
-                                    </label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Start time <span className="font-normal text-slate-500">(partial day)</span></span>
                                     <input type="time" className={inputBase} value={exceptionDraft.start_time} onChange={(e) => setExceptionDraft((p) => ({ ...p, start_time: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        End Time <span className="font-normal normal-case text-slate-400">(partial day)</span>
-                                    </label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>End time <span className="font-normal text-slate-500">(partial day)</span></span>
                                     <input type="time" className={inputBase} value={exceptionDraft.end_time} onChange={(e) => setExceptionDraft((p) => ({ ...p, end_time: e.target.value }))} />
-                                </div>
+                                </label>
                             </div>
-                        </div>
+                        </Card>
 
                         {/* Current exceptions */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <h3 className="mb-4 text-lg font-semibold">Current Exceptions</h3>
+                        <Card title="Current exceptions" bodyClassName="">
                             {!(data?.doctor?.exceptions || []).length ? (
-                                <p className="text-sm text-slate-400">No exceptions.</p>
+                                <EmptyState icon="calendar" title="No exceptions" />
                             ) : (
-                                <div className="space-y-2">
+                                <ul className="divide-y divide-slate-100">
                                     {(data.doctor.exceptions).map((ex) => {
-                                        const typeColors = {
-                                            leave: 'border-red-200 bg-red-50 text-red-800',
-                                            blocked: 'border-orange-200 bg-orange-50 text-orange-800',
-                                            special_hours: 'border-blue-200 bg-blue-50 text-blue-800',
-                                        };
+                                        const typeTone = { leave: 'red', blocked: 'amber', special_hours: 'blue' };
                                         const typeLabel = {
                                             leave: 'Leave',
                                             blocked: 'Blocked',
-                                            special_hours: 'Special Hours',
+                                            special_hours: 'Special hours',
                                         };
                                         return (
-                                            <div key={ex.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 ${typeColors[ex.type] || 'border-slate-200 bg-slate-50 text-slate-800'}`}>
-                                                <div className="flex flex-wrap items-center gap-3">
-                                                    <div>
-                                                        <span className="font-semibold text-sm">{String(ex.exception_date).slice(0, 10)}</span>
-                                                        <span className="ml-2 rounded-full border border-current bg-white/50 px-2 py-0.5 text-xs font-medium">{typeLabel[ex.type] || ex.type}</span>
-                                                    </div>
+                                            <li key={ex.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                                                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                                                    <span className="text-sm font-semibold tabular-nums text-slate-900">{String(ex.exception_date).slice(0, 10)}</span>
+                                                    <Badge tone={typeTone[ex.type] || 'slate'}>{typeLabel[ex.type] || ex.type}</Badge>
                                                     {ex.start_time && ex.end_time && (
-                                                        <span className="text-xs">
+                                                        <span className="text-sm tabular-nums text-slate-700">
                                                             {fmtTime(ex.start_time)} – {fmtTime(ex.end_time)}
                                                         </span>
                                                     )}
-                                                    {ex.reason && <span className="text-xs italic opacity-70">"{ex.reason}"</span>}
+                                                    {ex.reason && <span className="text-sm text-slate-600">{ex.reason}</span>}
                                                 </div>
                                                 {canRemoveSchedule ? (
-                                                    <button type="button" onClick={() => removeException(ex.id)} className="rounded-lg border border-current px-2.5 py-1 text-xs opacity-60 hover:opacity-100">Remove</button>
+                                                    <button type="button" onClick={() => removeException(ex.id)} className={REMOVE_BTN}>Remove</button>
                                                 ) : null}
-                                            </div>
+                                            </li>
                                         );
                                     })}
-                                </div>
+                                </ul>
                             )}
-                        </div>
+                        </Card>
                     </div>
 
                 </div>
@@ -1514,36 +1484,29 @@ function DoctorSetupFlowPageInner() {
 
             {/* ── Calendar Tab ── */}
             {tab === 'calendar' && (
-                <div className="space-y-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <h3 className="text-lg font-semibold">Calendar</h3>
-                                <p className="mt-0.5 text-sm text-slate-500">Click an available slot to book · click an appointment to view detail · click empty space to add a schedule or exception.</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-4 grid gap-3 md:grid-cols-2">
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Dates</label>
-                                <div className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
+                <div className="space-y-5">
+                    <Card
+                        title="Calendar"
+                        description="Click an available slot to book · click an appointment to view detail · click empty space to add a schedule or exception."
+                    >
+                        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                                <dt className="text-slate-600">Dates</dt>
+                                <dd className="font-medium tabular-nums text-slate-900">
                                     {toYmd(calendarRangeStart)} → {toYmd(addDays(calendarRangeStart, calendarVisibleDays - 1))}
-                                </div>
+                                </dd>
                             </div>
-
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Slot Step</label>
-                                <div className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
-                                    {effectiveSlotStep} min
-                                </div>
+                            <div className="flex items-center gap-2">
+                                <dt className="text-slate-600">Slot step</dt>
+                                <dd className="font-medium text-slate-900">{effectiveSlotStep} min</dd>
                             </div>
-                        </div>
+                            <div className="flex items-center gap-2">
+                                <dt className="text-slate-600">Future limit</dt>
+                                <dd className="font-medium text-slate-900">{calendarMaxAdvanceDays} days (max date: {toYmd(maxAllowedDate)})</dd>
+                            </div>
+                        </dl>
 
-                        <div className="mt-3 text-xs text-slate-500">
-                            Future limit: {calendarMaxAdvanceDays} days (max date: {toYmd(maxAllowedDate)})
-                        </div>
-
-{calendarError ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{calendarError}</div> : null}
+                        {calendarError ? <div className="mt-4"><Alert>{calendarError}</Alert></div> : null}
 
                         {(() => {
                             const pxPerMin = 1.5;
@@ -1564,8 +1527,8 @@ function DoctorSetupFlowPageInner() {
                             return (
                                 <>
                                 {/* Legend */}
-                                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Legend</span>
+                                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-700">
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Legend</span>
                                     {[
                                         { cls: 'bg-indigo-50 border border-indigo-300', label: 'Scheduled hours' },
                                         { cls: 'bg-purple-50 border border-purple-300', label: 'Special hours' },
@@ -1585,7 +1548,7 @@ function DoctorSetupFlowPageInner() {
                                     ))}
                                 </div>
 
-                                <div className="mt-4 rounded-2xl border border-slate-200 overflow-hidden">
+                                <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
                                     <div ref={calendarScrollRef} onScroll={handleCalendarScroll} className="max-h-[72vh] overflow-auto bg-white">
                                         {/* Single unified grid — header cells in row 1, body cells in row 2.
                                             Keeping header and body in ONE grid means sticky top-0 header cells
@@ -1595,7 +1558,7 @@ function DoctorSetupFlowPageInner() {
                                         <div className="grid" style={{ gridTemplateColumns: gridCols }}>
 
                                             {/* ── Row 1: header cells ── */}
-                                            <div className="sticky left-0 top-0 z-30 border-b border-r border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Time</div>
+                                            <div className="sticky left-0 top-0 z-30 border-b border-r border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">Time</div>
                                             {calendarDays.map((d) => {
                                                 const ymd = d.ymd;
                                                 const availSlots = calendarAvailSlotCountByDate[ymd] || 0;
@@ -1606,21 +1569,21 @@ function DoctorSetupFlowPageInner() {
                                                 const hasSpecialHours = ex.some((e) => e.type === 'special_hours');
                                                 const isToday = ymd === todayYmd;
                                                 return (
-                                                    <div key={`hdr-${ymd}`} className={`sticky top-0 z-20 border-b border-l border-slate-200 px-3 py-2 ${isToday ? 'bg-indigo-50' : 'bg-slate-50'}`}>
-                                                        <div className={`text-sm font-semibold ${isToday ? 'text-indigo-700' : 'text-slate-900'}`}>
+                                                    <div key={`hdr-${ymd}`} className={`sticky top-0 z-20 border-b border-l border-slate-200 px-3 py-2 ${isToday ? 'bg-blue-50' : 'bg-slate-50'}`}>
+                                                        <div className={`text-sm font-semibold ${isToday ? 'text-blue-800' : 'text-slate-900'}`}>
                                                             {DAY_NAMES[d.date.getDay()]}
-                                                            {isToday && <span className="ml-1 text-[10px] font-bold uppercase tracking-wide text-indigo-400">Today</span>}
-                                                            <span className="ml-1 font-normal text-slate-500">{ymd}</span>
+                                                            {isToday && <span className="ml-1.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">Today</span>}
+                                                            <span className="ml-1.5 font-normal tabular-nums text-slate-600">{ymd}</span>
                                                         </div>
                                                         <div className="mt-0.5 text-xs">
                                                             {hasLeave ? (
-                                                                <span className="font-medium text-rose-600">Leave</span>
+                                                                <span className="font-medium text-rose-700">Leave</span>
                                                             ) : hasFullBlocked ? (
-                                                                <span className="font-medium text-orange-600">Blocked</span>
+                                                                <span className="font-medium text-orange-700">Blocked</span>
                                                             ) : hasSpecialHours ? (
-                                                                <span className="font-medium text-purple-600">Special hours</span>
+                                                                <span className="font-medium text-purple-700">Special hours</span>
                                                             ) : (
-                                                                <span className="text-slate-500">{apptCount} appt · {availSlots} slots</span>
+                                                                <span className="text-slate-600">{apptCount} appt · {availSlots} slots</span>
                                                             )}
                                                         </div>
                                                     </div>
@@ -1717,7 +1680,7 @@ function DoctorSetupFlowPageInner() {
                                                     };
 
                                                     return (
-                                                        <div key={ymd} onClick={handleColumnClick} className={`relative border-l border-slate-200 ${isToday ? 'bg-indigo-50/20' : 'bg-white'} ${!fullDayLeave && !fullDayBlocked ? 'cursor-pointer' : ''}`} style={{ height: `${heightPx}px` }}>
+                                                        <div key={ymd} onClick={handleColumnClick} className={`relative border-l border-slate-200 ${isToday ? 'bg-blue-50/30' : 'bg-white'} ${!fullDayLeave && !fullDayBlocked ? 'cursor-pointer' : ''}`} style={{ height: `${heightPx}px` }}>
                                                             {/* Grid lines */}
                                                             {ticks.map((m) => (
                                                                 <div
@@ -1892,7 +1855,7 @@ function DoctorSetupFlowPageInner() {
                                                                             </div>
                                                                         )}
                                                                         {h >= 42 && a.status && (
-                                                                            <div className="mt-0.5 text-[9px] font-medium uppercase tracking-wide opacity-75">
+                                                                            <div className="mt-0.5 text-[10px] font-medium capitalize opacity-90">
                                                                                 {String(a.status).replace(/_/g, ' ')}
                                                                             </div>
                                                                         )}
@@ -1913,7 +1876,7 @@ function DoctorSetupFlowPageInner() {
                                 </>
                             );
                         })()}
-                    </div>
+                    </Card>
                 </div>
             )}
 
@@ -1922,17 +1885,17 @@ function DoctorSetupFlowPageInner() {
             <>
                 {/* Backdrop */}
                 <div
-                    className="fixed inset-0 z-40 bg-black/30"
+                    className="fixed inset-0 z-50 bg-slate-950/50"
                     onClick={() => setAvailSheet({ open: false, mode: 'schedule' })}
                 />
                 {/* Panel */}
-                <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl">
-                    <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div role="dialog" aria-modal="true" aria-labelledby="avail-sheet-title" className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
                         <div>
-                            <h2 className="text-base font-semibold">
-                                {availSheet.mode === 'schedule' ? 'Add Schedule' : 'Add Exception'}
+                            <h2 id="avail-sheet-title" className="text-base font-semibold text-slate-900">
+                                {availSheet.mode === 'schedule' ? 'Add schedule' : 'Add exception'}
                             </h2>
-                            <p className="mt-0.5 text-xs text-slate-500">
+                            <p className="mt-0.5 text-sm text-slate-600">
                                 {availSheet.mode === 'schedule'
                                     ? 'Recurring weekly working hours'
                                     : 'One-off override: leave, block or special hours'}
@@ -1941,68 +1904,67 @@ function DoctorSetupFlowPageInner() {
                         <button
                             type="button"
                             onClick={() => setAvailSheet({ open: false, mode: 'schedule' })}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                            aria-label="Close"
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                         >
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            <AppIcon name="close" className="h-5 w-5" />
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-5 py-4">
+                    <div className="flex-1 overflow-y-auto p-5">
                         {availSheet.mode === 'schedule' ? (
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Day</label>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                    <span className={labelCls}>Day</span>
                                     <select className={inputBase} value={scheduleDraft.day_of_week} onChange={(e) => setScheduleDraft((p) => ({ ...p, day_of_week: e.target.value }))}>
                                         {DAY_NAMES.map((name, i) => <option key={i} value={String(i)}>{name}</option>)}
                                     </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Start Time</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Start time</span>
                                     <input type="time" className={inputBase} value={scheduleDraft.start_time} onChange={(e) => setScheduleDraft((p) => ({ ...p, start_time: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">End Time</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>End time</span>
                                     <input type="time" className={inputBase} value={scheduleDraft.end_time} onChange={(e) => setScheduleDraft((p) => ({ ...p, end_time: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Mode</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Mode</span>
                                     <select className={inputBase} value={scheduleDraft.consultation_mode} onChange={(e) => setScheduleDraft((p) => ({ ...p, consultation_mode: e.target.value }))}>
-                                        <option value="in_person">Walk-in (In Person)</option>
+                                        <option value="in_person">Walk-in (in person)</option>
                                         <option value="video">Video</option>
                                         <option value="both">Both</option>
                                     </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Slot Duration (min)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Slot duration (min)</span>
                                     <input type="number" className={inputBase} placeholder={`Default: ${data?.doctor?.slot_duration_minutes ?? 15}`} value={scheduleDraft.slot_duration_minutes} onChange={(e) => setScheduleDraft((p) => ({ ...p, slot_duration_minutes: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Buffer Time (min)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Buffer time (min)</span>
                                     <input type="number" className={inputBase} placeholder={`Default: ${data?.doctor?.buffer_time_minutes ?? 0}`} value={scheduleDraft.buffer_time_minutes} onChange={(e) => setScheduleDraft((p) => ({ ...p, buffer_time_minutes: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Max Patients (optional)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Max patients (optional)</span>
                                     <input type="number" className={inputBase} value={scheduleDraft.max_patients} onChange={(e) => setScheduleDraft((p) => ({ ...p, max_patients: e.target.value }))} />
-                                </div>
+                                </label>
                                 <div className="flex items-end sm:col-span-2">
-                                    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                                        <input type="checkbox" checked={Boolean(scheduleDraft.is_active)} onChange={(e) => setScheduleDraft((p) => ({ ...p, is_active: e.target.checked }))} />
+                                    <label className="inline-flex h-10 cursor-pointer items-center gap-2 text-sm font-medium text-slate-900">
+                                        <input type="checkbox" className={CHECKBOX} checked={Boolean(scheduleDraft.is_active)} onChange={(e) => setScheduleDraft((p) => ({ ...p, is_active: e.target.checked }))} />
                                         Active
                                     </label>
                                 </div>
                                 {/* Slot preview */}
                                 {scheduleDraft.start_time && scheduleDraft.end_time && (scheduleDraft.slot_duration_minutes || profileDraft.slot_duration_minutes) && (
-                                    <div className="sm:col-span-2">
-                                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Slot Preview</p>
+                                    <div className="border-t border-slate-100 pt-4 sm:col-span-2">
+                                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Slot preview</p>
                                         <div className="flex flex-wrap gap-1.5">
                                             {generateSlots(
                                                 scheduleDraft.start_time,
                                                 scheduleDraft.end_time,
                                                 Number(scheduleDraft.slot_duration_minutes || profileDraft.slot_duration_minutes)
                                             ).map((slot) => (
-                                                <span key={slot} className={`rounded-lg border px-2 py-1 text-xs font-medium ${modeChipClass(scheduleDraft.consultation_mode)}`}>
+                                                <span key={slot} className={`rounded-lg border px-2 py-1 text-xs font-medium tabular-nums ${modeChipClass(scheduleDraft.consultation_mode)}`}>
                                                     {fmtTime(slot)}
                                                 </span>
                                             ))}
@@ -2011,45 +1973,41 @@ function DoctorSetupFlowPageInner() {
                                 )}
                             </div>
                         ) : (
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date</label>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                    <span className={labelCls}>Date</span>
                                     <input type="date" className={inputBase} value={exceptionDraft.exception_date} onChange={(e) => setExceptionDraft((p) => ({ ...p, exception_date: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Type</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Type</span>
                                     <select className={inputBase} value={exceptionDraft.type} onChange={(e) => setExceptionDraft((p) => ({ ...p, type: e.target.value }))}>
-                                        <option value="leave">Leave (Full Day Off)</option>
+                                        <option value="leave">Leave (full day off)</option>
                                         <option value="blocked">Blocked</option>
-                                        <option value="special_hours">Special Hours</option>
+                                        <option value="special_hours">Special hours</option>
                                     </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reason (optional)</label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Reason (optional)</span>
                                     <input className={inputBase} value={exceptionDraft.reason} onChange={(e) => setExceptionDraft((p) => ({ ...p, reason: e.target.value }))} placeholder="e.g. Public holiday" />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Start Time <span className="font-normal normal-case text-slate-400">(partial day)</span>
-                                    </label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>Start time <span className="font-normal text-slate-500">(partial day)</span></span>
                                     <input type="time" className={inputBase} value={exceptionDraft.start_time} onChange={(e) => setExceptionDraft((p) => ({ ...p, start_time: e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        End Time <span className="font-normal normal-case text-slate-400">(partial day)</span>
-                                    </label>
+                                </label>
+                                <label className="block">
+                                    <span className={labelCls}>End time <span className="font-normal text-slate-500">(partial day)</span></span>
                                     <input type="time" className={inputBase} value={exceptionDraft.end_time} onChange={(e) => setExceptionDraft((p) => ({ ...p, end_time: e.target.value }))} />
-                                </div>
+                                </label>
                             </div>
                         )}
                     </div>
 
-                    <div className="border-t border-slate-200 px-5 py-4">
+                    <div className="border-t border-slate-100 px-5 py-4">
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setAvailSheet({ open: false, mode: 'schedule' })}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                className={btn.secondary}
                             >
                                 Cancel
                             </button>
@@ -2065,7 +2023,7 @@ function DoctorSetupFlowPageInner() {
                                         }
                                         setAvailSheet({ open: false, mode: 'schedule' });
                                     }}
-                                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    className={btn.primary}
                                 >
                                     {(availSheet.mode === 'schedule' ? scheduleSaving : exceptionSaving) ? 'Saving…' : 'Save'}
                                 </button>
@@ -2081,24 +2039,31 @@ function DoctorSetupFlowPageInner() {
             <>
                 {/* Backdrop */}
                 <div
-                    className="fixed inset-0 z-40 bg-black/40"
+                    className="fixed inset-0 z-50 bg-slate-950/50"
                     onClick={() => setApptConfirm({ open: false, date: '', time: '', endTime: '' })}
                 />
                 {/* Dialog */}
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
-                        <div className="px-6 pt-6 pb-2">
-                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
-                                <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                            </div>
-                            <h2 className="text-base font-semibold text-slate-900">Create Appointment?</h2>
-                            <p className="mt-1 text-sm text-slate-500">
+                <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div role="dialog" aria-modal="true" aria-labelledby="appt-confirm-title" className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                            <h2 id="appt-confirm-title" className="text-base font-semibold text-slate-900">Create appointment?</h2>
+                            <button
+                                type="button"
+                                aria-label="Close"
+                                onClick={() => setApptConfirm({ open: false, date: '', time: '', endTime: '' })}
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                            >
+                                <AppIcon name="close" className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="p-5">
+                            <p className="text-sm text-slate-600">
                                 Book a new appointment for the selected slot:
                             </p>
-                            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                                <p className="text-sm font-semibold text-emerald-900">
+                            <div className="mt-3 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                                <AppIcon name="calendar" className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
+                                <div>
+                                <p className="text-sm font-semibold text-slate-900">
                                     {(() => {
                                         try {
                                             const [y, m, d] = apptConfirm.date.split('-').map(Number);
@@ -2107,16 +2072,17 @@ function DoctorSetupFlowPageInner() {
                                         } catch { return apptConfirm.date; }
                                     })()}
                                 </p>
-                                <p className="mt-0.5 text-sm text-emerald-700">
+                                <p className="mt-0.5 text-sm tabular-nums text-slate-700">
                                     {fmtTime(apptConfirm.time)}{apptConfirm.endTime ? ` – ${fmtTime(apptConfirm.endTime)}` : ''}
                                 </p>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex justify-end gap-2 px-6 py-4">
+                        <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
                             <button
                                 type="button"
                                 onClick={() => setApptConfirm({ open: false, date: '', time: '', endTime: '' })}
-                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                className={btn.secondary}
                             >
                                 Cancel
                             </button>
@@ -2131,9 +2097,9 @@ function DoctorSetupFlowPageInner() {
                                     setApptConfirm({ open: false, date: '', time: '', endTime: '' });
                                     navigate(`/workflows/appointments?${params.toString()}`);
                                 }}
-                                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                                className={btn.primary}
                             >
-                                Create Appointment
+                                Create appointment
                             </button>
                         </div>
                     </div>

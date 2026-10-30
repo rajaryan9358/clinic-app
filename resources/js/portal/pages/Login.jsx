@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSession } from '../session';
-import { Button, Card, ErrorText } from '../components/ui';
+import { Button, Card, ErrorText, inputClass, labelClass } from '../components/ui';
 
 const RESEND_SECONDS = 60;
 
@@ -107,19 +107,36 @@ export default function Login() {
         return <Navigate to="/" replace />;
     }
 
+    const stepTitle = {
+        phone: 'Sign in',
+        code: 'Enter your code',
+        choose: 'Choose a profile',
+    }[step];
+    const stepHint = {
+        phone: "We'll send a 6-digit code to your WhatsApp.",
+        code: phone ? `Sent on WhatsApp to ${phone}.` : 'Sent on WhatsApp.',
+        choose: 'More than one profile uses this number.',
+    }[step];
+
     return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-            <div className="w-full max-w-md">
-                <div className="mb-6 text-center">
-                    <h1 className="text-2xl font-semibold text-slate-900">Patient Portal</h1>
-                    <p className="mt-1 text-sm text-slate-500">Sign in with your phone number</p>
+        <div className="flex min-h-screen flex-col bg-slate-50 px-4 py-10 sm:items-center sm:justify-center">
+            <div className="mx-auto w-full max-w-md">
+                <div className="mb-6">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--accent)] text-white" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <path d="M12 6v12M6 12h12" />
+                        </svg>
+                    </div>
+                    <p className="text-sm font-medium text-slate-600">Patient portal</p>
+                    <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">{stepTitle}</h1>
+                    <p className="mt-1 text-sm text-slate-600">{stepHint}</p>
                 </div>
 
-                <Card>
+                <Card className="p-5">
                     {step === 'phone' && (
                         <form onSubmit={submitPhone} className="space-y-4">
                             <div>
-                                <label htmlFor="phone" className="mb-1 block text-sm font-medium text-slate-700">
+                                <label htmlFor="phone" className={labelClass}>
                                     Phone number
                                 </label>
                                 <input
@@ -130,7 +147,7 @@ export default function Login() {
                                     placeholder="10-digit mobile number"
                                     value={phone}
                                     onChange={(e) => setPhone(e.target.value)}
-                                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                                    className={inputClass}
                                 />
                             </div>
                             <ErrorText>{error}</ErrorText>
@@ -143,7 +160,7 @@ export default function Login() {
                     {step === 'code' && (
                         <form onSubmit={(e) => submitCode(e)} className="space-y-4">
                             <div>
-                                <label htmlFor="code" className="mb-1 block text-sm font-medium text-slate-700">
+                                <label htmlFor="code" className={labelClass}>
                                     Enter the code sent on WhatsApp
                                 </label>
                                 <input
@@ -155,32 +172,34 @@ export default function Login() {
                                     placeholder="6-digit code"
                                     value={code}
                                     onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg tracking-widest focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                                    className={`${inputClass} text-center text-xl font-semibold tracking-[0.4em] tabular-nums placeholder:text-base placeholder:font-normal placeholder:tracking-normal`}
                                 />
                             </div>
                             <ErrorText>{error}</ErrorText>
                             <Button type="submit" loading={loading}>
                                 Verify &amp; sign in
                             </Button>
-                            <button
-                                type="button"
-                                onClick={resend}
-                                disabled={secondsLeft > 0 || loading}
-                                className="w-full text-center text-sm font-medium text-[var(--accent)] disabled:text-slate-400"
-                            >
-                                {secondsLeft > 0 ? `Resend code in ${secondsLeft}s` : 'Resend code'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setStep('phone');
-                                    setCode('');
-                                    setError('');
-                                }}
-                                className="w-full text-center text-sm text-slate-500"
-                            >
-                                Change phone number
-                            </button>
+                            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+                                <button
+                                    type="button"
+                                    onClick={resend}
+                                    disabled={secondsLeft > 0 || loading}
+                                    className="min-h-[44px] rounded-xl px-2 text-sm font-semibold text-[var(--accent)] hover:bg-slate-50 disabled:text-slate-500 disabled:hover:bg-transparent"
+                                >
+                                    {secondsLeft > 0 ? `Resend code in ${secondsLeft}s` : 'Resend code'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setStep('phone');
+                                        setCode('');
+                                        setError('');
+                                    }}
+                                    className="min-h-[44px] rounded-xl px-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Change phone number
+                                </button>
+                            </div>
                         </form>
                     )}
 
@@ -195,12 +214,13 @@ export default function Login() {
                                             type="button"
                                             disabled={loading}
                                             onClick={() => submitCode(null, choice.patient_id)}
-                                            className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
+                                            className="flex min-h-[56px] w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50 disabled:opacity-50"
                                         >
-                                            <span>
-                                                <span className="block text-sm font-medium text-slate-900">{choice.patient_name}</span>
-                                                <span className="block text-xs text-slate-500">{choice.clinic_name}</span>
+                                            <span className="min-w-0">
+                                                <span className="block truncate text-sm font-semibold text-slate-900">{choice.patient_name}</span>
+                                                <span className="block truncate text-sm text-slate-600">{choice.clinic_name}</span>
                                             </span>
+                                            <span aria-hidden="true" className="text-lg text-slate-400">&rsaquo;</span>
                                         </button>
                                     </li>
                                 ))}
@@ -208,6 +228,10 @@ export default function Login() {
                         </div>
                     )}
                 </Card>
+
+                <p className="mt-6 text-center text-xs text-slate-500">
+                    Your visits, prescriptions and bookings in one place.
+                </p>
             </div>
         </div>
     );

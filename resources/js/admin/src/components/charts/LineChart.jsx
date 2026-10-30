@@ -30,31 +30,37 @@ export default function LineChart({ title, subtitle, data = [], xKey = 'date', y
 
     if (!data?.length) {
         return (
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
-                {title && <h3 className="text-sm font-semibold text-gray-900">{title}</h3>}
-                <div className="mt-4 flex h-[120px] items-center justify-center text-sm text-gray-400">No data</div>
-            </div>
+            <section className="rounded-2xl border border-slate-200 bg-white">
+                {title && (
+                    <div className="border-b border-slate-100 px-5 py-4">
+                        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+                        {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
+                    </div>
+                )}
+                <div className="flex h-[120px] items-center justify-center p-5 text-sm text-slate-500">No data yet</div>
+            </section>
         );
     }
 
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-slate-200 bg-white">
             {(title || last) && (
-                <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                        {title && <h3 className="text-sm font-semibold text-gray-900">{title}</h3>}
-                        {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+                <div className={`flex items-start justify-between gap-4 ${title ? 'border-b border-slate-100 px-5 py-4' : 'px-5 pt-5'}`}>
+                    <div className="min-w-0">
+                        {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
+                        {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
                     </div>
                     {last && (
-                        <div className="text-right flex-shrink-0">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Latest</p>
-                            <p className="text-xl font-bold text-blue-600">{last.value}</p>
+                        <div className="flex-shrink-0 text-right">
+                            <p className="text-xs font-medium text-slate-600">Latest</p>
+                            <p className="text-xl font-bold text-slate-900 tabular-nums">{last.value}</p>
                         </div>
                     )}
                 </div>
             )}
 
-            <svg viewBox={`0 0 480 ${height}`} className="w-full" style={{ height }}>
+            <div className="p-5">
+            <svg viewBox={`0 0 480 ${height}`} className="w-full" style={{ height }} preserveAspectRatio="none" role="img" aria-label={title || 'Trend'}>
                 <defs>
                     <linearGradient id="lineChartGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#2563EB" stopOpacity="0.12" />
@@ -65,7 +71,7 @@ export default function LineChart({ title, subtitle, data = [], xKey = 'date', y
                 {/* Grid lines */}
                 {[0.25, 0.5, 0.75, 1].map((t) => {
                     const y = 8 + (1 - t) * (height - 16);
-                    return <line key={t} x1="4" y1={y} x2="476" y2={y} stroke="#F3F4F6" strokeWidth="1" />;
+                    return <line key={t} x1="4" y1={y} x2="476" y2={y} stroke="#F1F5F9" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                 })}
 
                 {/* Area fill */}
@@ -79,13 +85,15 @@ export default function LineChart({ title, subtitle, data = [], xKey = 'date', y
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
                 />
 
                 {/* Dots — show all for small datasets, just last for large */}
                 {(data.length <= 15 ? points : points.slice(-1)).map((p) => (
-                    <circle key={p.label} cx={p.x} cy={p.y} r="3.5" fill="#2563EB" stroke="#fff" strokeWidth="1.5" />
+                    <circle key={p.label} cx={p.x} cy={p.y} r="3.5" fill="#2563EB" stroke="#fff" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
                 ))}
             </svg>
-        </div>
+            </div>
+        </section>
     );
 }

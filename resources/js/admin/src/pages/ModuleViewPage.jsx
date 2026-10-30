@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import client from '../api/client';
-import AppIcon from '../components/AppIcon';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { Alert, Card, PageHeader, Spinner, btn, input as inputClass, label as labelClass } from '../components/ui';
 import { modules } from '../config/modules';
 import { canAccessModule, isSuperAdminHiddenModuleKey } from '../config/access';
 import { useAuth } from '../context/AuthContext';
@@ -116,6 +116,13 @@ function ModuleViewPageInner() {
 
     const renderValue = (value) => {
         if (value === null || value === undefined || value === '') return '—';
+        // API timestamps (2026-10-27T19:37:43.000000Z) read better in local time.
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
+            const d = new Date(value);
+            if (!Number.isNaN(d.getTime())) {
+                return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+            }
+        }
         if (typeof value !== 'object') return String(value);
 
         if (Array.isArray(value)) return JSON.stringify(value, null, 2);
@@ -152,7 +159,7 @@ function ModuleViewPageInner() {
         return actions;
     }, [record?.status]);
 
-    if (!module) return <div className="rounded border bg-white p-4">Unknown module.</div>;
+    if (!module) return <Alert tone="error">Unknown module.</Alert>;
 
     const runAppointmentStatusChange = async (nextStatus) => {
         if (!nextStatus) return;
@@ -296,26 +303,25 @@ function ModuleViewPageInner() {
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="view" className="h-5 w-5 text-slate-700" />
-                    <h2 className="text-xl font-semibold">{module.label} Details</h2>
-                </div>
-                <Link to={`/modules/${moduleKey}`} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back</Link>
-            </div>
+        <div className="mx-auto max-w-5xl space-y-5">
+            <PageHeader
+                title={`${module.label} details`}
+                subtitle={record?.id ? `Record #${record.id}` : undefined}
+                back={{ to: `/modules/${moduleKey}`, label: module.label }}
+            />
 
             {moduleKey === 'appointments' ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="text-base font-semibold text-slate-900">Appointment Actions</h3>
-                    <p className="mt-1 text-sm text-slate-600">Guided actions instead of raw log tables.</p>
-                    {actionError ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</div> : null}
+                <Card title="Appointment actions" description="Guided actions instead of raw log tables.">
+                    {actionError ? <div className="mb-4"><Alert tone="error">{actionError}</Alert></div> : null}
 
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-2">
                         <div className="rounded-xl border border-slate-200 p-4">
-                            <p className="text-sm font-semibold text-slate-800">Change Status</p>
-                            <div className="mt-2 grid gap-2">
-                                <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={apptStatusReason} onChange={(e) => setApptStatusReason(e.target.value)} />
+                            <h3 className="text-sm font-semibold text-slate-900">Change status</h3>
+                            <div className="mt-3 grid gap-3">
+                                <div>
+                                    <label htmlFor="appt-status-reason" className={labelClass}>Reason (optional)</label>
+                                    <input id="appt-status-reason" className={`${inputClass} h-10`} placeholder="Reason (optional)" value={apptStatusReason} onChange={(e) => setApptStatusReason(e.target.value)} />
+                                </div>
 
                                 <div className="flex flex-wrap gap-2">
                                     {lifecycleActions
@@ -326,10 +332,7 @@ function ModuleViewPageInner() {
                                             type="button"
                                             disabled={actionSaving}
                                             onClick={() => runAppointmentStatusChange(a.next)}
-                                            className={a.primary
-                                                ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50'
-                                                : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50'
-                                            }
+                                            className={a.primary ? btn.primary : btn.secondary}
                                         >
                                             {actionSaving ? 'Working…' : a.label}
                                         </button>
@@ -339,13 +342,13 @@ function ModuleViewPageInner() {
                                             type="button"
                                             disabled={actionSaving}
                                             onClick={() => setUndoConfirmOpen(true)}
-                                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                            className={btn.secondary}
                                         >
                                             Undo {undoLabel}
                                         </button>
                                     ) : null}
                                     {!lifecycleActions.length && !canUndoStatus ? (
-                                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">No quick actions available.</div>
+                                        <p className="text-sm text-slate-600">No quick actions available.</p>
                                     ) : null}
                                 </div>
                             </div>
@@ -353,17 +356,31 @@ function ModuleViewPageInner() {
 
                         {scope?.can?.('appointments.edit') ? (
                             <div className="rounded-xl border border-slate-200 p-4">
-                                <p className="text-sm font-semibold text-slate-800">Reschedule</p>
-                                <div className="mt-2 grid gap-2">
-                                    <input type="date" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.appointment_date} onChange={(e) => setReschedule((p) => ({ ...p, appointment_date: e.target.value }))} />
-                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.start_time} onChange={(e) => setReschedule((p) => ({ ...p, start_time: e.target.value }))} />
-                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={reschedule.end_time} onChange={(e) => setReschedule((p) => ({ ...p, end_time: e.target.value }))} />
-                                    <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Reason (optional)" value={reschedule.reason} onChange={(e) => setReschedule((p) => ({ ...p, reason: e.target.value }))} />
+                                <h3 className="text-sm font-semibold text-slate-900">Reschedule</h3>
+                                <div className="mt-3 grid gap-3">
+                                    <div>
+                                        <label htmlFor="resched-date" className={labelClass}>Date</label>
+                                        <input id="resched-date" type="date" className={`${inputClass} h-10`} value={reschedule.appointment_date} onChange={(e) => setReschedule((p) => ({ ...p, appointment_date: e.target.value }))} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label htmlFor="resched-start" className={labelClass}>Start time</label>
+                                            <input id="resched-start" type="time" className={`${inputClass} h-10`} value={reschedule.start_time} onChange={(e) => setReschedule((p) => ({ ...p, start_time: e.target.value }))} />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="resched-end" className={labelClass}>End time</label>
+                                            <input id="resched-end" type="time" className={`${inputClass} h-10`} value={reschedule.end_time} onChange={(e) => setReschedule((p) => ({ ...p, end_time: e.target.value }))} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="resched-reason" className={labelClass}>Reason (optional)</label>
+                                        <input id="resched-reason" className={`${inputClass} h-10`} placeholder="Reason (optional)" value={reschedule.reason} onChange={(e) => setReschedule((p) => ({ ...p, reason: e.target.value }))} />
+                                    </div>
                                     <button
                                         type="button"
                                         disabled={!reschedule.appointment_date || !reschedule.start_time || actionSaving}
                                         onClick={runAppointmentReschedule}
-                                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                        className={btn.primary}
                                     >
                                         {actionSaving ? 'Working…' : 'Reschedule'}
                                     </button>
@@ -371,23 +388,22 @@ function ModuleViewPageInner() {
                             </div>
                         ) : null}
                     </div>
-                </div>
+                </Card>
             ) : null}
 
             {moduleKey === 'whatsappConversations' ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="text-base font-semibold text-slate-900">Quick Actions</h3>
-                    <p className="mt-1 text-sm text-slate-600">Act on a conversation without leaving the inbox.</p>
+                <>
+                <Card title="Quick actions" description="Act on a conversation without leaving the inbox.">
+                    {actionError ? <div className="mb-4"><Alert tone="error">{actionError}</Alert></div> : null}
 
-                    {actionError ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</div> : null}
-
-                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                    <div className="grid gap-4 lg:grid-cols-3">
                         <div className="rounded-xl border border-slate-200 p-4">
-                            <p className="text-sm font-semibold text-slate-800">Assign to Staff</p>
+                            <h3 className="text-sm font-semibold text-slate-900">Assign to staff</h3>
                             <p className="mt-1 text-xs text-slate-600">Sets the current owner for handover.</p>
-                            <div className="mt-2 grid gap-2">
+                            <div className="mt-3 grid gap-2">
                                 <select
-                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                                    className={`${inputClass} h-10`}
+                                    aria-label="Staff user"
                                     value={waAssign.user_id}
                                     onChange={(e) => setWaAssign({ user_id: e.target.value })}
                                 >
@@ -400,7 +416,7 @@ function ModuleViewPageInner() {
                                     type="button"
                                     disabled={!waAssign.user_id || actionSaving}
                                     onClick={runAssignConversation}
-                                    className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    className={btn.primary}
                                 >
                                     {actionSaving ? 'Working…' : 'Assign'}
                                 </button>
@@ -409,26 +425,26 @@ function ModuleViewPageInner() {
                         </div>
 
                         <div className="rounded-xl border border-slate-200 p-4">
-                            <p className="text-sm font-semibold text-slate-800">Add Follow-up</p>
+                            <h3 className="text-sm font-semibold text-slate-900">Add follow-up</h3>
                             <p className="mt-1 text-xs text-slate-600">Creates a follow-up task for the patient.</p>
-                            {!record?.patient_id ? <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Link a patient to enable follow-ups.</div> : null}
-                            <div className="mt-2 grid gap-2">
-                                <input type="date" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waFollowup.due_date} onChange={(e) => setWaFollowup((p) => ({ ...p, due_date: e.target.value }))} />
-                                <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waFollowup.task_type} onChange={(e) => setWaFollowup((p) => ({ ...p, task_type: e.target.value }))}>
+                            {!record?.patient_id ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Link a patient to enable follow-ups.</div> : null}
+                            <div className="mt-3 grid gap-2">
+                                <input type="date" className={`${inputClass} h-10`} aria-label="Due date" value={waFollowup.due_date} onChange={(e) => setWaFollowup((p) => ({ ...p, due_date: e.target.value }))} />
+                                <select className={`${inputClass} h-10`} aria-label="Task type" value={waFollowup.task_type} onChange={(e) => setWaFollowup((p) => ({ ...p, task_type: e.target.value }))}>
                                     {['whatsapp', 'call', 'followup_visit', 'review_request', 'lab_reminder', 'custom'].map((t) => <option key={t} value={t}>{t}</option>)}
                                 </select>
-                                <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waFollowup.assigned_to_user_id} onChange={(e) => setWaFollowup((p) => ({ ...p, assigned_to_user_id: e.target.value }))}>
+                                <select className={`${inputClass} h-10`} aria-label="Assign to" value={waFollowup.assigned_to_user_id} onChange={(e) => setWaFollowup((p) => ({ ...p, assigned_to_user_id: e.target.value }))}>
                                     <option value="">Assign to (optional)</option>
                                     {(waOptions.users || []).map((u) => (
                                         <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
                                     ))}
                                 </select>
-                                <input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" placeholder="Note (optional)" value={waFollowup.note} onChange={(e) => setWaFollowup((p) => ({ ...p, note: e.target.value }))} />
+                                <input className={`${inputClass} h-10`} placeholder="Note (optional)" aria-label="Note" value={waFollowup.note} onChange={(e) => setWaFollowup((p) => ({ ...p, note: e.target.value }))} />
                                 <button
                                     type="button"
                                     disabled={!record?.patient_id || !waFollowup.due_date || !waFollowup.task_type || actionSaving}
                                     onClick={runCreateFollowup}
-                                    className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    className={btn.primary}
                                 >
                                     {actionSaving ? 'Working…' : 'Create Follow-up'}
                                 </button>
@@ -437,25 +453,25 @@ function ModuleViewPageInner() {
                         </div>
 
                         <div className="rounded-xl border border-slate-200 p-4">
-                            <p className="text-sm font-semibold text-slate-800">Create Appointment</p>
+                            <h3 className="text-sm font-semibold text-slate-900">Create appointment</h3>
                             <p className="mt-1 text-xs text-slate-600">Creates an appointment for the linked patient.</p>
-                            {!record?.patient_id ? <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Link a patient to enable appointments.</div> : null}
-                            <div className="mt-2 grid gap-2">
-                                <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waAppt.doctor_id} onChange={(e) => setWaAppt((p) => ({ ...p, doctor_id: e.target.value }))}>
+                            {!record?.patient_id ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Link a patient to enable appointments.</div> : null}
+                            <div className="mt-3 grid gap-2">
+                                <select className={`${inputClass} h-10`} aria-label="Doctor" value={waAppt.doctor_id} onChange={(e) => setWaAppt((p) => ({ ...p, doctor_id: e.target.value }))}>
                                     <option value="">Select doctor</option>
                                     {(waOptions.doctors || []).map((d) => (
                                         <option key={d.id} value={d.id}>{d.full_name}</option>
                                     ))}
                                 </select>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <input type="date" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waAppt.appointment_date} onChange={(e) => setWaAppt((p) => ({ ...p, appointment_date: e.target.value }))} />
-                                    <input type="time" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waAppt.start_time} onChange={(e) => setWaAppt((p) => ({ ...p, start_time: e.target.value }))} />
+                                    <input type="date" className={`${inputClass} h-10`} aria-label="Date" value={waAppt.appointment_date} onChange={(e) => setWaAppt((p) => ({ ...p, appointment_date: e.target.value }))} />
+                                    <input type="time" className={`${inputClass} h-10`} aria-label="Start time" value={waAppt.start_time} onChange={(e) => setWaAppt((p) => ({ ...p, start_time: e.target.value }))} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waAppt.visit_type} onChange={(e) => setWaAppt((p) => ({ ...p, visit_type: e.target.value }))}>
+                                    <select className={`${inputClass} h-10`} aria-label="Visit type" value={waAppt.visit_type} onChange={(e) => setWaAppt((p) => ({ ...p, visit_type: e.target.value }))}>
                                         {['new', 'followup', 'routine', 'urgent'].map((v) => <option key={v} value={v}>{v}</option>)}
                                     </select>
-                                    <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" value={waAppt.booking_channel} onChange={(e) => setWaAppt((p) => ({ ...p, booking_channel: e.target.value }))}>
+                                    <select className={`${inputClass} h-10`} aria-label="Booking channel" value={waAppt.booking_channel} onChange={(e) => setWaAppt((p) => ({ ...p, booking_channel: e.target.value }))}>
                                         {['whatsapp', 'phone', 'walk_in', 'website', 'google', 'staff', 'other'].map((c) => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
@@ -463,7 +479,7 @@ function ModuleViewPageInner() {
                                     type="button"
                                     disabled={!record?.patient_id || !waAppt.doctor_id || !waAppt.appointment_date || !waAppt.start_time || !waAppt.visit_type || !waAppt.booking_channel || actionSaving}
                                     onClick={runCreateAppointment}
-                                    className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    className={btn.primary}
                                 >
                                     {actionSaving ? 'Working…' : 'Create Appointment'}
                                 </button>
@@ -472,19 +488,19 @@ function ModuleViewPageInner() {
                         </div>
                     </div>
 
-                    <div className="mt-5 border-t border-slate-200 pt-5">
-                    <h3 className="text-base font-semibold text-slate-900">Messages</h3>
-                    <p className="mt-1 text-sm text-slate-600">Messages are shown inside the conversation (not as a standalone menu item).</p>
-                    <div className="mt-3 space-y-2">
+                </Card>
+
+                <Card title="Messages" description="Messages are shown inside the conversation (not as a standalone menu item).">
+                    <div className="space-y-2">
                         {(related.messages === null) ? (
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">Loading messages…</div>
+                            <p className="py-4 text-sm text-slate-600">Loading messages…</p>
                         ) : (related.messages.length === 0) ? (
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">No messages found.</div>
+                            <p className="py-4 text-sm text-slate-600">No messages found.</p>
                         ) : (
                             related.messages.map((m) => (
                                 <div key={m.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                                     <div className="flex items-center justify-between">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{m.direction} · {m.delivery_status}</p>
+                                        <p className="text-xs font-medium text-slate-600">{m.direction} · {m.delivery_status}</p>
                                         <p className="text-xs text-slate-500">#{m.id}</p>
                                     </div>
                                     <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap break-words">{m.content_text || m.message_type || '—'}</p>
@@ -492,18 +508,25 @@ function ModuleViewPageInner() {
                             ))
                         )}
                     </div>
-                    </div>
-                </div>
+                </Card>
+                </>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-                {entries.map(([key, value]) => (
-                    <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{key.replaceAll('_', ' ')}</p>
-                        <p className="text-sm text-slate-800 break-words whitespace-pre-wrap">{renderValue(value)}</p>
-                    </div>
-                ))}
-            </div>
+            <Card title="Details" bodyClassName="px-5 py-2">
+                {!record ? <Spinner className="py-10" /> : (
+                    <dl className="grid gap-x-8 md:grid-cols-2">
+                        {entries.map(([key, value]) => {
+                            const text = key.replaceAll('_', ' ');
+                            return (
+                                <div key={key} className="min-w-0 border-b border-slate-100 py-3">
+                                    <dt className="text-xs font-medium text-slate-600">{text.charAt(0).toUpperCase() + text.slice(1)}</dt>
+                                    <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-900">{renderValue(value)}</dd>
+                                </div>
+                            );
+                        })}
+                    </dl>
+                )}
+            </Card>
 
             <ConfirmDialog
                 open={undoConfirmOpen}

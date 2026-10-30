@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSession } from '../session';
 import { formatDate } from '../lib/format';
-import { Button, Card, ErrorText, Spinner } from '../components/ui';
+import { Badge, Button, Card, ErrorText, Loading, PageHeader, inputClass, labelClass } from '../components/ui';
 
 const RELATION_LABELS = {
     self: 'You',
@@ -84,14 +84,10 @@ export default function Family() {
     }
 
     return (
-        <div className="space-y-4">
-            <h1 className="text-xl font-semibold text-slate-900">Family</h1>
+        <div className="space-y-5">
+            <PageHeader title="Family" subtitle="Switch between profiles to book and view visits for family members." />
 
-            {loading && (
-                <div className="flex justify-center py-12">
-                    <Spinner className="h-6 w-6 text-[var(--accent)]" />
-                </div>
-            )}
+            {loading && <Loading />}
 
             {!loading && error && <ErrorText>{error}</ErrorText>}
 
@@ -101,20 +97,24 @@ export default function Family() {
                         const isActive = p.id === activeProfileId;
                         return (
                             <li key={p.id}>
-                                <Card>
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
+                                <Card className={isActive ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]' : ''}>
+                                    <div className="flex items-center gap-3">
+                                        <span
+                                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                                                isActive ? 'bg-[var(--accent)] text-white' : 'bg-slate-100 text-slate-700'
+                                            }`}
+                                            aria-hidden="true"
+                                        >
+                                            {(p.full_name || '?').charAt(0).toUpperCase()}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-semibold text-slate-900">{p.full_name}</p>
-                                            <p className="text-xs text-slate-500">
+                                            <p className="text-sm text-slate-600">
                                                 {RELATION_LABELS[p.relation] || p.relation}
                                                 {p.dob ? ` · ${formatDate(p.dob)}` : ''}
                                             </p>
                                         </div>
-                                        {isActive && (
-                                            <span className="shrink-0 rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-xs font-medium text-[var(--accent)]">
-                                                Viewing
-                                            </span>
-                                        )}
+                                        {isActive && <Badge tone="accent">Viewing</Badge>}
                                     </div>
                                     {!isActive && (
                                         <div className="mt-3">
@@ -136,14 +136,18 @@ export default function Family() {
 
             {!showForm ? (
                 <Button variant="secondary" onClick={() => setShowForm(true)}>
+                    <span aria-hidden="true" className="text-xl leading-none">+</span>
                     Add family member
                 </Button>
             ) : (
-                <Card>
-                    <h2 className="mb-3 text-sm font-medium text-slate-900">Add family member</h2>
-                    <form onSubmit={submitNewMember} className="space-y-3">
+                <section className="rounded-2xl border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 px-4 py-3">
+                        <h2 className="text-base font-semibold text-slate-900">Add family member</h2>
+                        <p className="text-sm text-slate-600">They'll appear in your family list.</p>
+                    </div>
+                    <form onSubmit={submitNewMember} className="space-y-4 p-4">
                         <div>
-                            <label htmlFor="full_name" className="mb-1 block text-sm font-medium text-slate-700">
+                            <label htmlFor="full_name" className={labelClass}>
                                 Full name
                             </label>
                             <input
@@ -151,11 +155,11 @@ export default function Family() {
                                 type="text"
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
-                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                                className={inputClass}
                             />
                         </div>
                         <div>
-                            <label htmlFor="dob" className="mb-1 block text-sm font-medium text-slate-700">
+                            <label htmlFor="dob" className={labelClass}>
                                 Date of birth (optional)
                             </label>
                             <input
@@ -163,18 +167,18 @@ export default function Family() {
                                 type="date"
                                 value={dob}
                                 onChange={(e) => setDob(e.target.value)}
-                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                                className={inputClass}
                             />
                         </div>
                         <div>
-                            <label htmlFor="gender" className="mb-1 block text-sm font-medium text-slate-700">
+                            <label htmlFor="gender" className={labelClass}>
                                 Gender (optional)
                             </label>
                             <select
                                 id="gender"
                                 value={gender}
                                 onChange={(e) => setGender(e.target.value)}
-                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                                className={inputClass}
                             >
                                 <option value="">Prefer not to say</option>
                                 <option value="male">Male</option>
@@ -183,7 +187,7 @@ export default function Family() {
                             </select>
                         </div>
                         {formError ? <ErrorText>{formError}</ErrorText> : null}
-                        <div className="space-y-2">
+                        <div className="space-y-2 pt-1">
                             <Button type="submit" loading={submitting}>
                                 Add
                             </Button>
@@ -199,7 +203,7 @@ export default function Family() {
                             </Button>
                         </div>
                     </form>
-                </Card>
+                </section>
             )}
         </div>
     );

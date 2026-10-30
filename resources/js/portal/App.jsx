@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Shell from './components/Shell';
-import { Spinner } from './components/ui';
+import { DEFAULT_ACCENT, Spinner } from './components/ui';
 import Book from './pages/Book';
 import Consent from './pages/Consent';
 import Family from './pages/Family';
@@ -19,7 +19,7 @@ import { useSession } from './session';
 function FullPageLoader() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-slate-50">
-            <Spinner className="h-6 w-6 text-slate-400" />
+            <Spinner className="h-7 w-7 text-[var(--accent)]" />
         </div>
     );
 }
@@ -47,32 +47,36 @@ function ProtectedLayout() {
 }
 
 export default function App() {
+    // Blue-600 is the portal's accent until a clinic brand colour is known;
+    // Shell.jsx overrides `--accent` with the clinic's primary_color.
     return (
-        <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/login/:token" element={<MagicLink />} />
-            <Route
-                path="/consent"
-                element={
-                    <RequireAuth>
-                        <Consent />
-                    </RequireAuth>
-                }
-            />
+        <div style={{ '--accent': DEFAULT_ACCENT }} className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+            <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/login/:token" element={<MagicLink />} />
+                <Route
+                    path="/consent"
+                    element={
+                        <RequireAuth>
+                            <Consent />
+                        </RequireAuth>
+                    }
+                />
 
-            <Route element={<ProtectedLayout />}>
-                <Route path="/" element={<Home />} />
-                <Route path="/visits" element={<Visits />} />
-                <Route path="/visits/:id" element={<VisitDetail />} />
-                <Route path="/visits/:id/reschedule" element={<Reschedule />} />
-                <Route path="/prescriptions" element={<Prescriptions />} />
-                <Route path="/prescriptions/:id" element={<PrescriptionDetail />} />
-                <Route path="/book" element={<Book />} />
-                <Route path="/family" element={<Family />} />
-                <Route path="/waitlist/:id" element={<WaitlistOffer />} />
-            </Route>
+                <Route element={<ProtectedLayout />}>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/visits" element={<Visits />} />
+                    <Route path="/visits/:id" element={<VisitDetail />} />
+                    <Route path="/visits/:id/reschedule" element={<Reschedule />} />
+                    <Route path="/prescriptions" element={<Prescriptions />} />
+                    <Route path="/prescriptions/:id" element={<PrescriptionDetail />} />
+                    <Route path="/book" element={<Book />} />
+                    <Route path="/family" element={<Family />} />
+                    <Route path="/waitlist/:id" element={<WaitlistOffer />} />
+                </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </div>
     );
 }

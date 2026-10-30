@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { formatDate, formatInstantTime, formatTime } from '../lib/format';
-import { Button, Card, ErrorText } from './ui';
+import { Alert, Badge, Button, ErrorText } from './ui';
 
 /**
  * The Visits page "Waitlist" card: the acting profile's active entries
@@ -56,16 +56,25 @@ export default function WaitlistCard() {
     if (entries.length === 0 && !banner) return null;
 
     return (
-        <Card>
-            <h2 className="mb-2 text-sm font-medium text-slate-500">Waitlist</h2>
-            {banner && <div className="mb-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{banner}</div>}
+        <section aria-labelledby="waitlist-h" className="rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-4 py-3">
+                <h2 id="waitlist-h" className="text-base font-semibold text-slate-900">
+                    Waitlist
+                </h2>
+                <p className="text-sm text-slate-600">Times you're waiting for.</p>
+            </div>
+            {banner && (
+                <div className={`px-4 pt-3 ${entries.length === 0 ? 'pb-4' : ''}`}>
+                    <Alert tone="success">{banner}</Alert>
+                </div>
+            )}
             <ul className="divide-y divide-slate-100">
                 {entries.map((entry) => {
                     const offered = entry.status === 'offered';
                     return (
-                        <li key={entry.id} className="py-3 first:pt-0 last:pb-0">
-                            <div className="flex items-start justify-between gap-2">
-                                <Link to={`/waitlist/${entry.id}`} className="min-w-0">
+                        <li key={entry.id} className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <Link to={`/waitlist/${entry.id}`} className="min-w-0 py-0.5">
                                     <p className="text-sm font-semibold text-slate-900">
                                         {formatDate(entry.date)} &middot; {formatTime(entry.start_time)}
                                     </p>
@@ -75,28 +84,25 @@ export default function WaitlistCard() {
                                     </p>
                                 </Link>
                                 {offered ? (
-                                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                                        Held for you
-                                    </span>
+                                    <Badge tone="amber">Held for you</Badge>
                                 ) : (
-                                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                                        {entry.position ? `#${entry.position} in line` : 'Waiting'}
-                                    </span>
+                                    <Badge>{entry.position ? `#${entry.position} in line` : 'Waiting'}</Badge>
                                 )}
                             </div>
 
                             {offered && (
                                 <Link
                                     to={`/waitlist/${entry.id}`}
-                                    className="mt-2 block rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 ring-1 ring-amber-200"
+                                    className="mt-3 flex min-h-[48px] items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
                                 >
-                                    Held for you until {formatInstantTime(entry.hold_expires_at)} — Book it &rarr;
+                                    <span>Held for you until {formatInstantTime(entry.hold_expires_at)} — Book it</span>
+                                    <span aria-hidden="true">&rarr;</span>
                                 </Link>
                             )}
 
                             {confirmId === entry.id ? (
-                                <div className="mt-2 space-y-2">
-                                    <p className="text-sm text-slate-600">
+                                <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                    <p className="text-sm text-slate-700">
                                         {offered ? 'Give up this held time and leave the waitlist?' : 'Leave the waitlist for this time?'}
                                     </p>
                                     <ErrorText>{leaveError}</ErrorText>
@@ -122,7 +128,7 @@ export default function WaitlistCard() {
                                         setLeaveError('');
                                         setBanner('');
                                     }}
-                                    className="mt-1 text-sm font-medium text-red-600"
+                                    className="-ml-2 mt-1 min-h-[44px] rounded-lg px-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
                                 >
                                     Leave
                                 </button>
@@ -131,6 +137,6 @@ export default function WaitlistCard() {
                     );
                 })}
             </ul>
-        </Card>
+        </section>
     );
 }

@@ -6,7 +6,7 @@ import JoinWaitlist from '../components/JoinWaitlist';
 import SlotGrid from '../components/SlotGrid';
 import useDoctorSlots from '../hooks/useDoctorSlots';
 import { addDays, isoDate } from '../lib/format';
-import { Button, Card, ErrorText, Spinner } from '../components/ui';
+import { Button, Card, ErrorText, Loading, PageHeader, SectionLabel } from '../components/ui';
 
 const STRIP_DAYS = 14;
 
@@ -101,11 +101,7 @@ export default function Reschedule() {
     }
 
     if (loading) {
-        return (
-            <div className="flex justify-center py-12">
-                <Spinner className="h-6 w-6 text-[var(--accent)]" />
-            </div>
-        );
+        return <Loading />;
     }
 
     if (loadError || !appointment) {
@@ -113,48 +109,44 @@ export default function Reschedule() {
     }
 
     return (
-        <div className="space-y-4">
-            <button
-                type="button"
-                onClick={() => navigate(`/visits/${id}`)}
-                className="text-sm font-medium text-[var(--accent)]"
-            >
-                &larr; Back
-            </button>
-
-            <div>
-                <h1 className="text-xl font-semibold text-slate-900">Reschedule visit</h1>
-                <p className="text-sm text-slate-600">
-                    {appointment.doctor?.name}
-                    {appointment.doctor?.specialization ? ` · ${appointment.doctor.specialization}` : ''}
-                </p>
-            </div>
-
-            <DateStrip
-                dates={dates}
-                selectedDate={date}
-                onSelect={(d) => {
-                    loadSlots(appointment.doctor.id, d);
-                    setConflict(null);
-                    setSubmitError('');
-                }}
+        <div className="space-y-6">
+            <PageHeader
+                title="Reschedule visit"
+                subtitle={`${appointment.doctor?.name || ''}${appointment.doctor?.specialization ? ` · ${appointment.doctor.specialization}` : ''}`}
+                back={{ label: 'Back', onClick: () => navigate(`/visits/${id}`) }}
             />
 
-            <SlotGrid
-                key={date || ''}
-                loading={slotsLoading}
-                error={slotsError}
-                slots={slots}
-                taken={taken}
-                date={date}
-                selectedSlot={selectedSlot}
-                onSelect={(s) => {
-                    setSelectedSlot(s);
-                    setConflict(null);
-                    setSubmitError('');
-                }}
-                onJoin={joinWaitlist}
-            />
+            <section>
+                <SectionLabel>New date</SectionLabel>
+                <DateStrip
+                    dates={dates}
+                    selectedDate={date}
+                    onSelect={(d) => {
+                        loadSlots(appointment.doctor.id, d);
+                        setConflict(null);
+                        setSubmitError('');
+                    }}
+                />
+            </section>
+
+            <section>
+                <SectionLabel>New time</SectionLabel>
+                <SlotGrid
+                    key={date || ''}
+                    loading={slotsLoading}
+                    error={slotsError}
+                    slots={slots}
+                    taken={taken}
+                    date={date}
+                    selectedSlot={selectedSlot}
+                    onSelect={(s) => {
+                        setSelectedSlot(s);
+                        setConflict(null);
+                        setSubmitError('');
+                    }}
+                    onJoin={joinWaitlist}
+                />
+            </section>
 
             {submitError ? <ErrorText>{submitError}</ErrorText> : null}
             {conflict && conflict.date === date && !selectedSlot && (

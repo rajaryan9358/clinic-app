@@ -1,38 +1,44 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import AppIcon from '../../components/AppIcon';
+import { Alert, Card, PageHeader, btn, input, label } from '../../components/ui';
 
-function Field({ label, required, children, hint }) {
+function Field({ label: text, required, children, hint }) {
+    const id = useId();
+    const hintId = hint ? `${id}-hint` : undefined;
     return (
         <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
-                {label}{required && <span className="ml-0.5 text-red-500">*</span>}
+            <label htmlFor={id} className={label}>
+                {text}{required && <span className="ml-0.5 text-rose-600" aria-hidden="true">*</span>}
             </label>
-            {children}
-            {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+            {React.cloneElement(children, { id, 'aria-describedby': hintId, 'aria-required': required || undefined })}
+            {hint && <p id={hintId} className="mt-1 text-xs text-slate-600">{hint}</p>}
         </div>
     );
 }
 
-function TextInput({ value, onChange, placeholder, type = 'text' }) {
+function TextInput({ value, onChange, placeholder, type = 'text', ...rest }) {
     return (
         <input
+            {...rest}
             type={type}
             value={value ?? ''}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className={input}
         />
     );
 }
 
-function SelectInput({ value, onChange, options }) {
+function SelectInput({ value, onChange, options, ...rest }) {
     return (
         <select
+            {...rest}
             value={value ?? ''}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className={input}
         >
             {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -41,19 +47,15 @@ function SelectInput({ value, onChange, options }) {
 
 function SectionCard({ title, subtitle, children }) {
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-5 border-b border-gray-100 pb-4">
-                <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-                {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
-            </div>
-            <div className="space-y-4">{children}</div>
-        </div>
+        <Card title={title} description={subtitle} bodyClassName="space-y-4 p-5">
+            {children}
+        </Card>
     );
 }
 
 const STEPS = [
     { num: 1, label: 'Profile' },
-    { num: 2, label: 'Schedule & Fees' },
+    { num: 2, label: 'Schedule & fees' },
     { num: 3, label: 'Login' },
 ];
 
@@ -111,12 +113,10 @@ export default function SetupDoctorWizardPage() {
 
     if (!isClinic) {
         return (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900">Use the Clinic screens</h2>
-                <p className="mt-1 text-sm text-gray-500">Doctor setup from this wizard is intended for clinic users. Super admin can add doctors from the clinic detail page.</p>
-                <Link to="/dashboard" className="mt-4 inline-block rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                    Go to Dashboard
-                </Link>
+            <div className="mx-auto max-w-3xl">
+                <Card title="Use the clinic screens" description="Doctor setup from this wizard is intended for clinic users. Super admin can add doctors from the clinic detail page.">
+                    <Link to="/dashboard" className={btn.primary}>Go to dashboard</Link>
+                </Card>
             </div>
         );
     }
@@ -172,41 +172,36 @@ export default function SetupDoctorWizardPage() {
     };
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">Add Doctor</h2>
-                    <p className="mt-0.5 text-sm text-gray-500">Set up a doctor profile with schedule and fees.</p>
-                </div>
-                <Link to="/dashboard" className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-                    ← Back
-                </Link>
-            </div>
+        <div className="mx-auto max-w-3xl space-y-5">
+            <PageHeader
+                title="Add doctor"
+                subtitle="Set up a doctor profile with schedule and fees."
+                actions={<Link to="/dashboard" className={btn.secondary}>Back</Link>}
+            />
 
             {/* Steps */}
-            <div className="flex items-center gap-0 rounded-xl border border-gray-200 bg-white px-5 py-3 shadow-sm">
+            <ol aria-label="Steps" className="flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
                 {STEPS.map((s, i) => (
                     <React.Fragment key={s.num}>
-                        <div className="flex items-center gap-2">
-                            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                        <li className="flex items-center gap-2" aria-current={step === s.num ? 'step' : undefined}>
+                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                                 step === s.num ? 'bg-blue-600 text-white'
-                                : step > s.num ? 'bg-emerald-500 text-white'
-                                : 'bg-gray-100 text-gray-400'
-                            }`}>{step > s.num ? '✓' : s.num}</div>
-                            <span className={`text-sm font-semibold ${step === s.num ? 'text-gray-900' : step > s.num ? 'text-emerald-600' : 'text-gray-400'}`}>{s.label}</span>
-                        </div>
-                        {i < STEPS.length - 1 && <div className="mx-3 h-px flex-1 bg-gray-200" />}
+                                : step > s.num ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>{step > s.num ? <AppIcon name="check" className="h-3.5 w-3.5" /> : s.num}</span>
+                            <span className={`text-sm ${step === s.num ? 'font-semibold text-slate-900' : step > s.num ? 'font-medium text-slate-700' : 'text-slate-600'} ${step === s.num ? '' : 'hidden sm:inline'}`}>{s.label}</span>
+                        </li>
+                        {i < STEPS.length - 1 && <li aria-hidden="true" className="mx-3 h-px flex-1 bg-slate-200" />}
                     </React.Fragment>
                 ))}
-            </div>
+            </ol>
 
-            {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+            {error && <Alert>{error}</Alert>}
 
             {/* Step 1 — Profile */}
             {step === 1 && (
-                <SectionCard title="Doctor Profile" subtitle="Personal and professional information.">
-                    <div className="grid grid-cols-4 gap-3">
+                <SectionCard title="Doctor profile" subtitle="Personal and professional information.">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
                         <Field label="Title">
                             <SelectInput value={values.title} onChange={set('title')} options={[
                                 { value: 'Dr.', label: 'Dr.' },
@@ -215,13 +210,13 @@ export default function SetupDoctorWizardPage() {
                                 { value: 'Ms.', label: 'Ms.' },
                             ]} />
                         </Field>
-                        <div className="col-span-3">
-                            <Field label="Full Name" required>
+                        <div className="sm:col-span-3">
+                            <Field label="Full name" required>
                                 <TextInput value={values.full_name} onChange={set('full_name')} placeholder="Doctor's full name" />
                             </Field>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Field label="Specialization">
                             <TextInput value={values.specialization} onChange={set('specialization')} placeholder="e.g. Cardiologist" />
                         </Field>
@@ -229,8 +224,8 @@ export default function SetupDoctorWizardPage() {
                             <TextInput value={values.qualification} onChange={set('qualification')} placeholder="e.g. MBBS, MD" />
                         </Field>
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <Field label="Experience (Years)">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <Field label="Experience (years)">
                             <TextInput type="number" value={values.experience_years} onChange={set('experience_years')} placeholder="0" />
                         </Field>
                         <Field label="Gender">
@@ -248,7 +243,7 @@ export default function SetupDoctorWizardPage() {
                             ]} />
                         </Field>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Field label="Phone">
                             <TextInput value={values.phone} onChange={set('phone')} placeholder="+91 XXXXXXXXXX" />
                         </Field>
@@ -256,9 +251,9 @@ export default function SetupDoctorWizardPage() {
                             <TextInput type="email" value={values.email} onChange={set('email')} placeholder="doctor@clinic.com" />
                         </Field>
                     </div>
-                    <div className="flex justify-end pt-2">
-                        <button type="button" onClick={() => nextStep(1)} className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
-                            Next →
+                    <div className="flex justify-end border-t border-slate-100 pt-4">
+                        <button type="button" onClick={() => nextStep(1)} className={btn.primary}>
+                            Next
                         </button>
                     </div>
                 </SectionCard>
@@ -266,29 +261,29 @@ export default function SetupDoctorWizardPage() {
 
             {/* Step 2 — Schedule & Fees */}
             {step === 2 && (
-                <SectionCard title="Schedule & Fees" subtitle="Appointment slot configuration and consultation fees.">
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Consultation Fee (₹)">
+                <SectionCard title="Schedule & fees" subtitle="Appointment slot configuration and consultation fees.">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Consultation fee (₹)">
                             <TextInput type="number" value={values.consultation_fee} onChange={set('consultation_fee')} placeholder="500" />
                         </Field>
-                        <Field label="Follow-up Fee (₹)">
+                        <Field label="Follow-up fee (₹)">
                             <TextInput type="number" value={values.followup_fee} onChange={set('followup_fee')} placeholder="300" />
                         </Field>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Slot Duration (minutes)" hint="Length of each appointment slot.">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Slot duration (minutes)" hint="Length of each appointment slot.">
                             <TextInput type="number" value={values.slot_duration_minutes} onChange={set('slot_duration_minutes')} placeholder="15" />
                         </Field>
-                        <Field label="Buffer Time (minutes)" hint="Gap between consecutive slots.">
+                        <Field label="Buffer time (minutes)" hint="Gap between consecutive slots.">
                             <TextInput type="number" value={values.buffer_time_minutes} onChange={set('buffer_time_minutes')} placeholder="5" />
                         </Field>
                     </div>
-                    <div className="flex justify-between pt-2">
-                        <button type="button" onClick={() => { setError(''); setStep(1); }} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                            ← Back
+                    <div className="flex justify-between gap-2 border-t border-slate-100 pt-4">
+                        <button type="button" onClick={() => { setError(''); setStep(1); }} className={btn.secondary}>
+                            Back
                         </button>
-                        <button type="button" onClick={() => nextStep(2)} className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
-                            Next →
+                        <button type="button" onClick={() => nextStep(2)} className={btn.primary}>
+                            Next
                         </button>
                     </div>
                 </SectionCard>
@@ -297,12 +292,12 @@ export default function SetupDoctorWizardPage() {
             {/* Step 3 — Login */}
             {step === 3 && (
                 <div className="space-y-4">
-                    <SectionCard title="Doctor Login" subtitle="Optional — create login credentials so the doctor can access the portal.">
+                    <SectionCard title="Doctor login" subtitle="Optional. Create login credentials so the doctor can access the portal.">
                         <Field label="Password" hint="Leave blank to skip login creation.">
                             <TextInput type="password" value={values.password} onChange={set('password')} placeholder="••••••••" />
                         </Field>
                         {doctorRoles.items.length > 1 ? (
-                            <Field label="Login Role" hint="Which doctor-kind role this login gets.">
+                            <Field label="Login role" hint="Which doctor-kind role this login gets.">
                                 <SelectInput
                                     value={values.login_role}
                                     onChange={set('login_role')}
@@ -312,17 +307,17 @@ export default function SetupDoctorWizardPage() {
                         ) : null}
                     </SectionCard>
 
-                    <div className="flex justify-between pt-1">
-                        <button type="button" onClick={() => { setError(''); setStep(2); }} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                            ← Back
+                    <div className="flex justify-between gap-2">
+                        <button type="button" onClick={() => { setError(''); setStep(2); }} className={btn.secondary}>
+                            Back
                         </button>
                         <button
                             type="button"
                             onClick={submit}
                             disabled={saving}
-                            className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            className={btn.primary}
                         >
-                            {saving ? 'Creating…' : 'Create Doctor ✓'}
+                            {saving ? 'Creating…' : 'Create doctor'}
                         </button>
                     </div>
                 </div>

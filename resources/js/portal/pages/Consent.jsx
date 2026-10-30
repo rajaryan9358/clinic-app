@@ -69,39 +69,42 @@ export default function Consent() {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-            <Card className="w-full max-w-md">
-                <h1 className="mb-2 text-xl font-semibold text-slate-900">Privacy notice</h1>
+        <div className="flex min-h-screen flex-col bg-slate-50 px-4 py-8 sm:items-center sm:justify-center">
+            <div className="mx-auto w-full max-w-md">
+                <header className="mb-4">
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Privacy notice</h1>
+                    <p className="mt-1 text-sm text-slate-600">Please read this before you continue.</p>
+                </header>
 
-                {loading ? (
-                    <div className="flex justify-center py-8">
-                        <Spinner className="h-6 w-6 text-[var(--accent)]" />
-                    </div>
-                ) : (
-                    <>
-                        <div className="max-h-72 space-y-2 overflow-y-auto text-sm leading-relaxed text-slate-600">
-                            {(consent?.text || '').split('\n').filter(Boolean).map((line, i) => (
-                                <p key={i}>{line}</p>
-                            ))}
+                <Card className="p-0">
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <Spinner className="h-7 w-7 text-[var(--accent)]" />
                         </div>
-                        <div className="mt-3">
-                            <ErrorText>{error}</ErrorText>
-                        </div>
-                        <div className="mt-4 space-y-2">
-                            <Button onClick={accept} loading={submitting}>
-                                I agree, continue
-                            </Button>
-                            <button
-                                type="button"
-                                onClick={signOutInstead}
-                                className="w-full text-center text-sm text-slate-500"
-                            >
-                                Sign out instead
-                            </button>
-                        </div>
-                    </>
-                )}
-            </Card>
+                    ) : (
+                        <>
+                            <div className="max-h-[55vh] space-y-3 overflow-y-auto px-5 py-4 text-sm leading-relaxed text-slate-700">
+                                {(consent?.text || '').split('\n').filter(Boolean).map((line, i) => (
+                                    <p key={i}>{line}</p>
+                                ))}
+                            </div>
+                            <div className="space-y-3 border-t border-slate-100 px-5 py-4">
+                                <ErrorText>{error}</ErrorText>
+                                <Button onClick={accept} loading={submitting}>
+                                    I agree, continue
+                                </Button>
+                                <button
+                                    type="button"
+                                    onClick={signOutInstead}
+                                    className="min-h-[44px] w-full rounded-xl text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Sign out instead
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </Card>
+            </div>
         </div>
     );
 }

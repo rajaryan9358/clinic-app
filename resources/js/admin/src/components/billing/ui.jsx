@@ -6,15 +6,15 @@ import AppIcon from '../AppIcon';
 // ClinicDetailPage's local helpers so this module has no cross-page import. ──
 
 export function Card({ children, className = '' }) {
-    return <div className={`rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}>{children}</div>;
+    return <div className={`rounded-2xl border border-slate-200 bg-white ${className}`}>{children}</div>;
 }
 
 export function SectionHeader({ title, subtitle, action }) {
     return (
         <div className="flex items-center justify-between gap-4 pb-4">
             <div>
-                <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-                {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+                <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+                {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
             </div>
             {action}
         </div>
@@ -24,8 +24,8 @@ export function SectionHeader({ title, subtitle, action }) {
 export function EmptyState({ icon, text }) {
     return (
         <div className="flex flex-col items-center justify-center py-14 text-center">
-            <AppIcon name={icon} className="mb-3 h-8 w-8 text-gray-200" />
-            <p className="text-sm text-gray-400">{text}</p>
+            <AppIcon name={icon} className="mb-3 h-8 w-8 text-slate-200" />
+            <p className="text-sm text-slate-500">{text}</p>
         </div>
     );
 }
@@ -39,11 +39,11 @@ export function LoadingState() {
 }
 
 export function Btn({ onClick, children, variant = 'secondary', disabled, type = 'button', className = '' }) {
-    const base = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50';
+    const base = 'inline-flex h-10 items-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold transition-colors disabled:opacity-50';
     const styles = {
         primary: 'bg-blue-600 text-white hover:bg-blue-700',
-        secondary: 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
-        danger: 'bg-red-600 text-white hover:bg-red-700',
+        secondary: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50',
+        danger: 'border border-rose-200 bg-white text-rose-700 hover:bg-rose-50',
         ghost: 'text-blue-600 hover:underline text-xs font-medium',
     };
     return (
@@ -66,19 +66,19 @@ export function Sheet({ open, title, subtitle, onClose, children, footer }) {
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end" aria-modal="true" role="dialog">
-            <div ref={overlayRef} className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+            <div ref={overlayRef} className="absolute inset-0 bg-slate-950/50" onClick={onClose} />
             <div className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl">
-                <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
+                <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
                     <div>
-                        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-                        {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+                        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+                        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
                     </div>
-                    <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600">
+                    <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-600">
                         <AppIcon name="close" className="h-4 w-4" />
                     </button>
                 </div>
                 <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-                {footer && <div className="border-t border-gray-200 px-6 py-4">{footer}</div>}
+                {footer && <div className="border-t border-slate-200 px-6 py-4">{footer}</div>}
             </div>
         </div>
     );
@@ -87,12 +87,12 @@ export function Sheet({ open, title, subtitle, onClose, children, footer }) {
 export function Field({ label, required, error, hint, children }) {
     return (
         <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
-                {label}{required && <span className="ml-0.5 text-red-500">*</span>}
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+                {label}{required && <span className="ml-0.5 text-rose-500">*</span>}
             </label>
             {children}
-            {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
-            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+            {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+            {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
         </div>
     );
 }
@@ -108,7 +108,7 @@ export function TextInput({ value, onChange, placeholder, type = 'text', disable
             max={max}
             onChange={(e) => (onChange ? onChange(e.target.value) : undefined)}
             placeholder={placeholder}
-            className={`w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-gray-50 text-gray-500' : ''}`}
+            className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-slate-50 text-slate-500' : ''}`}
         />
     );
 }
@@ -119,7 +119,7 @@ export function SelectInput({ value, onChange, options, disabled = false }) {
             value={value || ''}
             disabled={disabled}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-gray-50 text-gray-500' : ''}`}
+            className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${disabled ? 'bg-slate-50 text-slate-500' : ''}`}
         >
             {options.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -133,18 +133,18 @@ export function Toggle({ checked, onChange, label }) {
         <label className="flex cursor-pointer items-center gap-3">
             <div className="relative flex-shrink-0">
                 <input type="checkbox" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
-                <div className={`flex h-5 w-9 items-center rounded-full transition-colors ${Boolean(checked) ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                <div className={`flex h-5 w-9 items-center rounded-full transition-colors ${Boolean(checked) ? 'bg-blue-600' : 'bg-slate-200'}`}>
                     <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${Boolean(checked) ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </div>
             </div>
-            <span className="text-sm text-gray-700">{label}</span>
+            <span className="text-sm text-slate-700">{label}</span>
         </label>
     );
 }
 
 export function ErrorText({ children }) {
     if (!children) return null;
-    return <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{children}</p>;
+    return <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">{children}</p>;
 }
 
 export function SuccessText({ children }) {

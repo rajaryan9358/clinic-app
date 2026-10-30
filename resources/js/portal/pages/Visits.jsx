@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import AppointmentCard from '../components/AppointmentCard';
 import WaitlistCard from '../components/WaitlistCard';
-import { Card, ErrorText, Spinner } from '../components/ui';
+import { EmptyState, ErrorText, Loading, PageHeader } from '../components/ui';
+import { CalendarIcon, ChevronRightIcon } from '../components/icons';
 
 const FILTERS = [
     { key: 'upcoming', label: 'Upcoming' },
@@ -52,19 +53,21 @@ export default function Visits() {
     }, [filter]);
 
     return (
-        <div className="space-y-4">
-            <h1 className="text-xl font-semibold text-slate-900">Visits</h1>
+        <div className="space-y-5">
+            <PageHeader title="Visits" subtitle="Your appointments with the clinic." />
 
             <WaitlistCard />
 
-            <div className="flex gap-2">
+            <div role="tablist" aria-label="Show visits" className="grid grid-cols-3 rounded-xl border border-slate-200 bg-white p-1">
                 {FILTERS.map((f) => (
                     <button
                         key={f.key}
                         type="button"
+                        role="tab"
+                        aria-selected={filter === f.key}
                         onClick={() => setFilter(f.key)}
-                        className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                            filter === f.key ? 'bg-[var(--accent)] text-white' : 'bg-slate-100 text-slate-600'
+                        className={`min-h-[44px] rounded-lg px-3 text-sm transition ${
+                            filter === f.key ? 'bg-slate-900 font-semibold text-white' : 'font-medium text-slate-700 hover:bg-slate-100'
                         }`}
                     >
                         {f.label}
@@ -72,28 +75,24 @@ export default function Visits() {
                 ))}
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-12">
-                    <Spinner className="h-6 w-6 text-[var(--accent)]" />
-                </div>
-            )}
+            {loading && <Loading />}
 
             {!loading && error && <ErrorText>{error}</ErrorText>}
 
-            {!loading && !error && items.length === 0 && (
-                <Card className="py-10 text-center text-slate-500">
-                    <p className="text-sm">{EMPTY_MESSAGES[filter]}</p>
-                </Card>
-            )}
+            {!loading && !error && items.length === 0 && <EmptyState icon={CalendarIcon} title={EMPTY_MESSAGES[filter]} />}
 
             {!loading && !error && items.length > 0 && (
                 <ul className="space-y-3">
                     {items.map((appointment) => (
                         <li key={appointment.id}>
-                            <Link to={`/visits/${appointment.id}`} className="block">
-                                <Card>
+                            <Link
+                                to={`/visits/${appointment.id}`}
+                                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
+                            >
+                                <div className="min-w-0 flex-1">
                                     <AppointmentCard appointment={appointment} />
-                                </Card>
+                                </div>
+                                <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-400" />
                             </Link>
                         </li>
                     ))}

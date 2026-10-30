@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import PermissionGrid from '../../components/roles/PermissionGrid';
-import { Btn, Card, EmptyState, ErrorText, Field, LoadingState, Sheet, TextInput } from '../../components/billing/ui.jsx';
+import { Alert, Badge, btn, Card, EmptyState, input, PageHeader, Spinner } from '../../components/ui';
 
 const emptyForm = () => ({
     label: '',
@@ -13,27 +13,33 @@ const emptyForm = () => ({
 });
 
 const KIND_LABEL = { staff: 'Staff', doctor: 'Doctor', clinic_admin: 'Clinic Admin' };
-const KIND_STYLE = {
-    staff: 'border-blue-200 bg-blue-50 text-blue-700',
-    doctor: 'border-purple-200 bg-purple-50 text-purple-700',
-    clinic_admin: 'border-amber-200 bg-amber-50 text-amber-700',
-};
+const KIND_TONE = { staff: 'blue', doctor: 'violet', clinic_admin: 'amber' };
 
 function KindBadge({ kind }) {
+    return <Badge tone={KIND_TONE[kind] || 'slate'}>{KIND_LABEL[kind] || kind}</Badge>;
+}
+
+function Field({ id, label, required, hint, children }) {
+    const LabelTag = id ? 'label' : 'p';
     return (
-        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${KIND_STYLE[kind] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
-            {KIND_LABEL[kind] || kind}
-        </span>
+        <div>
+            <LabelTag {...(id ? { htmlFor: id } : {})} className="mb-1 block text-xs font-medium text-slate-600">
+                {label}{required && <span className="ml-0.5 text-rose-600" aria-hidden="true">*</span>}
+            </LabelTag>
+            {children}
+            {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+        </div>
     );
 }
 
-function Textarea({ value, onChange, placeholder }) {
+function Textarea({ id, value, onChange, placeholder }) {
     return (
         <textarea
+            id={id}
             value={value ?? ''}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="min-h-[80px] w-full resize-y rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className={`${input} min-h-[80px] resize-y`}
         />
     );
 }
@@ -42,14 +48,47 @@ function RadioOption({ checked, disabled, onSelect, label }) {
     return (
         <button
             type="button"
+            role="radio"
+            aria-checked={checked}
             disabled={disabled}
             onClick={onSelect}
-            className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
-                checked ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            className={`h-10 flex-1 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                checked ? 'border-blue-600 bg-blue-50 text-blue-800 ring-1 ring-blue-600' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
             } disabled:cursor-not-allowed disabled:opacity-60`}
         >
             {label}
         </button>
+    );
+}
+
+/** Right-hand drawer used for the add / edit role form. */
+function Sheet({ open, title, subtitle, onClose, children, footer }) {
+    useEffect(() => {
+        if (!open) return undefined;
+        const handler = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [open, onClose]);
+
+    if (!open) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex justify-end" aria-modal="true" role="dialog" aria-label={title}>
+            <div className="absolute inset-0 bg-slate-950/50" onClick={onClose} />
+            <div className="relative flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
+                <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+                        {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+                        <AppIcon name="close" className="h-4 w-4" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-5">{children}</div>
+                {footer && <div className="border-t border-slate-100 px-5 py-4">{footer}</div>}
+            </div>
+        </div>
     );
 }
 
@@ -60,7 +99,7 @@ function DeleteRoleBtn({ role, onDeleted }) {
 
     if (role.is_system) {
         return (
-            <span className="text-xs text-gray-400" title="Built-in roles can't be deleted.">
+            <span className="inline-flex h-9 cursor-not-allowed items-center px-2.5 text-sm font-semibold text-slate-500" title="Built-in roles can't be deleted.">
                 Delete
             </span>
         );
@@ -71,9 +110,9 @@ function DeleteRoleBtn({ role, onDeleted }) {
             <button
                 type="button"
                 onClick={() => { setConfirming(true); setError(''); }}
-                className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                className={`${btn.danger} h-9`}
             >
-                <AppIcon name="trash" className="h-3.5 w-3.5" />
+                <AppIcon name="trash" className="h-4 w-4" />
                 Delete
             </button>
         );
@@ -81,8 +120,8 @@ function DeleteRoleBtn({ role, onDeleted }) {
 
     return (
         <div className="inline-flex flex-col items-end gap-1">
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-2.5 py-1.5">
-                <span className="text-xs font-semibold text-red-700">Delete role?</span>
+            <div className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2.5">
+                <span className="text-sm font-semibold text-rose-800">Delete role?</span>
                 <button
                     type="button"
                     disabled={busy}
@@ -100,15 +139,15 @@ function DeleteRoleBtn({ role, onDeleted }) {
                             setBusy(false);
                         }
                     }}
-                    className="rounded px-1.5 py-0.5 text-xs font-bold text-red-700 hover:bg-red-200 disabled:opacity-50"
+                    className="rounded-md px-2 py-1 text-sm font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-50"
                 >
                     {busy ? '…' : 'Yes'}
                 </button>
-                <button type="button" onClick={() => setConfirming(false)} className="rounded px-1.5 py-0.5 text-xs font-semibold text-gray-600 hover:bg-gray-200">
+                <button type="button" onClick={() => setConfirming(false)} className="rounded-md px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-white">
                     No
                 </button>
             </div>
-            {error && <span className="text-xs text-red-600">{error}</span>}
+            {error && <span className="text-xs text-rose-700">{error}</span>}
         </div>
     );
 }
@@ -213,56 +252,52 @@ export default function RolesPage() {
     const showLimitToggle = sheet.role ? sheet.role.kind === 'staff' : form.kind === 'staff';
 
     return (
-        <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900">Roles</h1>
-                    <p className="mt-0.5 text-sm text-gray-500">Define what staff, doctor and clinic admin roles can see and do.</p>
-                </div>
-                <Btn variant="primary" onClick={openAdd}>
-                    <AppIcon name="plus" className="h-3.5 w-3.5" /> New Role
-                </Btn>
-            </div>
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <PageHeader
+                title="Roles"
+                subtitle="Define what staff, doctor and clinic admin roles can see and do."
+                actions={(
+                    <button type="button" className={btn.primary} onClick={openAdd}>
+                        <AppIcon name="plus" className="h-4 w-4" /> New role
+                    </button>
+                )}
+            />
 
-            {error && <ErrorText>{error}</ErrorText>}
+            {error && <Alert tone="error">{error}</Alert>}
 
             {loading ? (
-                <LoadingState />
+                <Card><Spinner /></Card>
             ) : !roles.length ? (
-                <Card><EmptyState icon="key" text="No roles yet." /></Card>
+                <Card bodyClassName=""><EmptyState icon="key" title="No roles yet" /></Card>
             ) : (
-                <Card className="overflow-x-auto">
+                <Card bodyClassName="overflow-x-auto" className="overflow-hidden">
                     <table className="w-full min-w-[720px] text-sm">
                         <thead>
-                            <tr className="border-b border-gray-100 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
-                                <th className="px-4 py-3">Label</th>
-                                <th className="px-4 py-3">Kind</th>
-                                <th className="px-4 py-3">Users</th>
-                                <th className="px-4 py-3">System</th>
-                                <th className="px-4 py-3 text-right">Actions</th>
+                            <tr className="bg-slate-50 text-left text-xs font-medium text-slate-600">
+                                <th className="px-4 py-3 font-medium">Role</th>
+                                <th className="px-4 py-3 font-medium">Kind</th>
+                                <th className="px-4 py-3 font-medium">Users</th>
+                                <th className="px-4 py-3 font-medium">System</th>
+                                <th className="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody>
                             {roles.map((role) => (
-                                <tr key={role.id} className="align-top">
+                                <tr key={role.id} className="border-t border-slate-100 align-top hover:bg-slate-50">
                                     <td className="px-4 py-3">
-                                        <p className="font-semibold text-gray-900">{role.label}</p>
-                                        {role.description && <p className="mt-0.5 max-w-sm text-xs text-gray-500">{role.description}</p>}
+                                        <p className="font-semibold text-slate-900">{role.label}</p>
+                                        {role.description && <p className="mt-0.5 max-w-sm text-xs text-slate-600">{role.description}</p>}
                                     </td>
                                     <td className="px-4 py-3"><KindBadge kind={role.kind} /></td>
-                                    <td className="px-4 py-3 tabular-nums text-gray-800">{role.users_count ?? 0}</td>
+                                    <td className="px-4 py-3 tabular-nums text-slate-800">{role.users_count ?? 0}</td>
                                     <td className="px-4 py-3">
-                                        {role.is_system ? (
-                                            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-600">System</span>
-                                        ) : (
-                                            <span className="text-gray-300">—</span>
-                                        )}
+                                        {role.is_system ? <Badge tone="slate">System</Badge> : <span className="text-slate-400">—</span>}
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center justify-end gap-2">
-                                            <Btn onClick={() => openEdit(role)}>
-                                                <AppIcon name="edit" className="h-3.5 w-3.5" /> Edit
-                                            </Btn>
+                                            <button type="button" className={`${btn.secondary} h-9`} onClick={() => openEdit(role)}>
+                                                <AppIcon name="edit" className="h-4 w-4" /> Edit
+                                            </button>
                                             <DeleteRoleBtn role={role} onDeleted={load} />
                                         </div>
                                     </td>
@@ -275,29 +310,29 @@ export default function RolesPage() {
 
             <Sheet
                 open={sheet.open}
-                title={sheet.role ? `Edit Role — ${sheet.role.label}` : 'New Role'}
-                subtitle={isClinicAdmin ? 'Clinic Admin always has full access.' : 'Choose what this role can see and do.'}
+                title={sheet.role ? `Edit role — ${sheet.role.label}` : 'New role'}
+                subtitle={isClinicAdmin ? 'Clinic admin always has full access.' : 'Choose what this role can see and do.'}
                 onClose={closeSheet}
                 footer={
-                    <div className="flex items-center justify-between gap-3">
-                        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        {saveError && <p role="alert" className="text-sm text-rose-700">{saveError}</p>}
                         <div className="ml-auto flex gap-2">
-                            <Btn onClick={closeSheet} disabled={saving}>Cancel</Btn>
-                            <Btn variant="primary" onClick={save} disabled={saving} className="min-w-[110px]">
+                            <button type="button" className={btn.secondary} onClick={closeSheet} disabled={saving}>Cancel</button>
+                            <button type="button" className={`${btn.primary} min-w-[110px]`} onClick={save} disabled={saving}>
                                 {saving ? 'Saving…' : 'Save'}
-                            </Btn>
+                            </button>
                         </div>
                     </div>
                 }
             >
                 <div className="space-y-4">
-                    <Field label="Label" required>
-                        <TextInput value={form.label} onChange={(v) => setForm((p) => ({ ...p, label: v }))} placeholder="e.g. Front Desk" />
+                    <Field id="role-label" label="Label" required>
+                        <input id="role-label" className={input} value={form.label ?? ''} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} placeholder="e.g. Front Desk" />
                     </Field>
 
                     {!isClinicAdmin && (
                         <Field label="Kind" required hint={sheet.role ? "A role's kind can't be changed after it's created." : ''}>
-                            <div className="flex gap-2">
+                            <div role="radiogroup" aria-label="Kind" className="flex gap-2">
                                 <RadioOption
                                     label="Staff"
                                     checked={form.kind === 'staff'}
@@ -315,29 +350,25 @@ export default function RolesPage() {
                     )}
 
                     {showLimitToggle && (
-                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                             <input
                                 type="checkbox"
                                 checked={Boolean(form.limit_to_assigned_doctors)}
                                 onChange={(e) => setForm((p) => ({ ...p, limit_to_assigned_doctors: e.target.checked }))}
-                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                             />
-                            <span className="text-sm text-gray-700">Only see assigned doctors&rsquo; patients and appointments</span>
+                            <span className="text-sm text-slate-800">Only see assigned doctors&rsquo; patients and appointments</span>
                         </label>
                     )}
 
-                    <Field label="Description">
-                        <Textarea value={form.description} onChange={(v) => setForm((p) => ({ ...p, description: v }))} placeholder="Shown to super admins managing roles." />
+                    <Field id="role-desc" label="Description">
+                        <Textarea id="role-desc" value={form.description} onChange={(v) => setForm((p) => ({ ...p, description: v }))} placeholder="Shown to super admins managing roles." />
                     </Field>
 
-                    {isClinicAdmin ? (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                            Clinic Admin always has full access.
-                        </div>
-                    ) : null}
+                    {isClinicAdmin ? <Alert tone="warn">Clinic admin always has full access.</Alert> : null}
 
                     <div>
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Permissions</p>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Permissions</p>
                         <PermissionGrid
                             catalogue={catalogue}
                             value={gridValue}

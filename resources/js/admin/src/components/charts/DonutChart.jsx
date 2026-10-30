@@ -39,22 +39,23 @@ export default function DonutChart({ title, subtitle, items = [], valueKey = 'co
     }, [items, total, valueKey]);
 
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <section className="h-full rounded-2xl border border-slate-200 bg-white">
             {(title || subtitle) && (
-                <div className="mb-5">
-                    {title && <h3 className="text-sm font-semibold text-gray-900">{title}</h3>}
-                    {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+                <div className="border-b border-slate-100 px-5 py-4">
+                    {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
+                    {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
                 </div>
             )}
 
+            <div className="p-5">
             {!items?.length || !total ? (
-                <div className="flex h-32 items-center justify-center text-sm text-gray-400">No data</div>
+                <div className="flex h-32 items-center justify-center text-sm text-slate-500">No data yet</div>
             ) : (
                 <div className="flex flex-col items-center gap-5 sm:flex-row">
                     {/* Donut */}
                     <div className="flex-shrink-0">
-                        <svg viewBox="0 0 48 48" className="h-32 w-32">
-                            <circle cx="24" cy="24" r="18" stroke="#F3F4F6" strokeWidth="7" fill="none" />
+                        <svg viewBox="0 0 48 48" className="h-32 w-32" role="img" aria-label={`${total} total`}>
+                            <circle cx="24" cy="24" r="18" stroke="#F1F5F9" strokeWidth="7" fill="none" />
                             {segments.map((s) => (
                                 <circle
                                     key={s.key}
@@ -68,10 +69,10 @@ export default function DonutChart({ title, subtitle, items = [], valueKey = 'co
                                     strokeLinecap="butt"
                                 />
                             ))}
-                            <text x="24" y="22" textAnchor="middle" dominantBaseline="middle" fill="#111827" fontSize="7" fontWeight="700">
+                            <text x="24" y="22" textAnchor="middle" dominantBaseline="middle" fill="#0F172A" fontSize="7" fontWeight="700">
                                 {total}
                             </text>
-                            <text x="24" y="29" textAnchor="middle" dominantBaseline="middle" fill="#9CA3AF" fontSize="4.5">
+                            <text x="24" y="29" textAnchor="middle" dominantBaseline="middle" fill="#64748B" fontSize="4.5">
                                 total
                             </text>
                         </svg>
@@ -85,11 +86,11 @@ export default function DonutChart({ title, subtitle, items = [], valueKey = 'co
                                 <div key={s.key} className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <span className={`h-2 w-2 flex-shrink-0 rounded-full ${s.bg}`} />
-                                        <span className="truncate text-xs font-medium text-gray-700">{s.label}</span>
+                                        <span className="truncate text-sm capitalize text-slate-700">{String(s.label).replace(/_/g, ' ')}</span>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0">
-                                        <span className="text-xs font-bold text-gray-900">{s.value}</span>
-                                        <span className="text-[10px] text-gray-400 w-7 text-right">{pct}%</span>
+                                        <span className="text-sm font-semibold text-slate-900 tabular-nums">{s.value}</span>
+                                        <span className="w-9 text-right text-xs text-slate-500 tabular-nums">{pct}%</span>
                                     </div>
                                 </div>
                             );
@@ -97,6 +98,7 @@ export default function DonutChart({ title, subtitle, items = [], valueKey = 'co
                     </div>
                 </div>
             )}
-        </div>
+            </div>
+        </section>
     );
 }

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useScope } from '../context/ScopeContext';
 import AppIcon from './AppIcon';
 import StatusBadge from './StatusBadge';
+import { Alert, Spinner, btn, input, label } from './ui';
 
 function prettyDateLabel(ymd) {
     try {
@@ -46,15 +47,28 @@ function formatDateTime(value) {
 
 function TimelineItem({ title, meta, description }) {
     return (
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-sm font-semibold text-slate-900">{title}</p>
-                    {description ? <p className="mt-1 text-sm text-slate-700">{description}</p> : null}
-                </div>
-                {meta ? <p className="text-xs text-slate-500">{meta}</p> : null}
+        <li className="flex items-start justify-between gap-4 px-5 py-3">
+            <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">{title}</p>
+                {description ? <p className="mt-0.5 text-sm text-slate-700">{description}</p> : null}
             </div>
-        </div>
+            {meta ? <p className="shrink-0 text-xs text-slate-600">{meta}</p> : null}
+        </li>
+    );
+}
+
+function DrawerSection({ title, description, actions, children, bodyClassName = 'p-5' }) {
+    return (
+        <section className="rounded-2xl border border-slate-200 bg-white">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div className="min-w-0">
+                    <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+                    {description ? <p className="mt-0.5 text-sm text-slate-600">{description}</p> : null}
+                </div>
+                {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+            </div>
+            <div className={bodyClassName}>{children}</div>
+        </section>
     );
 }
 
@@ -271,14 +285,14 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
         if (apptStatus === 'pending')
             acts.push({ label: 'Confirm', status: 'confirmed', style: 'indigo' });
         if (['pending', 'confirmed'].includes(apptStatus))
-            acts.push({ label: 'Check In', status: 'checked_in', style: 'emerald' });
+            acts.push({ label: 'Check in', status: 'checked_in', style: 'emerald' });
         if (apptStatus === 'checked_in')
-            acts.push({ label: 'Start Consultation', status: 'in_consultation', style: 'violet' });
+            acts.push({ label: 'Start consultation', status: 'in_consultation', style: 'violet' });
         if (['checked_in', 'in_consultation'].includes(apptStatus))
             acts.push({ label: 'Complete', status: 'completed', style: 'emerald' });
         // Mirrors AppointmentStatus::allowedTransitions(); in_consultation can only complete.
         if (['pending', 'confirmed', 'checked_in'].includes(apptStatus)) {
-            acts.push({ label: 'No Show', status: 'no_show', style: 'orange' });
+            acts.push({ label: 'No show', status: 'no_show', style: 'orange' });
             acts.push({ label: 'Cancel', status: 'cancelled', style: 'rose' });
         }
         return acts.filter((a) => (a.status === 'cancelled' ? canCancel : canCheckIn));
@@ -288,75 +302,77 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
     // the one the original transition needed.
     const canUndo = Boolean(appt?.can_undo_status) && (apptStatus === 'cancelled' ? canCancel : canCheckIn);
     const undoLabel = { cancelled: 'cancellation', no_show: 'no-show', completed: 'completion' }[apptStatus] || 'status change';
-    const actionStyleMap = {
-        indigo:  'bg-indigo-600 hover:bg-indigo-700 text-white',
-        emerald: 'bg-emerald-600 hover:bg-emerald-700 text-white',
-        violet:  'bg-violet-600 hover:bg-violet-700 text-white',
-        orange:  'bg-orange-500 hover:bg-orange-600 text-white',
-        rose:    'bg-rose-600 hover:bg-rose-700 text-white',
+    // Visual weight per action: the first forward step is the primary
+    // button, other forward steps are secondary, cancel is destructive.
+    const primaryActionStatus = statusActions.find((a) => !['no_show', 'cancelled'].includes(a.status))?.status;
+    const actionClass = (a) => {
+        if (a.style === 'rose') return btn.danger;
+        if (a.status === primaryActionStatus) return btn.primary;
+        return btn.secondary;
     };
 
     if (!open) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-            <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={onClose} />
+    const patientLabel = appt?.patient?.full_name ? appt.patient.full_name : (appt?.patient_id ? `Patient #${appt.patient_id}` : '—');
+    const detailRows = appt ? [
+        ['Status', String(appt.status || '—')],
+        ['UUID', appt.uuid || '—'],
+        ['Patient', appt?.patient?.full_name || (appt.patient_id ? `Patient #${appt.patient_id}` : '—')],
+        ['Phone', appt?.patient?.phone || '—'],
+        ['Doctor', appt?.doctor?.full_name || (appt.doctor_id ? `Doctor #${appt.doctor_id}` : '—')],
+        ['Service', appt.service_id ? `#${appt.service_id}` : '—'],
+        ['Visit type', appt.visit_type || '—'],
+        ['Consultation', appt.consultation_mode || '—'],
+        ['Booking', appt.booking_channel || '—'],
+        ['Token', appt.token_number || '—'],
+        ['Confirmed at', formatDateTime(appt.confirmed_at) || '—'],
+        ['Checked-in at', formatDateTime(appt.checked_in_at) || '—'],
+        ['Completed at', formatDateTime(appt.completed_at) || '—'],
+        ['Cancelled at', formatDateTime(appt.cancelled_at) || '—'],
+        ['Cancellation reason', appt.cancellation_reason || '—', true],
+        ['Notes', appt.notes || '—', true],
+    ] : [];
 
-            <div className="relative ml-auto h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
-                <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
+    return (
+        <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog" aria-labelledby="appt-drawer-title">
+            <div className="absolute inset-0 bg-slate-950/50" onClick={onClose} />
+
+            <div className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
+                <div className="border-b border-slate-200 bg-white px-5 py-4">
                     <div className="flex items-start justify-between gap-4">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <AppIcon name="module" className="h-5 w-5 text-slate-700" />
-                                <h3 className="text-base font-semibold text-slate-900">Appointment</h3>
+                        <div className="min-w-0">
+                            <p className="text-xs font-medium text-slate-600">Appointment</p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                                <h2 id="appt-drawer-title" className="truncate text-lg font-semibold text-slate-900">{patientLabel}</h2>
                                 {appt?.status ? <StatusBadge status={appt.status} /> : null}
                             </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-medium text-slate-700">
-                                    {appt?.patient?.full_name ? appt.patient.full_name : (appt?.patient_id ? `Patient #${appt.patient_id}` : '—')}
-                                </span>
-                                {appt?.appointment_date && appt?.start_time ? (
-                                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-800">
-                                        {prettySlotLabel({ date: appt.appointment_date, start: appt.start_time, end: appt.end_time })}
-                                    </span>
-                                ) : null}
-                            </div>
+                            {appt?.appointment_date && appt?.start_time ? (
+                                <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-700">
+                                    <AppIcon name="calendar" className="h-4 w-4 text-slate-500" />
+                                    {prettySlotLabel({ date: appt.appointment_date, start: appt.start_time, end: appt.end_time })}
+                                </p>
+                            ) : null}
                         </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                            Close
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                            <button type="button" onClick={downloadAppointmentPdf} className={btn.ghost}>
+                                <AppIcon name="download" className="h-4 w-4" />
+                                <span className="hidden sm:inline">Download PDF</span>
+                                <span className="sr-only sm:hidden">Download PDF</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                aria-label="Close"
+                                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                                <AppIcon name="close" className="h-5 w-5" />
+                            </button>
+                        </div>
                     </div>
-
-                    <div className="mt-3 flex items-center justify-end gap-2">
-                        <button
-                            type="button"
-                            onClick={downloadAppointmentPdf}
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                            Download PDF
-                        </button>
-                    </div>
-                </div>
-
-                <div className="space-y-4 p-5">
-                    {loading ? (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">Loading…</div>
-                    ) : null}
-                    {error ? (
-                        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
-                    ) : null}
 
                     {(statusActions.length > 0 || canUndo) && (
-                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <h4 className="mb-3 text-sm font-semibold text-slate-900">Actions</h4>
-
-                            {actionError ? (
-                                <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</div>
-                            ) : null}
+                        <div className="mt-4 space-y-3">
+                            {actionError ? <Alert>{actionError}</Alert> : null}
 
                             <div className="flex flex-wrap gap-2">
                                 {statusActions.map((a) => {
@@ -367,7 +383,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                                 type="button"
                                                 disabled={actionLoading}
                                                 onClick={() => setShowCancelInput((v) => !v)}
-                                                className={`rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50 ${actionStyleMap[a.style]}`}
+                                                className={actionClass(a)}
                                             >
                                                 {a.label}
                                             </button>
@@ -379,7 +395,7 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                             type="button"
                                             disabled={actionLoading}
                                             onClick={() => changeStatus(a.status)}
-                                            className={`rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50 ${actionStyleMap[a.style]}`}
+                                            className={actionClass(a)}
                                         >
                                             {actionLoading ? 'Saving…' : a.label}
                                         </button>
@@ -390,93 +406,83 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                         type="button"
                                         disabled={actionLoading}
                                         onClick={() => setShowUndoConfirm((v) => !v)}
-                                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                        className={btn.secondary}
                                     >
+                                        <AppIcon name="restore" className="h-4 w-4" />
                                         Undo {undoLabel}
                                     </button>
                                 ) : null}
                             </div>
 
                             {showUndoConfirm && canUndo && (
-                                <div className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
                                     <p className="text-sm text-amber-900">
                                         Undo this {undoLabel}? The appointment goes back to its previous status
                                         {apptStatus === 'cancelled' ? ' and the patient is sent the booking confirmation again' : ''}.
                                     </p>
-                                    <div className="flex gap-2">
-                                        <button
-                                            type="button"
-                                            disabled={actionLoading}
-                                            onClick={undoStatus}
-                                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                                        >
-                                            {actionLoading ? 'Undoing…' : 'Confirm Undo'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowUndoConfirm(false)}
-                                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                        >
+                                    <div className="flex flex-wrap justify-end gap-2">
+                                        <button type="button" onClick={() => setShowUndoConfirm(false)} className={btn.secondary}>
                                             Dismiss
+                                        </button>
+                                        <button type="button" disabled={actionLoading} onClick={undoStatus} className={btn.primary}>
+                                            {actionLoading ? 'Undoing…' : 'Confirm undo'}
                                         </button>
                                     </div>
                                 </div>
                             )}
 
                             {showCancelInput && (
-                                <div className="mt-3 flex flex-col gap-2">
-                                    <input
-                                        type="text"
-                                        value={cancelReason}
-                                        onChange={(e) => setCancelReason(e.target.value)}
-                                        placeholder="Cancellation reason (optional)"
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                                    />
-                                    <div className="flex gap-2">
+                                <div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+                                    <div>
+                                        <label htmlFor="appt-cancel-reason" className={label}>Cancellation reason (optional)</label>
+                                        <input
+                                            id="appt-cancel-reason"
+                                            type="text"
+                                            value={cancelReason}
+                                            onChange={(e) => setCancelReason(e.target.value)}
+                                            placeholder="Cancellation reason (optional)"
+                                            className={input}
+                                        />
+                                    </div>
+                                    <div className="flex flex-wrap justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowCancelInput(false); setCancelReason(''); }}
+                                            className={btn.secondary}
+                                        >
+                                            Dismiss
+                                        </button>
                                         <button
                                             type="button"
                                             disabled={actionLoading}
                                             onClick={() => changeStatus('cancelled', cancelReason)}
-                                            className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+                                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
                                         >
-                                            {actionLoading ? 'Cancelling…' : 'Confirm Cancel'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setShowCancelInput(false); setCancelReason(''); }}
-                                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                                        >
-                                            Dismiss
+                                            {actionLoading ? 'Cancelling…' : 'Confirm cancel'}
                                         </button>
                                     </div>
                                 </div>
                             )}
                         </div>
                     )}
+                </div>
+
+                <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-5">
+                    {loading ? <Spinner className="py-8" /> : null}
+                    {error ? <Alert>{error}</Alert> : null}
 
                     {appt ? (
-                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <h4 className="text-sm font-semibold text-slate-900">Appointment Details</h4>
-                            <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
-                                <div><span className="text-slate-500">Status:</span> <span className="font-semibold">{String(appt.status || '—')}</span></div>
-                                <div><span className="text-slate-500">UUID:</span> {appt.uuid || '—'}</div>
-                                <div><span className="text-slate-500">Patient:</span> {appt?.patient?.full_name || (appt.patient_id ? `Patient #${appt.patient_id}` : '—')}</div>
-                                <div><span className="text-slate-500">Phone:</span> {appt?.patient?.phone || '—'}</div>
-                                <div><span className="text-slate-500">Doctor:</span> {appt?.doctor?.full_name || (appt.doctor_id ? `Doctor #${appt.doctor_id}` : '—')}</div>
-                                <div><span className="text-slate-500">Service:</span> {appt.service_id ? `#${appt.service_id}` : '—'}</div>
-                                <div><span className="text-slate-500">Visit type:</span> {appt.visit_type || '—'}</div>
-                                <div><span className="text-slate-500">Consultation:</span> {appt.consultation_mode || '—'}</div>
-                                <div><span className="text-slate-500">Booking:</span> {appt.booking_channel || '—'}</div>
-                                <div><span className="text-slate-500">Token:</span> {appt.token_number || '—'}</div>
-                                <div><span className="text-slate-500">Confirmed at:</span> {formatDateTime(appt.confirmed_at) || '—'}</div>
-                                <div><span className="text-slate-500">Checked-in at:</span> {formatDateTime(appt.checked_in_at) || '—'}</div>
-                                <div><span className="text-slate-500">Completed at:</span> {formatDateTime(appt.completed_at) || '—'}</div>
-                                <div><span className="text-slate-500">Cancelled at:</span> {formatDateTime(appt.cancelled_at) || '—'}</div>
-                                <div className="md:col-span-2"><span className="text-slate-500">Cancellation reason:</span> {appt.cancellation_reason || '—'}</div>
-                                <div className="md:col-span-2"><span className="text-slate-500">Notes:</span> {appt.notes || '—'}</div>
-                            </div>
+                        <DrawerSection title="Appointment details">
+                            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                                {detailRows.map(([k, v, wide]) => (
+                                    <div key={k} className={wide ? 'sm:col-span-2' : ''}>
+                                        <dt className="text-xs font-medium text-slate-600">{k}</dt>
+                                        <dd className="mt-0.5 break-words text-sm text-slate-900">{v}</dd>
+                                    </div>
+                                ))}
+                            </dl>
                             {waitlist && (waitlist.waiting_count > 0 || waitlist.held_for) ? (
-                                <div className="mt-3 space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                                <div className="mt-4 space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                                     {waitlist.waiting_count > 0 ? (
                                         <div>{waitlist.waiting_count} waiting for this slot</div>
                                     ) : null}
@@ -485,13 +491,11 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                     ) : null}
                                 </div>
                             ) : null}
-                        </div>
+                        </DrawerSection>
                     ) : null}
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h4 className="text-sm font-semibold text-slate-900">Timeline</h4>
-                        <p className="mt-1 text-sm text-slate-600">Status changes and reschedules.</p>
-                        <div className="mt-3 space-y-2">
+                    <DrawerSection title="Timeline" description="Status changes and reschedules." bodyClassName="">
+                        <ul className="divide-y divide-slate-100">
                             {[...statusLogs.map((l) => ({
                                 kind: 'status',
                                 at: l.created_at,
@@ -515,47 +519,44 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                         meta={formatDateTime(it.at)}
                                     />
                                 ))}
-                            {!statusLogs.length && !reschedules.length ? (
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">No timeline events yet.</div>
-                            ) : null}
-                        </div>
-                    </div>
+                        </ul>
+                        {!statusLogs.length && !reschedules.length ? (
+                            <p className="px-5 py-4 text-sm text-slate-600">No timeline events yet.</p>
+                        ) : null}
+                    </DrawerSection>
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h4 className="text-sm font-semibold text-slate-900">Communication / Reminders</h4>
-                        <p className="mt-1 text-sm text-slate-600">Reminders and WhatsApp message summary for this appointment.</p>
-
-                        <div className={`mt-3 grid gap-4 ${canViewWhatsapp && waMessages.length ? 'md:grid-cols-2' : ''}`}>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reminder status counts</p>
-                                <div className="mt-2 space-y-1">
+                    <DrawerSection title="Communication and reminders" description="Reminders and WhatsApp message summary for this appointment.">
+                        <div className={`grid gap-4 ${canViewWhatsapp && waMessages.length ? 'md:grid-cols-2' : ''}`}>
+                            <div>
+                                <p className={label}>Reminder status counts</p>
+                                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                                     {(reminders?.counts_by_delivery_status || []).map((r) => (
-                                        <div key={r.delivery_status} className="flex items-center justify-between text-sm">
+                                        <div key={r.delivery_status} className="flex items-center justify-between px-3 py-2 text-sm">
                                             <span className="text-slate-700">{r.delivery_status}</span>
                                             <span className="font-semibold text-slate-900">{r.count}</span>
                                         </div>
                                     ))}
                                     {!(reminders?.counts_by_delivery_status || []).length ? (
-                                        <p className="text-sm text-slate-600">No reminders yet.</p>
+                                        <p className="px-3 py-2 text-sm text-slate-600">No reminders yet.</p>
                                     ) : null}
                                 </div>
                             </div>
 
                             {canViewWhatsapp && waMessages.length ? (
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp Messages</p>
-                                    <div className="mt-2 space-y-2">
+                                <div>
+                                    <p className={label}>WhatsApp messages</p>
+                                    <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                                         {waMessages.map((m) => (
-                                            <div key={m.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                                            <div key={m.id} className="px-3 py-2">
                                                 <div className="flex items-center justify-between gap-2">
-                                                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                                    <span className="text-sm font-medium capitalize text-slate-800">
                                                         {String(m.notification_type || m.message_type || 'message').replaceAll('_', ' ')}
                                                     </span>
                                                     <StatusBadge status={m.delivery_status} />
                                                 </div>
-                                                <p className="mt-1 text-xs text-slate-500">{formatDateTime(m.created_at)}</p>
+                                                <p className="mt-0.5 text-xs text-slate-600">{formatDateTime(m.created_at)}</p>
                                                 {m.delivery_status === 'failed' && m.error_message ? (
-                                                    <p className="mt-1 text-xs text-rose-600">{m.error_message}</p>
+                                                    <p className="mt-1 text-xs text-rose-700">{m.error_message}</p>
                                                 ) : null}
                                             </div>
                                         ))}
@@ -564,104 +565,88 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                             ) : null}
                         </div>
 
-                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent reminders</p>
-                            <div className="mt-2 space-y-2">
+                        <div className="mt-4">
+                            <p className={label}>Recent reminders</p>
+                            <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                                 {(reminders?.recent || []).map((r) => (
-                                    <div key={r.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                                        <div className="flex items-center justify-between">
+                                    <div key={r.id} className="px-3 py-2">
+                                        <div className="flex items-center justify-between gap-2">
                                             <p className="text-sm font-medium text-slate-800">{r.channel} · {r.reminder_type}</p>
-                                            <p className="text-xs text-slate-500">{r.delivery_status}</p>
+                                            <p className="text-xs text-slate-600">{r.delivery_status}</p>
                                         </div>
-                                            <p className="text-xs text-slate-600">Scheduled: {formatDateTime(r.scheduled_for) || '—'}</p>
+                                        <p className="text-xs text-slate-600">Scheduled: {formatDateTime(r.scheduled_for) || '—'}</p>
                                     </div>
                                 ))}
                                 {!(reminders?.recent || []).length ? (
-                                    <p className="text-sm text-slate-600">No reminders linked.</p>
+                                    <p className="px-3 py-2 text-sm text-slate-600">No reminders linked.</p>
                                 ) : null}
                             </div>
                         </div>
-                    </div>
+                    </DrawerSection>
 
                     {/* AI Summary Section */}
-                    <div className="rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <h4 className="text-sm font-semibold text-slate-900">AI Appointment Summary</h4>
-                                <p className="mt-0.5 text-xs text-slate-500">Record the doctor-patient conversation to generate a structured summary.</p>
-                            </div>
-                            {summary ? (
-                                <button
-                                    type="button"
-                                    onClick={fetchSummary}
-                                    className="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                >
-                                    Refresh
-                                </button>
-                            ) : null}
-                        </div>
-
-                        {summaryError ? (
-                            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{summaryError}</div>
+                    <DrawerSection
+                        title="AI appointment summary"
+                        description="Record the doctor-patient conversation to generate a structured summary."
+                        actions={summary ? (
+                            <button type="button" onClick={fetchSummary} className={btn.ghost}>
+                                Refresh
+                            </button>
                         ) : null}
+                    >
+                        {summaryError ? <div className="mb-3"><Alert>{summaryError}</Alert></div> : null}
 
-                        {summaryLoading ? (
-                            <div className="mt-3 text-sm text-slate-500">Loading summary…</div>
-                        ) : null}
+                        {summaryLoading ? <Spinner className="py-6" /> : null}
 
                         {!summaryLoading && !summary ? (
-                            <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 text-center">
+                            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
                                 <p className="text-sm text-slate-600">No summary yet. Record the consultation to generate one.</p>
                                 {summaryUploading ? (
-                                    <div className="flex items-center gap-2 text-sm text-indigo-600">
-                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+                                    <div className="flex items-center gap-2 text-sm text-blue-700">
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                                         Transcribing and generating summary…
                                     </div>
                                 ) : summaryRecording ? (
                                     <button
                                         type="button"
                                         onClick={stopSummaryRecording}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                                        className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700"
                                     >
                                         <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
-                                        Stop Recording
+                                        Stop recording
                                     </button>
                                 ) : canPrescribe ? (
-                                    <button
-                                        type="button"
-                                        onClick={startSummaryRecording}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                                    >
+                                    <button type="button" onClick={startSummaryRecording} className={btn.secondary}>
                                         <AppIcon name="section" className="h-4 w-4" />
-                                        Record &amp; Generate Summary
+                                        Record &amp; generate summary
                                     </button>
                                 ) : null}
                             </div>
                         ) : null}
 
                         {summary ? (
-                            <div className="mt-4 space-y-3">
+                            <div className="space-y-3">
                                 {summary.patient_summary ? (
                                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Patient Summary</p>
-                                        <p className="mt-1.5 text-sm text-slate-800 leading-relaxed">{summary.patient_summary}</p>
+                                        <p className="text-xs font-semibold text-slate-700">Patient summary</p>
+                                        <p className="mt-1.5 text-sm leading-relaxed text-slate-800">{summary.patient_summary}</p>
                                     </div>
                                 ) : null}
 
                                 {summary.doctor_suggestions ? (
                                     <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Doctor Suggestions</p>
-                                        <p className="mt-1.5 text-sm text-slate-800 leading-relaxed">{summary.doctor_suggestions}</p>
+                                        <p className="text-xs font-semibold text-blue-800">Doctor suggestions</p>
+                                        <p className="mt-1.5 text-sm leading-relaxed text-slate-800">{summary.doctor_suggestions}</p>
                                     </div>
                                 ) : null}
 
                                 {(summary.preferred_medications || []).length > 0 ? (
                                     <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-3">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">Preferred Medications</p>
+                                        <p className="text-xs font-semibold text-amber-800">Preferred medications</p>
                                         <ul className="mt-1.5 space-y-1">
                                             {(summary.preferred_medications || []).map((m, i) => (
                                                 <li key={i} className="flex items-start gap-2 text-sm text-slate-800">
-                                                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
                                                     <span><span className="font-medium">{m.name}</span>{m.note ? ` — ${m.note}` : ''}</span>
                                                 </li>
                                             ))}
@@ -669,32 +654,28 @@ export default function AppointmentDetailDrawer({ open, appointmentId, onClose, 
                                     </div>
                                 ) : null}
 
-                                <div className="flex items-center justify-between text-xs text-slate-400">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
                                     <span>Generated {formatDateTime(summary.created_at)}</span>
                                     {summaryUploading ? (
-                                        <span className="text-indigo-500">Regenerating…</span>
+                                        <span className="text-blue-700">Regenerating…</span>
                                     ) : summaryRecording ? (
                                         <button
                                             type="button"
                                             onClick={stopSummaryRecording}
-                                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-700"
+                                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-rose-600 px-2.5 text-xs font-semibold text-white hover:bg-rose-700"
                                         >
                                             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-                                            Stop Recording
+                                            Stop recording
                                         </button>
                                     ) : canPrescribe ? (
-                                        <button
-                                            type="button"
-                                            onClick={startSummaryRecording}
-                                            className="rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
-                                        >
+                                        <button type="button" onClick={startSummaryRecording} className={btn.ghost}>
                                             Regenerate
                                         </button>
                                     ) : null}
                                 </div>
                             </div>
                         ) : null}
-                    </div>
+                    </DrawerSection>
                 </div>
             </div>
         </div>

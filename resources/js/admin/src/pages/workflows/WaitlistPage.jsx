@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useScope } from '../../context/ScopeContext';
 import AppIcon from '../../components/AppIcon';
 import StatusBadge from '../../components/StatusBadge';
+import { PageHeader, Alert, Spinner, EmptyState, btn, input, label } from '../../components/ui';
 import { formatDate, formatDateTime, formatTime } from '../../utils/dateFormat';
 
 const STATUS_OPTIONS = [
@@ -31,7 +32,9 @@ const doctorLabel = (d) => [d?.title, d?.full_name || d?.name].filter(Boolean).j
 
 const apiError = (e, fallback) => e?.response?.data?.message || e?.message || fallback;
 
-const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200';
+const inputClass = input;
+const smallSecondary = 'inline-flex h-8 items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
+const smallDanger = 'inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50';
 
 const EMPTY_ADD = {
     open: false,
@@ -232,41 +235,34 @@ export default function WaitlistPage() {
     const canSubmitAdd = Boolean(add.patient && add.doctorId && add.date && add.startTime) && !add.busy;
 
     return (
-        <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <AppIcon name="calendar" className="h-5 w-5 text-slate-700" />
-                    <div>
-                        <h2 className="text-xl font-semibold text-slate-900">Waitlist</h2>
-                        <p className="mt-0.5 text-sm text-slate-600">Patients waiting for a taken slot. A freed slot is held for the first in line.</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setReloadKey((k) => k + 1)}
-                        disabled={loading}
-                        className="rounded-xl border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
-                    >
-                        {loading ? 'Refreshing…' : 'Refresh'}
-                    </button>
-                    {canManage ? (
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <PageHeader
+                title="Waitlist"
+                subtitle="Patients waiting for a taken slot. A freed slot is held for the first in line."
+                actions={(
+                    <>
                         <button
                             type="button"
-                            onClick={openAdd}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                            onClick={() => setReloadKey((k) => k + 1)}
+                            disabled={loading}
+                            className={btn.secondary}
                         >
-                            <AppIcon name="plus" className="h-4 w-4" />
-                            Add to waitlist
+                            {loading ? 'Refreshing…' : 'Refresh'}
                         </button>
-                    ) : null}
-                </div>
-            </div>
+                        {canManage ? (
+                            <button type="button" onClick={openAdd} className={btn.primary}>
+                                <AppIcon name="plus" className="h-4 w-4" />
+                                Add to waitlist
+                            </button>
+                        ) : null}
+                    </>
+                )}
+            />
 
-            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-4">
+            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 md:grid-cols-4">
                 <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Doctor</label>
-                    <select value={filters.doctorId} onChange={(e) => setFilter('doctorId', e.target.value)} className={inputClass}>
+                    <label htmlFor="wl-filter-doctor" className={label}>Doctor</label>
+                    <select id="wl-filter-doctor" value={filters.doctorId} onChange={(e) => setFilter('doctorId', e.target.value)} className={inputClass}>
                         <option value="">All doctors</option>
                         {doctors.map((d) => (
                             <option key={d.id} value={String(d.id)}>{doctorLabel(d)}</option>
@@ -274,12 +270,12 @@ export default function WaitlistPage() {
                     </select>
                 </div>
                 <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date</label>
-                    <input type="date" value={filters.date} onChange={(e) => setFilter('date', e.target.value)} className={inputClass} />
+                    <label htmlFor="wl-filter-date" className={label}>Date</label>
+                    <input id="wl-filter-date" type="date" value={filters.date} onChange={(e) => setFilter('date', e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Status</label>
-                    <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)} className={inputClass}>
+                    <label htmlFor="wl-filter-status" className={label}>Status</label>
+                    <select id="wl-filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)} className={inputClass}>
                         {STATUS_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
@@ -292,69 +288,69 @@ export default function WaitlistPage() {
                             setFilters({ doctorId: '', date: '', status: 'active' });
                             setPage(1);
                         }}
-                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        className={`${btn.secondary} w-full`}
                     >
                         Clear filters
                     </button>
                 </div>
             </div>
 
-            {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-            {notice ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</div> : null}
+            {error ? <Alert>{error}</Alert> : null}
+            {notice ? <Alert tone="success">{notice}</Alert> : null}
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <table className="min-w-full text-sm">
                         <thead className="bg-slate-50">
-                            <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                <th className="px-4 py-3">Patient</th>
-                                <th className="px-4 py-3">Doctor</th>
-                                <th className="px-4 py-3">Date / time</th>
-                                <th className="px-4 py-3">Status</th>
-                                <th className="px-4 py-3">Position</th>
-                                <th className="px-4 py-3">Hold until</th>
-                                <th className="px-4 py-3">Source</th>
-                                {canManage ? <th className="px-4 py-3 text-right">Actions</th> : null}
+                            <tr className="text-left text-xs font-medium text-slate-600">
+                                <th className="px-4 py-3 font-medium">Patient</th>
+                                <th className="px-4 py-3 font-medium">Doctor</th>
+                                <th className="px-4 py-3 font-medium">Date / time</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">Position</th>
+                                <th className="px-4 py-3 font-medium">Hold until</th>
+                                <th className="px-4 py-3 font-medium">Source</th>
+                                {canManage ? <th className="px-4 py-3 text-right font-medium">Actions</th> : null}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody>
                             {loading && !rows.length ? (
-                                <tr><td colSpan={canManage ? 8 : 7} className="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+                                <tr className="border-t border-slate-100"><td colSpan={canManage ? 8 : 7}><Spinner className="py-10" /></td></tr>
                             ) : null}
                             {!loading && !rows.length ? (
-                                <tr><td colSpan={canManage ? 8 : 7} className="px-4 py-6 text-center text-slate-500">No waitlist entries.</td></tr>
+                                <tr className="border-t border-slate-100"><td colSpan={canManage ? 8 : 7}><EmptyState icon="calendar" title="No waitlist entries" /></td></tr>
                             ) : null}
                             {rows.map((r) => {
                                 const active = ['waiting', 'offered'].includes(String(r.status));
                                 const confirming = removeConfirm.id === r.id;
                                 return (
-                                    <tr key={r.id} className="align-top">
+                                    <tr key={r.id} className="border-t border-slate-100 align-top hover:bg-slate-50">
                                         <td className="px-4 py-3">
                                             <div className="font-medium text-slate-900">{r.patient?.full_name || `Patient #${r.patient?.id ?? ''}`}</div>
-                                            <div className="text-xs text-slate-500">{r.patient?.phone || '—'}</div>
+                                            <div className="text-xs text-slate-600">{r.patient?.phone || '—'}</div>
                                         </td>
-                                        <td className="px-4 py-3 text-slate-700">{r.doctor?.name || '—'}</td>
-                                        <td className="px-4 py-3 text-slate-700">
+                                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">{r.doctor?.name || '—'}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">
                                             <div>{formatDate(r.date)}</div>
-                                            <div className="text-xs text-slate-500">
+                                            <div className="text-xs text-slate-600">
                                                 {formatTime(r.start_time)}{r.end_time ? `–${formatTime(r.end_time)}` : ''}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                                         <td className="px-4 py-3 text-slate-700">{r.position ?? '—'}</td>
-                                        <td className="px-4 py-3 text-slate-700">{r.hold_expires_at ? formatDateTime(r.hold_expires_at) : '—'}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">{r.hold_expires_at ? formatDateTime(r.hold_expires_at) : '—'}</td>
                                         <td className="px-4 py-3 capitalize text-slate-700">{r.source || '—'}</td>
                                         {canManage ? (
                                             <td className="px-4 py-3 text-right">
                                                 {active ? (
                                                     confirming ? (
-                                                        <div className="inline-flex items-center gap-2">
+                                                        <div className="inline-flex items-center gap-2 whitespace-nowrap">
                                                             <span className="text-xs text-slate-600">Remove?</span>
                                                             <button
                                                                 type="button"
                                                                 disabled={removeConfirm.busy}
                                                                 onClick={() => confirmRemove(r.id)}
-                                                                className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+                                                                className={smallDanger}
                                                             >
                                                                 {removeConfirm.busy ? 'Removing…' : 'Yes, remove'}
                                                             </button>
@@ -362,7 +358,7 @@ export default function WaitlistPage() {
                                                                 type="button"
                                                                 disabled={removeConfirm.busy}
                                                                 onClick={() => setRemoveConfirm({ id: null, busy: false })}
-                                                                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                                                className={smallSecondary}
                                                             >
                                                                 Keep
                                                             </button>
@@ -372,7 +368,7 @@ export default function WaitlistPage() {
                                                             type="button"
                                                             disabled={removeConfirm.busy}
                                                             onClick={() => setRemoveConfirm({ id: r.id, busy: false })}
-                                                            className="rounded-lg border border-red-100 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                                                            className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                                                         >
                                                             Remove
                                                         </button>
@@ -388,14 +384,14 @@ export default function WaitlistPage() {
                 </div>
 
                 {lastPage > 1 || total > 0 ? (
-                    <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm text-slate-600">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
                         <span>{total} {total === 1 ? 'entry' : 'entries'} · Page {page} of {lastPage}</span>
                         <div className="flex gap-2">
                             <button
                                 type="button"
                                 disabled={loading || page <= 1}
                                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                className="rounded-xl border border-slate-300 px-3 py-1.5 disabled:opacity-50"
+                                className={smallSecondary}
                             >
                                 Previous
                             </button>
@@ -403,7 +399,7 @@ export default function WaitlistPage() {
                                 type="button"
                                 disabled={loading || page >= lastPage}
                                 onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
-                                className="rounded-xl border border-slate-300 px-3 py-1.5 disabled:opacity-50"
+                                className={smallSecondary}
                             >
                                 Next
                             </button>
@@ -413,45 +409,45 @@ export default function WaitlistPage() {
             </div>
 
             {add.open ? (
-                <div className="fixed inset-0 z-50 flex" aria-modal="true" role="dialog">
-                    <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => !add.busy && closeAdd()} />
-
-                    <div className="relative m-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => !add.busy && closeAdd()}>
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="wl-add-title"
+                        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
                             <div>
-                                <div className="flex items-center gap-2">
-                                    <AppIcon name="calendar-plus" className="h-5 w-5 text-slate-700" />
-                                    <h3 className="text-base font-semibold text-slate-900">Add to waitlist</h3>
-                                </div>
-                                <p className="mt-1 text-sm text-slate-600">Pick a patient and a booked slot. If the slot frees up, it is held for them.</p>
+                                <h2 id="wl-add-title" className="text-lg font-semibold text-slate-900">Add to waitlist</h2>
+                                <p className="mt-0.5 text-sm text-slate-600">Pick a patient and a booked slot. If the slot frees up, it is held for them.</p>
                             </div>
                             <button
                                 type="button"
                                 disabled={add.busy}
                                 onClick={closeAdd}
-                                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                aria-label="Close"
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                             >
-                                Close
+                                <AppIcon name="close" className="h-5 w-5" />
                             </button>
                         </div>
 
-                        <div className="space-y-4 px-5 py-4">
-                            {add.error ? (
-                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{add.error}</div>
-                            ) : null}
+                        <div className="space-y-4 overflow-y-auto p-5">
+                            {add.error ? <Alert>{add.error}</Alert> : null}
 
                             <div>
-                                <label className="text-sm font-semibold text-slate-900">Patient</label>
+                                <label htmlFor="wl-add-patient" className={label}>Patient</label>
                                 {add.patient ? (
-                                    <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-slate-900 bg-white px-3 py-2">
+                                    <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-300 bg-blue-50/50 px-3 py-2">
                                         <div>
                                             <div className="text-sm font-semibold text-slate-900">{add.patient.full_name || `Patient #${add.patient.id}`}</div>
-                                            <div className="text-xs text-slate-500">{add.patient.phone || '—'}</div>
+                                            <div className="text-xs text-slate-600">{add.patient.phone || '—'}</div>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => setAdd((p) => ({ ...p, patient: null }))}
-                                            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                            className={smallSecondary}
                                         >
                                             Change
                                         </button>
@@ -459,7 +455,8 @@ export default function WaitlistPage() {
                                 ) : (
                                     <>
                                         <input
-                                            className={`mt-2 ${inputClass}`}
+                                            id="wl-add-patient"
+                                            className={inputClass}
                                             value={add.patientQuery}
                                             onChange={(e) => {
                                                 const q = e.target.value;
@@ -468,21 +465,21 @@ export default function WaitlistPage() {
                                             }}
                                             placeholder="Search by name or mobile"
                                         />
-                                        {add.patientSearching ? <div className="mt-2 text-xs text-slate-500">Searching…</div> : null}
+                                        {add.patientSearching ? <div className="mt-2 text-xs text-slate-600">Searching…</div> : null}
                                         {!add.patientSearching && add.patientQuery.trim() && !add.patientResults.length ? (
-                                            <div className="mt-2 text-xs text-slate-500">No patients found.</div>
+                                            <div className="mt-2 text-xs text-slate-600">No patients found.</div>
                                         ) : null}
                                         {add.patientResults.length ? (
-                                            <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                                            <div className="mt-2 max-h-48 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
                                                 {add.patientResults.map((p) => (
                                                     <button
                                                         key={p.id}
                                                         type="button"
                                                         onClick={() => setAdd((s) => ({ ...s, patient: p }))}
-                                                        className="block w-full rounded-xl border border-slate-200 px-3 py-2 text-left hover:border-slate-300 hover:bg-slate-50"
+                                                        className="block w-full px-3 py-2 text-left hover:bg-slate-50"
                                                     >
                                                         <div className="text-sm font-medium text-slate-900">{p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Patient #${p.id}`}</div>
-                                                        <div className="text-xs text-slate-500">{p.phone || '—'}</div>
+                                                        <div className="text-xs text-slate-600">{p.phone || '—'}</div>
                                                     </button>
                                                 ))}
                                             </div>
@@ -493,11 +490,12 @@ export default function WaitlistPage() {
 
                             <div className="grid gap-3 md:grid-cols-2">
                                 <div>
-                                    <label className="text-sm font-semibold text-slate-900">Doctor</label>
+                                    <label htmlFor="wl-add-doctor" className={label}>Doctor</label>
                                     <select
+                                        id="wl-add-doctor"
                                         value={add.doctorId}
                                         onChange={(e) => setAdd((p) => ({ ...p, doctorId: e.target.value, startTime: '' }))}
-                                        className={`mt-2 ${inputClass}`}
+                                        className={inputClass}
                                     >
                                         <option value="">Select doctor</option>
                                         {activeDoctors.map((d) => (
@@ -506,39 +504,41 @@ export default function WaitlistPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-sm font-semibold text-slate-900">Date</label>
+                                    <label htmlFor="wl-add-date" className={label}>Date</label>
                                     <input
+                                        id="wl-add-date"
                                         type="date"
                                         min={todayYMD}
                                         value={add.date}
                                         onChange={(e) => setAdd((p) => ({ ...p, date: e.target.value, startTime: '' }))}
-                                        className={`mt-2 ${inputClass}`}
+                                        className={inputClass}
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="text-sm font-semibold text-slate-900">Booked time</label>
+                                <span className={label}>Booked time</span>
                                 {!add.doctorId || !add.date ? (
-                                    <div className="mt-2 text-sm text-slate-500">Select a doctor and date to see booked times.</div>
+                                    <div className="text-sm text-slate-600">Select a doctor and date to see booked times.</div>
                                 ) : slots.loading ? (
-                                    <div className="mt-2 text-sm text-slate-500">Loading booked times…</div>
+                                    <div className="text-sm text-slate-600">Loading booked times…</div>
                                 ) : slots.error ? (
-                                    <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{slots.error}</div>
+                                    <Alert>{slots.error}</Alert>
                                 ) : !slots.items.length ? (
-                                    <div className="mt-2 text-sm text-slate-500">No booked times on this day — book the appointment directly.</div>
+                                    <div className="text-sm text-slate-600">No booked times on this day — book the appointment directly.</div>
                                 ) : (
-                                    <div className="mt-2 flex flex-wrap gap-2">
+                                    <div className="flex flex-wrap gap-2">
                                         {slots.items.map((s) => {
                                             const isSelected = add.startTime === s.start_time;
                                             return (
                                                 <button
                                                     key={s.start_time}
                                                     type="button"
+                                                    aria-pressed={isSelected}
                                                     onClick={() => setAdd((p) => ({ ...p, startTime: s.start_time }))}
                                                     className={isSelected
-                                                        ? 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white'
-                                                        : 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50'}
+                                                        ? 'h-9 rounded-xl border border-blue-600 bg-blue-600 px-3 text-sm font-semibold text-white'
+                                                        : 'h-9 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50'}
                                                 >
                                                     {formatTime(s.start_time)}–{formatTime(s.end_time)}
                                                 </button>
@@ -549,21 +549,11 @@ export default function WaitlistPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
-                            <button
-                                type="button"
-                                disabled={add.busy}
-                                onClick={closeAdd}
-                                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
+                        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+                            <button type="button" disabled={add.busy} onClick={closeAdd} className={btn.secondary}>
                                 Cancel
                             </button>
-                            <button
-                                type="button"
-                                disabled={!canSubmitAdd}
-                                onClick={submitAdd}
-                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                            >
+                            <button type="button" disabled={!canSubmitAdd} onClick={submitAdd} className={btn.primary}>
                                 {add.busy ? 'Adding…' : 'Add to waitlist'}
                             </button>
                         </div>

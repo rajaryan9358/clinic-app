@@ -1,5 +1,6 @@
 import StatusBadge from './StatusBadge';
 import AppIcon from './AppIcon';
+import { EmptyState } from './ui';
 import { formatDate, formatDateTime, formatTime, isDateKey, isDateTimeKey, isTimeKey } from '../utils/dateFormat';
 
 function inferObjectLabel(value) {
@@ -17,17 +18,18 @@ function inferObjectLabel(value) {
 
 function Btn({ onClick, variant = 'default', children, title }) {
     const variants = {
-        default: 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300',
-        blue:    'bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100',
-        red:     'bg-red-50 border border-red-100 text-red-700 hover:bg-red-100',
-        amber:   'bg-amber-50 border border-amber-100 text-amber-700 hover:bg-amber-100',
-        green:   'bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-100',
+        default: 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
+        blue:    'text-blue-700 hover:bg-blue-50 hover:text-blue-900',
+        red:     'text-rose-700 hover:bg-rose-50 hover:text-rose-800',
+        amber:   'text-amber-800 hover:bg-amber-50',
+        green:   'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800',
     };
     return (
         <button
+            type="button"
             onClick={onClick}
             title={title}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${variants[variant]}`}
+            className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-xs font-semibold transition-colors ${variants[variant]}`}
         >
             {children}
         </button>
@@ -54,13 +56,14 @@ export default function DataTable({
     columnLabels = {},
     cellRenderers = {},
     priorityColumns = [],
+    framed = true,
 }) {
+    const frame = framed ? 'overflow-hidden rounded-2xl border border-slate-200 bg-white' : '';
+
     if (!rows.length) {
         return (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white py-14 text-center">
-                <AppIcon name="module" className="mb-3 h-8 w-8 text-gray-300" />
-                <p className="text-sm font-medium text-gray-500">No records found</p>
-                <p className="mt-1 text-xs text-gray-400">Try adjusting your search or filters</p>
+            <div className={frame}>
+                <EmptyState title="No records found">Try adjusting your search or filters.</EmptyState>
             </div>
         );
     }
@@ -92,28 +95,28 @@ export default function DataTable({
 
         // Auto-format date/time columns
         if (key && typeof value === 'string' && value) {
-            if (isDateTimeKey(key)) return <span className="whitespace-nowrap text-gray-600">{formatDateTime(value)}</span>;
-            if (isDateKey(key)) return <span className="whitespace-nowrap text-gray-600">{formatDate(value)}</span>;
-            if (isTimeKey(key)) return <span className="whitespace-nowrap text-gray-600">{formatTime(value)}</span>;
+            if (isDateTimeKey(key)) return <span className="whitespace-nowrap text-slate-600">{formatDateTime(value)}</span>;
+            if (isDateKey(key)) return <span className="whitespace-nowrap text-slate-600">{formatDate(value)}</span>;
+            if (isTimeKey(key)) return <span className="whitespace-nowrap text-slate-600">{formatTime(value)}</span>;
         }
 
         if (typeof value === 'boolean') {
             return (
-                <span className={`inline-flex items-center gap-1 text-xs font-medium ${value ? 'text-emerald-600' : 'text-gray-400'}`}>
+                <span className={`inline-flex items-center gap-1 text-xs font-medium ${value ? 'text-emerald-700' : 'text-slate-500'}`}>
                     <AppIcon name={value ? 'check' : 'close'} className="h-3.5 w-3.5" />
                     {value ? 'Yes' : 'No'}
                 </span>
             );
         }
 
-        if (Array.isArray(value)) return value.length ? <span className="text-gray-500">{value.length} items</span> : <span className="text-gray-300">—</span>;
+        if (Array.isArray(value)) return value.length ? <span className="text-slate-600">{value.length} items</span> : <span className="text-slate-400">—</span>;
 
         if (value && typeof value === 'object') {
             const label = inferObjectLabel(value);
-            return label ? <span>{label}</span> : <span className="text-gray-300">—</span>;
+            return label ? <span>{label}</span> : <span className="text-slate-400">—</span>;
         }
 
-        if (value === null || value === undefined || value === '') return <span className="text-gray-300">—</span>;
+        if (value === null || value === undefined || value === '') return <span className="text-slate-400">—</span>;
 
         // Truncate long strings
         const str = String(value);
@@ -166,50 +169,54 @@ export default function DataTable({
 
         return (
             <Btn key={a.value} onClick={handler} variant={variant}>
-                {icon && <AppIcon name={icon} className="h-3 w-3" />}
+                {icon && <AppIcon name={icon} className="h-3.5 w-3.5" />}
                 {a.label}
             </Btn>
         );
     };
 
-    const colLabel = (key) => (columnLabels?.[key] || key).replaceAll('_', ' ');
+    const colLabel = (key) => {
+        if (!columnLabels?.[key] && key === 'id') return 'ID';
+        const text = String(columnLabels?.[key] || key).replaceAll('_', ' ');
+        return text.charAt(0).toUpperCase() + text.slice(1);
+    };
 
     return (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className={frame}>
             <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
                     <thead>
-                        <tr className="border-b border-gray-200 bg-gray-50">
+                        <tr className="bg-slate-50">
                             {keys.map((key) => (
-                                <th key={key} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                <th key={key} scope="col" className="whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600">
                                     {colLabel(key)}
                                 </th>
                             ))}
-                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                Actions
+                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-600">
+                                <span className="sr-only">Actions</span>
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody>
                         {rows.map((row) => (
                             <tr
                                 key={row.id}
-                                className={`transition-colors hover:bg-gray-50 ${row?.deleted_at ? 'opacity-60' : ''}`}
+                                className={`border-t border-slate-100 transition-colors hover:bg-slate-50 ${row?.deleted_at ? 'opacity-60' : ''}`}
                             >
                                 {keys.map((key) => (
-                                    <td key={key} className="px-4 py-3.5 text-gray-700">
+                                    <td key={key} className="px-4 py-3 text-slate-700">
                                         {formatValue(row[key], key, row)}
                                     </td>
                                 ))}
-                                <td className="px-4 py-3.5">
-                                    <div className="flex flex-wrap items-center gap-1.5">
+                                <td className="px-4 py-2">
+                                    <div className="flex items-center justify-end gap-0.5">
                                         {actionMode === 'buttons' && Array.isArray(buttonActions) && buttonActions.length
                                             ? buttonsForRow(row).map((a) => renderAction(a, row))
                                             : (
                                                 <>
                                                     {onView && (
                                                         <Btn onClick={() => onView(row)} variant="blue">
-                                                            <AppIcon name="eye" className="h-3 w-3" />
+                                                            <AppIcon name="eye" className="h-3.5 w-3.5" />
                                                             View
                                                         </Btn>
                                                     )}

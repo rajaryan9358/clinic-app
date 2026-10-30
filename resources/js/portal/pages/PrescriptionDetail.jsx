@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import { formatDate } from '../lib/format';
-import { Button, Card, ErrorText, Spinner } from '../components/ui';
+import { Button, Card, CardTitle, ErrorText, Loading, PageHeader } from '../components/ui';
+import { DownloadIcon } from '../components/icons';
 
 /**
  * `GET prescriptions/{id}`: the same `data` fields the clinic's PDF
@@ -80,11 +81,7 @@ export default function PrescriptionDetail() {
     }
 
     if (loading) {
-        return (
-            <div className="flex justify-center py-12">
-                <Spinner className="h-6 w-6 text-[var(--accent)]" />
-            </div>
-        );
+        return <Loading />;
     }
 
     if (loadError || !rx) {
@@ -99,30 +96,24 @@ export default function PrescriptionDetail() {
     const followUp = typeof data.follow_up === 'string' ? data.follow_up.trim() : '';
 
     return (
-        <div className="space-y-4">
-            <button
-                type="button"
-                onClick={() => navigate('/prescriptions')}
-                className="text-sm font-medium text-[var(--accent)]"
-            >
-                &larr; Back to prescriptions
-            </button>
+        <div className="space-y-5">
+            <PageHeader title="Prescription" back={{ label: 'Back to prescriptions', onClick: () => navigate('/prescriptions') }} />
 
             <Card>
                 <p className="text-base font-semibold text-slate-900">{formatDate(rx.date)}</p>
-                <p className="text-sm text-slate-600">
+                <p className="mt-0.5 text-sm text-slate-600">
                     {rx.doctor?.name}
                     {rx.doctor?.specialization ? ` · ${rx.doctor.specialization}` : ''}
                 </p>
-                {rx.clinic?.name && <p className="text-xs text-slate-500">{rx.clinic.name}</p>}
+                {rx.clinic?.name && <p className="mt-0.5 text-sm text-slate-500">{rx.clinic.name}</p>}
             </Card>
 
             {complaints.length > 0 && (
                 <Card>
-                    <h2 className="mb-2 text-sm font-medium text-slate-500">Complaints</h2>
-                    <ul className="space-y-1 text-sm text-slate-700">
+                    <CardTitle>Complaints</CardTitle>
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700 marker:text-slate-400">
                         {complaints.map((c, i) => (
-                            <li key={i}>&bull; {c}</li>
+                            <li key={i}>{c}</li>
                         ))}
                     </ul>
                 </Card>
@@ -130,57 +121,49 @@ export default function PrescriptionDetail() {
 
             {diagnosis && (
                 <Card>
-                    <h2 className="mb-1 text-sm font-medium text-slate-500">Diagnosis</h2>
+                    <CardTitle className="mb-1">Diagnosis</CardTitle>
                     <p className="whitespace-pre-line text-sm text-slate-700">{diagnosis}</p>
                 </Card>
             )}
 
-            <Card>
-                <h2 className="mb-2 text-sm font-medium text-slate-500">Medicines</h2>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Medicines</h2>
                 {medicines.length === 0 ? (
-                    <p className="text-sm text-slate-500">No medicines.</p>
+                    <p className="px-4 py-4 text-sm text-slate-600">No medicines.</p>
                 ) : (
-                    <div className="-mx-4 overflow-x-auto">
-                        <table className="w-full min-w-[480px] text-left text-sm">
-                            <thead>
-                                <tr className="text-xs text-slate-500">
-                                    <th className="px-4 py-1">Medicine</th>
-                                    <th className="px-4 py-1">Dosage</th>
-                                    <th className="px-4 py-1">Duration</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {medicines.map((m, i) => {
-                                    // Older/legacy rows may carry timing as a
-                                    // separate `frequency`/`timing` field
-                                    // instead of folded into dosage (the AI
-                                    // service's current schema); fold it in
-                                    // here so this table matches the PDF
-                                    // (resources/views/reports/prescription.blade.php)
-                                    // and the staff admin viewer's
-                                    // Medicine/Dosage/Duration layout.
-                                    const dosage = [m.dosage, m.frequency || m.timing].filter(Boolean).join(' • ');
-                                    const duration = m.duration || m.days || m.duration_days || '-';
-                                    return (
-                                        <tr key={i} className="border-t border-slate-100">
-                                            <td className="px-4 py-2 font-medium text-slate-900">{m.name || m.medicine || '-'}</td>
-                                            <td className="px-4 py-2 text-slate-600">{dosage || '-'}</td>
-                                            <td className="px-4 py-2 text-slate-600">{duration}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    <ul className="divide-y divide-slate-100">
+                        {medicines.map((m, i) => {
+                            // Older/legacy rows may carry timing as a
+                            // separate `frequency`/`timing` field instead of
+                            // folded into dosage (the AI service's current
+                            // schema); fold it in here so this list matches
+                            // the PDF (resources/views/reports/prescription.blade.php)
+                            // and the staff admin viewer's
+                            // Medicine/Dosage/Duration layout.
+                            const dosage = [m.dosage, m.frequency || m.timing].filter(Boolean).join(' • ');
+                            const duration = m.duration || m.days || m.duration_days || '-';
+                            return (
+                                <li key={i} className="px-4 py-3">
+                                    <p className="text-sm font-semibold text-slate-900">{m.name || m.medicine || '-'}</p>
+                                    <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                                        <dt className="text-slate-500">Dosage</dt>
+                                        <dd className="text-slate-700">{dosage || '-'}</dd>
+                                        <dt className="text-slate-500">Duration</dt>
+                                        <dd className="text-slate-700">{duration}</dd>
+                                    </dl>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 )}
-            </Card>
+            </section>
 
             {advice.length > 0 && (
                 <Card>
-                    <h2 className="mb-2 text-sm font-medium text-slate-500">Advice</h2>
-                    <ul className="space-y-1 text-sm text-slate-700">
+                    <CardTitle>Advice</CardTitle>
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700 marker:text-slate-400">
                         {advice.map((a, i) => (
-                            <li key={i}>&bull; {a}</li>
+                            <li key={i}>{a}</li>
                         ))}
                     </ul>
                 </Card>
@@ -188,7 +171,7 @@ export default function PrescriptionDetail() {
 
             {followUp && (
                 <Card>
-                    <h2 className="mb-1 text-sm font-medium text-slate-500">Follow-up</h2>
+                    <CardTitle className="mb-1">Follow-up</CardTitle>
                     <p className="whitespace-pre-line text-sm text-slate-700">{followUp}</p>
                 </Card>
             )}
@@ -196,6 +179,7 @@ export default function PrescriptionDetail() {
             <div className="space-y-2">
                 {downloadError ? <ErrorText>{downloadError}</ErrorText> : null}
                 <Button variant="secondary" onClick={downloadPdf} loading={downloading}>
+                    {!downloading ? <DownloadIcon className="h-5 w-5" /> : null}
                     Download PDF
                 </Button>
 

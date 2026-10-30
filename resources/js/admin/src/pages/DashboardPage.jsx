@@ -8,6 +8,7 @@ import DonutChart from '../components/charts/DonutChart';
 import BarListChart from '../components/charts/BarListChart';
 import AppIcon from '../components/AppIcon';
 import StatusBadge from '../components/StatusBadge';
+import { Alert, Badge, btn, Card, EmptyState, PageHeader, Spinner } from '../components/ui';
 import DoctorToday from './dashboards/DoctorToday';
 import FrontDeskToday from './dashboards/FrontDeskToday';
 
@@ -38,28 +39,25 @@ function KpiCard({ label, value, icon, color = 'blue', suffix = '' }) {
 function AlertCard({ alert }) {
     const severity = String(alert?.severity || 'low');
     const cfg = {
-        high:   { border: 'border-red-200 bg-red-50',    icon: 'text-red-500',    badge: 'bg-red-100 text-red-700' },
-        medium: { border: 'border-amber-200 bg-amber-50', icon: 'text-amber-500', badge: 'bg-amber-100 text-amber-700' },
-        low:    { border: 'border-gray-200 bg-gray-50',   icon: 'text-gray-400',  badge: 'bg-gray-100 text-gray-600' },
-    }[severity] || { border: 'border-gray-200 bg-gray-50', icon: 'text-gray-400', badge: 'bg-gray-100 text-gray-600' };
+        high:   { icon: 'bg-rose-50 text-rose-700',   tone: 'red',   label: 'High' },
+        medium: { icon: 'bg-amber-50 text-amber-700', tone: 'amber', label: 'Medium' },
+        low:    { icon: 'bg-slate-100 text-slate-600', tone: 'slate', label: 'Low' },
+    }[severity] || { icon: 'bg-slate-100 text-slate-600', tone: 'slate', label: severity };
 
     return (
-        <div className={`rounded-xl border p-4 ${cfg.border}`}>
-            <div className="flex items-start gap-3">
-                <AppIcon name="alert-triangle" className={`mt-0.5 h-4 w-4 flex-shrink-0 ${cfg.icon}`} />
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-semibold text-gray-900">{alert?.title}</h4>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${cfg.badge}`}>{severity}</span>
-                    </div>
-                    {alert?.description ? <p className="mt-1 text-sm text-gray-600">{alert.description}</p> : null}
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cfg.icon}`}>
+                <AppIcon name="alert-triangle" className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900">{alert?.title}</h3>
+                    <Badge tone={cfg.tone}>{cfg.label}</Badge>
                 </div>
+                {alert?.description ? <p className="mt-1 text-sm text-slate-600">{alert.description}</p> : null}
                 {alert?.cta?.to ? (
-                    <Link
-                        to={alert.cta.to}
-                        className="flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                    >
-                        {alert.cta.label || 'Open'}
+                    <Link to={alert.cta.to} className={`${btn.link} mt-2 inline-flex items-center gap-1`}>
+                        {alert.cta.label || 'Open'} <AppIcon name="arrow-right" className="h-3.5 w-3.5" />
                     </Link>
                 ) : null}
             </div>
@@ -70,29 +68,21 @@ function AlertCard({ alert }) {
 // ── Action card ────────────────────────────────────────────────────────────────
 function ActionCard({ title, description, icon, actions }) {
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex items-start gap-3">
                 {icon && (
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50">
-                        <AppIcon name={icon} className="h-5 w-5 text-blue-600" />
-                    </div>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                        <AppIcon name={icon} className="h-4 w-4" />
+                    </span>
                 )}
-                <div>
-                    <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-                    {description ? <p className="mt-0.5 text-sm text-gray-500">{description}</p> : null}
+                <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+                    {description ? <p className="mt-0.5 text-sm text-slate-600">{description}</p> : null}
                 </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
                 {(actions || []).map((a, i) => (
-                    <Link
-                        key={a.to}
-                        to={a.to}
-                        className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                            i === 0
-                                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                    >
+                    <Link key={a.to} to={a.to} className={i === 0 ? btn.primary : btn.secondary}>
                         {a.label}
                     </Link>
                 ))}
@@ -104,9 +94,9 @@ function ActionCard({ title, description, icon, actions }) {
 // ── Stat (raw key/value) ───────────────────────────────────────────────────────
 function StatCard({ label, value }) {
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-            <p className="mt-1 text-xl font-bold text-gray-900">{value ?? <span className="text-gray-300">—</span>}</p>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs font-medium text-slate-600 first-letter:uppercase">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900 tabular-nums">{value ?? <span className="text-slate-300">—</span>}</p>
         </div>
     );
 }
@@ -115,69 +105,57 @@ function StatCard({ label, value }) {
 function ActivityList({ items }) {
     if (!items?.length) {
         return (
-            <div className="rounded-xl border border-gray-200 bg-white p-5 text-center">
-                <p className="text-sm text-gray-400">No recent activity.</p>
-            </div>
+            <Card title="Recent activity" bodyClassName="">
+                <EmptyState icon="activity" title="No recent activity" />
+            </Card>
         );
     }
     return (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-5 py-4">
-                <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
-            </div>
-            <div className="divide-y divide-gray-100">
+        <Card title="Recent activity" bodyClassName="">
+            <ul className="divide-y divide-slate-100">
                 {items.map((row) => (
-                    <div key={row.id} className="flex items-center justify-between gap-4 px-5 py-3">
+                    <li key={row.id} className="flex items-center justify-between gap-4 px-5 py-3">
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-gray-800">
-                                <span className="text-gray-500">{row.module}</span>
-                                {' · '}
+                            <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-900">
+                                <span className="capitalize">{String(row.module || '').replace(/_/g, ' ')}</span>
                                 <StatusBadge status={row.action} />
                             </p>
-                            <p className="mt-0.5 text-xs text-gray-400">{row.entity_type} #{row.entity_id}</p>
+                            <p className="mt-0.5 text-xs text-slate-600">{row.entity_type} #{row.entity_id}</p>
                         </div>
-                        <p className="flex-shrink-0 text-xs text-gray-400">
+                        <p className="shrink-0 text-xs text-slate-500 tabular-nums">
                             {row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 16) : ''}
                         </p>
-                    </div>
+                    </li>
                 ))}
-            </div>
-        </div>
+            </ul>
+        </Card>
     );
 }
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
 function Section({ title, subtitle, children }) {
-    return (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-5 py-4">
-                <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-                {subtitle ? <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p> : null}
-            </div>
-            <div className="p-5">{children}</div>
-        </div>
-    );
+    return <Card title={title} description={subtitle} className="h-full">{children}</Card>;
 }
 
 // ── Followup mini-stats ────────────────────────────────────────────────────────
 function FollowupStats({ insights }) {
     const fu = insights?.followup_insights || {};
+    const tiles = [
+        { label: 'Overdue', value: fu.overdue ?? '—', dot: 'bg-rose-500' },
+        { label: 'Due today', value: fu.due_today ?? '—', dot: 'bg-amber-500' },
+        { label: 'Done (7d)', value: fu.completion_rate_7d != null ? `${fu.completion_rate_7d}%` : '—', dot: 'bg-emerald-500' },
+    ];
     return (
-        <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl bg-red-50 border border-red-100 p-4 text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-red-500">Overdue</p>
-                <p className="mt-1 text-2xl font-bold text-red-700">{fu.overdue ?? '—'}</p>
-            </div>
-            <div className="rounded-xl bg-amber-50 border border-amber-100 p-4 text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">Due Today</p>
-                <p className="mt-1 text-2xl font-bold text-amber-700">{fu.due_today ?? '—'}</p>
-            </div>
-            <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Done (7d)</p>
-                <p className="mt-1 text-2xl font-bold text-emerald-700">
-                    {fu.completion_rate_7d != null ? `${fu.completion_rate_7d}%` : '—'}
-                </p>
-            </div>
+        <div className="grid grid-cols-3 gap-3">
+            {tiles.map((t) => (
+                <div key={t.label} className="rounded-xl border border-slate-200 px-3 py-3">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${t.dot}`} aria-hidden="true" />
+                        <span className="truncate">{t.label}</span>
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900 tabular-nums">{t.value}</p>
+                </div>
+            ))}
         </div>
     );
 }
@@ -189,13 +167,13 @@ function AssistantDashboard({ data }) {
     const statusBreakdown = data?.status_breakdown || [];
 
     const statusCfg = {
-        pending:         { label: 'Pending',        bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400' },
-        confirmed:       { label: 'Confirmed',       bg: 'bg-blue-50',    text: 'text-blue-700',    dot: 'bg-blue-500' },
-        checked_in:      { label: 'Checked In',      bg: 'bg-violet-50',  text: 'text-violet-700',  dot: 'bg-violet-500' },
-        in_consultation: { label: 'In Consultation', bg: 'bg-indigo-50',  text: 'text-indigo-700',  dot: 'bg-indigo-500' },
-        completed:       { label: 'Completed',       bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-        no_show:         { label: 'No Show',         bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-400' },
-        cancelled:       { label: 'Cancelled',       bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400' },
+        pending:         { label: 'Not confirmed', tone: 'amber' },
+        confirmed:       { label: 'Confirmed',     tone: 'blue' },
+        checked_in:      { label: 'Checked in',    tone: 'violet' },
+        in_consultation: { label: 'With doctor',   tone: 'teal' },
+        completed:       { label: 'Completed',     tone: 'green' },
+        no_show:         { label: 'No-show',       tone: 'slate' },
+        cancelled:       { label: 'Cancelled',     tone: 'red' },
     };
 
     const fmtTime = (t) => {
@@ -215,81 +193,75 @@ function AssistantDashboard({ data }) {
     })();
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900">Today</h1>
-                    <p className="mt-0.5 text-sm text-gray-500">{dateLabel}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Link to="/modules/patients/new" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                        + New Patient
-                    </Link>
-                    <Link to="/workflows/appointments/new" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                        + New Appointment
-                    </Link>
-                </div>
-            </div>
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <PageHeader
+                title="Today"
+                subtitle={dateLabel}
+                actions={(
+                    <>
+                        <Link to="/modules/patients/new" className={btn.secondary}>
+                            <AppIcon name="user-plus" className="h-4 w-4" /> New patient
+                        </Link>
+                        <Link to="/workflows/appointments/new" className={btn.primary}>
+                            <AppIcon name="calendar-plus" className="h-4 w-4" /> New appointment
+                        </Link>
+                    </>
+                )}
+            />
 
             {/* KPIs */}
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-                <KpiCard label="Total Today"     value={kpis.total_today}      icon="calendar"   color="blue" />
-                <KpiCard label="Waiting"         value={kpis.waiting}          icon="clock"      color="amber" />
-                <KpiCard label="Checked In"      value={kpis.checked_in}       icon="user-check" color="violet" />
-                <KpiCard label="In Consultation" value={kpis.in_consultation}  icon="activity"   color="sky" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <KpiCard label="Total today"     value={kpis.total_today}      icon="calendar"   color="blue" />
+                <KpiCard label="Waiting"         value={kpis.waiting}          icon="bell"       color="amber" />
+                <KpiCard label="Checked in"      value={kpis.checked_in}       icon="user-check" color="violet" />
+                <KpiCard label="With doctor"     value={kpis.in_consultation}  icon="stethoscope" color="sky" />
                 <KpiCard label="Completed"       value={kpis.completed}        icon="check"      color="emerald" />
-                <KpiCard label="No Show"         value={kpis.no_show}          icon="user-x"     color="red" />
+                <KpiCard label="No-show"         value={kpis.no_show}          icon="alert-triangle" color="red" />
                 <KpiCard label="Cancelled"       value={kpis.cancelled}        icon="close"      color="red" />
-                <KpiCard label="New Patients"    value={kpis.new_patients_today} icon="user-plus" color="sky" />
+                <KpiCard label="New patients"    value={kpis.new_patients_today} icon="user-plus" color="sky" />
             </div>
 
             <div className="grid gap-5 lg:grid-cols-5">
                 {/* Upcoming list */}
-                <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                    <div className="border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-900">Up Next Today</h3>
-                            <p className="mt-0.5 text-xs text-gray-400">Pending, confirmed, or checked-in appointments</p>
-                        </div>
-                        <Link to="/workflows/appointments" className="text-xs font-semibold text-blue-600 hover:underline">
-                            View all
-                        </Link>
-                    </div>
-                    {upcoming.length === 0 ? (
-                        <div className="px-5 py-10 text-center text-sm text-gray-400">No upcoming appointments for today.</div>
-                    ) : (
-                        <div className="divide-y divide-gray-100">
-                            {upcoming.map((appt) => {
-                                const cfg = statusCfg[appt.status] || statusCfg.pending;
-                                return (
-                                    <Link
-                                        key={appt.id}
-                                        to={`/workflows/appointments?open=${appt.id}`}
-                                        className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition"
-                                    >
-                                        <div className="flex-shrink-0 w-14 text-center">
-                                            <span className="text-sm font-bold text-gray-800">{fmtTime(appt.start_time)}</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-gray-900 truncate">{appt.patient_name || '—'}</p>
-                                            <p className="text-xs text-gray-400 truncate">{appt.doctor_name}</p>
-                                        </div>
-                                        <div className={`flex-shrink-0 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
-                                            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
-                                            {cfg.label}
-                                        </div>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    )}
+                <div className="lg:col-span-3">
+                    <Card
+                        title="Up next today"
+                        description="Pending, confirmed, or checked-in appointments"
+                        actions={<Link to="/workflows/appointments" className={btn.link}>View all</Link>}
+                        bodyClassName=""
+                        className="h-full"
+                    >
+                        {upcoming.length === 0 ? (
+                            <EmptyState icon="calendar" title="No upcoming appointments for today" />
+                        ) : (
+                            <ul className="divide-y divide-slate-100">
+                                {upcoming.map((appt) => {
+                                    const cfg = statusCfg[appt.status] || statusCfg.pending;
+                                    return (
+                                        <li key={appt.id}>
+                                            <Link
+                                                to={`/workflows/appointments?open=${appt.id}`}
+                                                className="flex items-center gap-4 px-5 py-3 transition hover:bg-slate-50"
+                                            >
+                                                <span className="w-16 shrink-0 text-sm font-bold text-slate-900 tabular-nums">{fmtTime(appt.start_time)}</span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block truncate text-sm font-semibold text-slate-900">{appt.patient_name || '—'}</span>
+                                                    <span className="block truncate text-xs text-slate-600">{appt.doctor_name}</span>
+                                                </span>
+                                                <Badge tone={cfg.tone}>{cfg.label}</Badge>
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+                    </Card>
                 </div>
 
                 {/* Status donut */}
                 <div className="lg:col-span-2">
                     <DonutChart
-                        title="Today's Status"
+                        title="Today’s status"
                         subtitle="Appointment breakdown by status."
                         items={statusBreakdown}
                         valueKey="count"
@@ -418,21 +390,14 @@ export default function DashboardPage() {
     }
 
     if (error) {
-        return withTabs(
-            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
-                <AppIcon name="alert-triangle" className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
-                <p className="text-sm text-red-700">{error}</p>
-            </div>
-        );
+        return withTabs(<Alert tone="error">{error}</Alert>);
     }
 
     if (!data) {
         return withTabs(
-            <div className="flex items-center justify-center py-20">
-                <div className="flex flex-col items-center gap-3">
-                    <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                    <p className="text-sm text-gray-500">Loading dashboard…</p>
-                </div>
+            <div className="flex flex-col items-center gap-3 py-20">
+                <Spinner className="" />
+                <p className="text-sm text-slate-600">Loading dashboard…</p>
             </div>
         );
     }
@@ -454,7 +419,7 @@ export default function DashboardPage() {
         const doctors = (insights.doctor_performance_30d || []).map((x) => ({ label: x.doctor_name, count: x.total }));
 
         return withTabs(
-            <div className="space-y-6">
+            <div className="mx-auto max-w-[1400px] space-y-5">
                 {/* Page header */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -462,11 +427,11 @@ export default function DashboardPage() {
                         <p className="mt-0.5 text-sm text-slate-500">Today’s numbers, trends and anything that needs your attention.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Link to="/modules/patients/new" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                            + New Patient
+                        <Link to="/modules/patients/new" className={btn.secondary}>
+                            <AppIcon name="user-plus" className="h-4 w-4" /> New patient
                         </Link>
-                        <Link to="/workflows/appointments/new" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                            + New Appointment
+                        <Link to="/workflows/appointments/new" className={btn.primary}>
+                            <AppIcon name="calendar-plus" className="h-4 w-4" /> New appointment
                         </Link>
                     </div>
                 </div>
@@ -488,17 +453,17 @@ export default function DashboardPage() {
                 {/* Today's status + followup health */}
                 <div className="grid gap-5 lg:grid-cols-2">
                     <DonutChart
-                        title="Appointment Status (Today)"
+                        title="Appointment status (today)"
                         subtitle="Distribution of today's appointments by status."
                         items={(today.appointment_status || []).map((x) => ({ label: x.status, count: x.count }))}
                     />
-                    <Section title="Follow-up Health" subtitle="Operational follow-up metrics.">
+                    <Section title="Follow-up health" subtitle="Operational follow-up metrics.">
                         <FollowupStats insights={insights} />
                         <div className="mt-4 flex flex-wrap gap-2">
-                            <Link to="/modules/followups" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                                Open Follow-ups
+                            <Link to="/modules/followups" className={btn.primary}>
+                                Open follow-ups
                             </Link>
-                            <Link to="/workflows/appointments" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                            <Link to="/workflows/appointments" className={btn.secondary}>
                                 Appointments
                             </Link>
                         </div>
@@ -506,18 +471,18 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Trends */}
-                <Section title="Trends" subtitle="30-day daily appointment volume.">
-                    <LineChart
-                        data={trends.appointments_30d || []}
-                        xKey="date"
-                        yKey="count"
-                    />
-                </Section>
+                <LineChart
+                    title="Trends"
+                    subtitle="30-day daily appointment volume."
+                    data={trends.appointments_30d || []}
+                    xKey="date"
+                    yKey="count"
+                />
 
                 {/* Insights */}
                 <div className="grid gap-5 lg:grid-cols-3">
                     <BarListChart
-                        title="Doctor Performance (30d)"
+                        title="Doctor performance (30d)"
                         subtitle="Top by appointment volume."
                         items={doctors}
                         labelKey="label"
@@ -525,27 +490,26 @@ export default function DashboardPage() {
                         maxItems={8}
                     />
                     <DonutChart
-                        title="New vs Repeat (30d)"
+                        title="New vs repeat (30d)"
                         subtitle="Patient visit type breakdown."
                         items={insights.new_vs_repeat_30d || []}
                         valueKey="count"
                     />
+                    {bookingSources.length > 0 && (
+                        <BarListChart
+                            title="Booking sources (30d)"
+                            subtitle="Channels driving appointment bookings."
+                            items={bookingSources}
+                            labelKey="label"
+                            valueKey="count"
+                            maxItems={10}
+                        />
+                    )}
                 </div>
-
-                {bookingSources.length > 0 && (
-                    <BarListChart
-                        title="Booking Sources (30d)"
-                        subtitle="Channels driving appointment bookings."
-                        items={bookingSources}
-                        labelKey="label"
-                        valueKey="count"
-                        maxItems={10}
-                    />
-                )}
 
                 {/* Alerts */}
                 {alerts.length > 0 && (
-                    <Section title="Alerts & Actionables" subtitle="Items requiring attention.">
+                    <Section title="Needs attention" subtitle="Items requiring attention.">
                         <div className="grid gap-3 sm:grid-cols-2">
                             {alerts.map((a, idx) => (
                                 <AlertCard key={`${a.title}:${idx}`} alert={a} />
@@ -560,61 +524,54 @@ export default function DashboardPage() {
     // ── Super Admin / summary (doctors, custom roles) ─────────────────────────
     // Only offer shortcuts to pages this user can open.
     const startOfDayActions = [
-        allowed('appointments.create') && { to: '/workflows/appointments/new', label: 'New Appointment' },
+        allowed('appointments.create') && { to: '/workflows/appointments/new', label: 'New appointment' },
         allowed('appointments.view') && { to: '/workflows/appointments', label: 'Appointments' },
         allowed('followups.view') && { to: '/modules/followups', label: 'Follow-ups' },
     ].filter(Boolean);
     const teamActions = [
-        allowed('staff.create') && { to: '/workflows/create-staff', label: 'Add Staff' },
-        allowed('doctors.create') && { to: '/workflows/setup-doctor', label: 'Add Doctor' },
+        allowed('staff.create') && { to: '/workflows/create-staff', label: 'Add staff' },
+        allowed('doctors.create') && { to: '/workflows/setup-doctor', label: 'Add doctor' },
     ].filter(Boolean);
 
     return (
-        <div className="space-y-6">
-            {/* Page header */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900">
-                        {isSuperAdmin ? 'Super Admin Overview' : 'Dashboard'}
-                    </h1>
-                    <p className="mt-0.5 text-sm text-gray-500">
-                        {isSuperAdmin
-                            ? 'Onboard clinics, manage access, and monitor the network.'
-                            : 'Run daily workflows: appointments, patients, billing, and communication.'}
-                    </p>
-                </div>
-                {!isSuperAdmin && (allowed('patients.create') || allowed('appointments.create')) && (
-                    <div className="flex flex-wrap gap-2">
+        <div className="mx-auto max-w-[1400px] space-y-5">
+            <PageHeader
+                title={isSuperAdmin ? 'Super admin overview' : 'Dashboard'}
+                subtitle={isSuperAdmin
+                    ? 'Onboard clinics, manage access, and monitor the network.'
+                    : 'Run daily workflows: appointments, patients, billing, and communication.'}
+                actions={!isSuperAdmin && (allowed('patients.create') || allowed('appointments.create')) ? (
+                    <>
                         {allowed('patients.create') && (
-                            <Link to="/modules/patients/new" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                + New Patient
+                            <Link to="/modules/patients/new" className={btn.secondary}>
+                                <AppIcon name="user-plus" className="h-4 w-4" /> New patient
                             </Link>
                         )}
                         {allowed('appointments.create') && (
-                            <Link to="/workflows/appointments/new" className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                                + New Appointment
+                            <Link to="/workflows/appointments/new" className={btn.primary}>
+                                <AppIcon name="calendar-plus" className="h-4 w-4" /> New appointment
                             </Link>
                         )}
-                    </div>
-                )}
-            </div>
+                    </>
+                ) : null}
+            />
 
             {/* Quick action cards */}
             <div className={isSuperAdmin ? 'grid gap-4' : 'grid gap-4 sm:grid-cols-2'}>
                 {isSuperAdmin ? (
                     <ActionCard
-                        title="Clinic Onboarding"
+                        title="Clinic onboarding"
                         description="Guided flow to create a clinic and admin access."
                         icon="hospital"
                         actions={[
-                            { to: '/workflows/onboard-clinic', label: 'Onboard New Clinic' },
-                            { to: '/workflows/clinics', label: 'View Clinics' },
+                            { to: '/workflows/onboard-clinic', label: 'Onboard new clinic' },
+                            { to: '/workflows/clinics', label: 'View clinics' },
                         ]}
                     />
                 ) : (
                     startOfDayActions.length > 0 && (
                         <ActionCard
-                            title="Start of Day"
+                            title="Start of day"
                             description="Jump into today's appointments and tasks."
                             icon="calendar"
                             actions={startOfDayActions}
@@ -624,7 +581,7 @@ export default function DashboardPage() {
 
                 {!isSuperAdmin && teamActions.length > 0 && (
                     <ActionCard
-                        title="Team Management"
+                        title="Team management"
                         description="Add staff and doctors to your clinic."
                         icon="users"
                         actions={teamActions}
@@ -636,34 +593,34 @@ export default function DashboardPage() {
             {isSuperAdmin ? (
                 <div className="space-y-5">
                     <Section title="Network" subtitle="High-level platform counts.">
-                        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                            <StatCard label="Total Clinics" value={data.total_clinics} />
-                            <StatCard label="Onboarded Today" value={data.today_clinic_onboarding} />
-                            <StatCard label="Total Staff" value={data.total_staff} />
-                            <StatCard label="Total Doctors" value={data.total_doctors} />
+                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                            <StatCard label="Total clinics" value={data.total_clinics} />
+                            <StatCard label="Onboarded today" value={data.today_clinic_onboarding} />
+                            <StatCard label="Total staff" value={data.total_staff} />
+                            <StatCard label="Total doctors" value={data.total_doctors} />
                         </div>
                     </Section>
 
-                    <Section title="Patients & Appointments" subtitle="Totals and today's activity.">
-                        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                            <StatCard label="Total Patients" value={data.total_patients} />
-                            <StatCard label="Patients Today" value={data.today_patients} />
-                            <StatCard label="Total Appointments" value={data.total_appointments} />
-                            <StatCard label="Appointments Today" value={data.today_appointments} />
+                    <Section title="Patients and appointments" subtitle="Totals and today's activity.">
+                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                            <StatCard label="Total patients" value={data.total_patients} />
+                            <StatCard label="Patients today" value={data.today_patients} />
+                            <StatCard label="Total appointments" value={data.total_appointments} />
+                            <StatCard label="Appointments today" value={data.today_appointments} />
                         </div>
                     </Section>
 
                     <Section title="WhatsApp" subtitle="Conversation and booking activity.">
-                        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                            <StatCard label="Total Conversations" value={data.total_whatsapp_conversations} />
-                            <StatCard label="Conversations Today" value={data.today_whatsapp_conversations} />
-                            <StatCard label="Total WhatsApp Appointments" value={data.total_whatsapp_appointments} />
-                            <StatCard label="WhatsApp Appointments Today" value={data.today_whatsapp_appointments} />
+                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                            <StatCard label="Total conversations" value={data.total_whatsapp_conversations} />
+                            <StatCard label="Conversations today" value={data.today_whatsapp_conversations} />
+                            <StatCard label="Total WhatsApp appointments" value={data.total_whatsapp_appointments} />
+                            <StatCard label="WhatsApp appointments today" value={data.today_whatsapp_appointments} />
                         </div>
                     </Section>
                 </div>
             ) : (
-                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
                     {Object.entries(data)
                         .filter(([k, v]) => k !== 'recent_activity' && (typeof v === 'number' || typeof v === 'string'))
                         .map(([key, value]) => (

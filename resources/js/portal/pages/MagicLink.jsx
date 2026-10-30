@@ -42,16 +42,21 @@ export default function MagicLink() {
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-            <Card className="w-full max-w-md text-center">
+            <Card className="w-full max-w-md p-6 text-center">
                 {status === 'loading' ? (
                     <div className="flex flex-col items-center gap-3 py-6">
-                        <Spinner className="h-6 w-6 text-[var(--accent)]" />
-                        <p className="text-sm text-slate-500">Signing you in…</p>
+                        <Spinner className="h-7 w-7 text-[var(--accent)]" />
+                        <p className="text-base font-semibold text-slate-900">Signing you in…</p>
+                        <p className="text-sm text-slate-600">This only takes a moment.</p>
                     </div>
                 ) : (
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-4 py-2 text-left">
+                        <h1 className="text-xl font-bold tracking-tight text-slate-900">We couldn't sign you in</h1>
                         <ErrorText>{error}</ErrorText>
-                        <Link to="/login" className="text-sm font-medium text-[var(--accent)]">
+                        <Link
+                            to="/login"
+                            className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-3 text-base font-semibold text-white hover:brightness-95"
+                        >
                             Back to sign in
                         </Link>
                     </div>

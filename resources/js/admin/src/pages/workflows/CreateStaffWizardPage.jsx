@@ -4,6 +4,7 @@ import client from '../../api/client';
 import FormRenderer from '../../components/FormRenderer';
 import { useAssignableRoles } from '../../hooks/useAssignableRoles';
 import { useAuth } from '../../context/AuthContext';
+import { Card, PageHeader, Spinner, btn } from '../../components/ui';
 
 const text = (key, label, required = false) => ({ key, label, type: 'text', required });
 const select = (key, label, options, required = false) => ({ key, label, type: 'select', options, required });
@@ -50,20 +51,16 @@ export default function CreateStaffWizardPage() {
 
     if (!isClinic) {
         return (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-lg font-semibold">Use the Super Admin flows</h2>
-                <p className="mt-1 text-sm text-slate-600">Staff creation from this wizard is intended for clinic users.</p>
-                <Link to="/dashboard" className="mt-4 inline-block rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white">Go to Dashboard</Link>
+            <div className="mx-auto max-w-3xl">
+                <Card title="Use the super admin flows" description="Staff creation from this wizard is intended for clinic users.">
+                    <Link to="/dashboard" className={btn.primary}>Go to dashboard</Link>
+                </Card>
             </div>
         );
     }
 
     if (rolesLoading) {
-        return (
-            <div className="flex items-center justify-center py-14">
-                <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
-            </div>
-        );
+        return <Spinner />;
     }
 
     if (!roleOptions.length) {
@@ -71,13 +68,13 @@ export default function CreateStaffWizardPage() {
     }
 
     const staffDetailsFields = [
-        text('full_name', 'Full Name', true),
+        text('full_name', 'Full name', true),
         text('email', 'Email'),
         text('phone', 'Phone'),
         text('password', 'Password', true),
         select('role', 'Role', roleOptions, true),
         select('status', 'Status', ['active', 'inactive', 'blocked']),
-        ...(currentRole?.limit_to_assigned_doctors ? [relation('doctor_ids', 'Assigned Doctors', 'doctors', true)] : []),
+        ...(currentRole?.limit_to_assigned_doctors ? [relation('doctor_ids', 'Assigned doctors', 'doctors', true)] : []),
     ];
 
     const submit = async () => {
@@ -103,17 +100,15 @@ export default function CreateStaffWizardPage() {
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div>
-                    <h2 className="text-xl font-semibold">Add Staff (Guided)</h2>
-                    <p className="mt-1 text-sm text-slate-600">Staff Details</p>
-                </div>
-                <Link to="/dashboard" className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Back</Link>
-            </div>
+        <div className="mx-auto max-w-3xl space-y-5">
+            <PageHeader
+                title="Add staff"
+                subtitle="Create a login for a staff member and choose their role."
+                actions={<Link to="/dashboard" className={btn.secondary}>Back</Link>}
+            />
 
             <FormRenderer
-                title="Staff Details"
+                title="Staff details"
                 fields={staffDetailsFields}
                 values={values}
                 error={error}
@@ -123,7 +118,7 @@ export default function CreateStaffWizardPage() {
                     submit();
                 }}
                 onCancel={() => navigate('/dashboard')}
-                submitLabel={saving ? 'Creating…' : 'Create Staff'}
+                submitLabel={saving ? 'Creating…' : 'Create staff'}
             />
         </div>
     );
