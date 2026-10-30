@@ -42,7 +42,9 @@ class KindScopingTest extends TestCase
         $docA = Doctor::create(['clinic_id' => $clinic->id, 'full_name' => 'Dr A', 'slot_duration_minutes' => 30]);
         $docB = Doctor::create(['clinic_id' => $clinic->id, 'full_name' => 'Dr B', 'slot_duration_minutes' => 30]);
 
-        $today = Carbon::now()->startOfDay();
+        // A doctor's list defaults to today in the clinic's timezone, so book on that
+        // day too (UTC 'today' differs between midnight and 05:30 IST).
+        $today = Carbon::now(config('app.clinic_timezone', 'Asia/Kolkata'))->startOfDay();
         foreach ([$docA, $docB] as $doc) {
             DoctorSchedule::create([
                 'clinic_id' => $clinic->id,
