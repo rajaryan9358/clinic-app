@@ -8,7 +8,7 @@ const DEFAULT_SECONDARY = '#64748B';
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 
 const EDITABLE_FIELDS = [
-    'logo_url', 'primary_color', 'secondary_color',
+    'logo_url',
     'address_line_1', 'address_line_2', 'city', 'state', 'pincode', 'phone', 'email',
 ];
 
@@ -116,48 +116,6 @@ function Field({ label, value, onChange, error, readOnly, type = 'text', placeho
     );
 }
 
-function ColorField({ label, fallback, value, onChange, error, readOnly }) {
-    const effective = HEX_RE.test(value) ? value : fallback;
-    return (
-        <div>
-            <p className="text-xs font-medium text-slate-600">{label}</p>
-            {readOnly ? (
-                <div className="mt-1 flex items-center gap-2">
-                    <span className="h-6 w-6 rounded-md ring-1 ring-inset ring-black/10" style={{ backgroundColor: effective }} />
-                    <span className="font-mono text-sm text-slate-900">{value || fallback}</span>
-                </div>
-            ) : (
-                <div className={`mt-1 flex items-center gap-2 rounded-xl border bg-white p-1.5 pr-3 focus-within:ring-2 ${error ? 'border-rose-300 focus-within:ring-rose-100' : 'border-slate-300 focus-within:border-blue-500 focus-within:ring-blue-100'}`}>
-                    <label className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 ring-inset ring-black/10" style={{ backgroundColor: effective }}>
-                        <input
-                            type="color"
-                            value={effective}
-                            onChange={(e) => onChange(e.target.value)}
-                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                            aria-label={`${label} picker`}
-                        />
-                    </label>
-                    <input
-                        type="text"
-                        value={value}
-                        onChange={(e) => onChange(e.target.value.trim())}
-                        placeholder={fallback}
-                        maxLength={7}
-                        aria-label={`${label} hex value`}
-                        className="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase text-slate-900 outline-none placeholder:text-slate-400"
-                    />
-                    {value && value.toLowerCase() !== fallback.toLowerCase() && (
-                        <button type="button" onClick={() => onChange('')} className="text-xs font-medium text-slate-500 hover:text-slate-800">
-                            Reset
-                        </button>
-                    )}
-                </div>
-            )}
-            {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
-        </div>
-    );
-}
-
 function LogoMark({ src, name, color, className }) {
     return src ? (
         <img src={src} alt={`${name || 'Clinic'} logo`} className={`bg-white object-contain ${className}`} />
@@ -165,27 +123,6 @@ function LogoMark({ src, name, color, className }) {
         <span className={`flex items-center justify-center font-semibold text-white ${className}`} style={{ backgroundColor: color }}>
             {initials(name)}
         </span>
-    );
-}
-
-function BrandPreview({ name, logo, primary, secondary }) {
-    return (
-        <div className="overflow-hidden rounded-xl border border-slate-200">
-            <div className="flex items-center gap-2.5 px-4 py-3" style={{ backgroundColor: primary }}>
-                <LogoMark src={logo} name={name} color={secondary} className="h-8 w-8 rounded-lg text-xs" />
-                <span className="truncate text-sm font-semibold text-white">{name || 'Your clinic'}</span>
-            </div>
-            <div className="space-y-3 bg-white p-4">
-                <div>
-                    <p className="text-sm font-semibold text-slate-900">Appointment confirmed</p>
-                    <p className="text-xs" style={{ color: secondary }}>Tue, 10:30 AM · Dr. Sharma</p>
-                </div>
-                <div className="flex gap-2">
-                    <span className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: primary }}>View details</span>
-                    <span className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: secondary, color: secondary }}>Reschedule</span>
-                </div>
-            </div>
-        </div>
     );
 }
 
@@ -255,14 +192,6 @@ export default function ClinicProfilePage() {
     };
 
     const handleSave = async () => {
-        const colorErrors = {};
-        if (form.primary_color && !HEX_RE.test(form.primary_color)) colorErrors.primary_color = 'Use a hex colour like #2563EB.';
-        if (form.secondary_color && !HEX_RE.test(form.secondary_color)) colorErrors.secondary_color = 'Use a hex colour like #64748B.';
-        if (Object.keys(colorErrors).length) {
-            setFieldErrors(colorErrors);
-            return;
-        }
-
         setSaving(true);
         setError('');
         setSuccess('');
@@ -304,8 +233,9 @@ export default function ClinicProfilePage() {
         );
     }
 
-    const primary = HEX_RE.test(form.primary_color) ? form.primary_color : DEFAULT_PRIMARY;
-    const secondary = HEX_RE.test(form.secondary_color) ? form.secondary_color : DEFAULT_SECONDARY;
+    // Theme colours are set by the super admin; the clinic only sees them here.
+    const primary = HEX_RE.test(clinic?.primary_color || '') ? clinic.primary_color : DEFAULT_PRIMARY;
+    const secondary = HEX_RE.test(clinic?.secondary_color || '') ? clinic.secondary_color : DEFAULT_SECONDARY;
     const logo = logoPreview || form.logo_url;
     const address = [form.address_line_1, form.address_line_2, [form.city, form.state].filter(Boolean).join(', '), form.pincode]
         .filter(Boolean).join(' · ');
@@ -374,11 +304,11 @@ export default function ClinicProfilePage() {
                         </div>
                     </Card>
 
-                    <Card title="Branding" description="Your logo and colours on the patient portal, PDFs and messages." icon="star">
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <Card title="Logo" description="Shown on the patient portal, prescriptions, bills and messages. Brand colours are set by ClinicFlow." icon="star">
+                        <div>
                             <div className="space-y-4">
                                 <div>
-                                    <p className="text-xs font-medium text-slate-600">Logo</p>
+                                    <p className="sr-only">Logo</p>
                                     <div className="mt-1 flex items-center gap-4">
                                         <LogoMark src={logo} name={clinic?.name} color={primary} className="h-16 w-16 rounded-xl text-lg ring-1 ring-inset ring-slate-200" />
                                         {readOnly ? (
@@ -401,12 +331,6 @@ export default function ClinicProfilePage() {
                                     </div>
                                     {fieldErrors.logo_url && <p className="mt-1 text-xs text-rose-600">{fieldErrors.logo_url}</p>}
                                 </div>
-                                <ColorField label="Primary colour" fallback={DEFAULT_PRIMARY} value={form.primary_color} onChange={set('primary_color')} error={fieldErrors.primary_color} readOnly={readOnly} />
-                                <ColorField label="Secondary colour" fallback={DEFAULT_SECONDARY} value={form.secondary_color} onChange={set('secondary_color')} error={fieldErrors.secondary_color} readOnly={readOnly} />
-                            </div>
-                            <div>
-                                <p className="mb-1 text-xs font-medium text-slate-600">Preview</p>
-                                <BrandPreview name={clinic?.name} logo={logo} primary={primary} secondary={secondary} />
                             </div>
                         </div>
                         {!readOnly && <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={pickLogo} />}

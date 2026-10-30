@@ -14,6 +14,8 @@ import OnboardClinicWizardPage from './pages/workflows/OnboardClinicWizardPage';
 import SetupDoctorWizardPage from './pages/workflows/SetupDoctorWizardPage';
 import SchedulePage from './pages/workflows/SchedulePage';
 import SettingsHubPage from './pages/workflows/SettingsHubPage';
+import BookingSettingsPage from './pages/settings/BookingSettingsPage';
+import WhatsAppSettingsPage from './pages/settings/WhatsAppSettingsPage';
 import WaitlistPage from './pages/workflows/WaitlistPage';
 import PrescriptionPage from './pages/workflows/PrescriptionPage';
 import PatientProfilePage from './pages/workflows/PatientProfilePage';
@@ -127,6 +129,8 @@ function AuthenticatedShell() {
 
                 {/* ── Clinic Admin Workflows ── */}
                 <Route path="/settings" element={<BlockSuperAdmin><SettingsHubPage /></BlockSuperAdmin>} />
+                <Route path="/settings/booking" element={<BlockSuperAdmin><RequirePerm perm="clinic_settings.view"><BookingSettingsPage /></RequirePerm></BlockSuperAdmin>} />
+                <Route path="/settings/whatsapp" element={<BlockSuperAdmin><RequirePerm perm="clinic_settings.view"><WhatsAppSettingsPage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/clinic-profile" element={<BlockSuperAdmin><RequirePerm perm="clinic_profile.view"><ClinicProfilePage /></RequirePerm></BlockSuperAdmin>} />
                 <Route path="/workflows/subscription" element={<BlockSuperAdmin><RequirePerm perm="subscription.view"><ClinicSubscriptionPage /></RequirePerm></BlockSuperAdmin>} />
 

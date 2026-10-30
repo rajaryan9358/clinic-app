@@ -27,11 +27,11 @@ class ClinicProfileController extends Controller
     {
         $clinic = $this->getClinic($request);
 
+        // The clinic's theme colours are set by the super admin (clinic
+        // detail page), so they are not accepted here.
         $data = validator($request->all(), [
             'logo_url'        => ['nullable', 'string', 'max:500'],
             'name'            => ['sometimes', 'string', 'max:255'],
-            'primary_color'   => ['nullable', 'string', 'max:20'],
-            'secondary_color' => ['nullable', 'string', 'max:20'],
             'address_line_1'  => ['nullable', 'string', 'max:255'],
             'address_line_2'  => ['nullable', 'string', 'max:255'],
             'city'            => ['nullable', 'string', 'max:120'],

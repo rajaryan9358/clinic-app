@@ -63,13 +63,9 @@ export const navigationByRole = {
 
 };
 
-// The Settings hub shows a card per permission below; its nav item appears
-// for anyone holding at least one of them.
-const SETTINGS_PERMS = [
-    'clinic_profile.view', 'clinic_settings.view', 'services.view', 'doctors.view', 'staff.view',
-    'reminders.view', 'whatsapp.view', 'followups.view', 'reviews.view', 'billing.view',
-    'subscription.view', 'audit_logs.view',
-];
+// The Settings hub only holds real settings (see SettingsHubPage); its nav
+// item appears for anyone holding at least one of their permissions.
+const SETTINGS_PERMS = ['clinic_profile.view', 'clinic_settings.view', 'subscription.view', 'audit_logs.view'];
 
 // ── Clinic users (clinic_admin, doctor, and every staff role) ───────────────
 // A single permission-driven list: every item declares the permission it
@@ -85,8 +81,22 @@ const clinicNavigation = [
             routeItem('/workflows/appointments', 'Schedule', { perm: 'appointments.view' }),
             routeItem('/workflows/waitlist', 'Waitlist', { perm: 'appointments.view' }),
             moduleItem('patients', { perm: 'patients.view' }),
-            moduleItem('whatsappConversations', { label: 'Messages', perm: 'whatsapp.view' }),
+            moduleItem('followups', { label: 'Follow-ups', perm: 'followups.view' }),
+        ],
+    },
+    {
+        section: 'Messages',
+        items: [
+            moduleItem('whatsappConversations', { label: 'WhatsApp chats', perm: 'whatsapp.view' }),
             moduleItem('reminders', { perm: 'reminders.view' }),
+            routeItem('/workflows/communication/delivery-issues', 'Delivery issues', { perm: 'whatsapp.view' }),
+        ],
+    },
+    {
+        section: 'Billing',
+        items: [
+            moduleItem('invoices', { label: 'Bills', perm: 'billing.view' }),
+            moduleItem('payments', { label: 'Payments', perm: 'billing.view' }),
         ],
     },
     {

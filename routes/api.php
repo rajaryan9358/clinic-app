@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Clinic\AppointmentController as ClinicAppointmentController;
 use App\Http\Controllers\Api\Clinic\AuditLogController as ClinicAuditLogController;
 use App\Http\Controllers\Api\Clinic\ClinicProfileController as ClinicClinicProfileController;
+use App\Http\Controllers\Api\Clinic\WhatsAppStatusController as ClinicWhatsAppStatusController;
 use App\Http\Controllers\Api\Clinic\ClinicSettingController as ClinicClinicSettingController;
 use App\Http\Controllers\Api\Clinic\DashboardController as ClinicDashboardController;
 use App\Http\Controllers\Api\Clinic\DoctorController as ClinicDoctorController;
@@ -340,6 +341,7 @@ Route::middleware(['auth:sanctum', 'clinic.scope', 'clinic.context', 'clinic.sub
 
     Route::post('uploads/image', [UploadController::class, 'storeImage']);
 
+    Route::get('whatsapp/status', [ClinicWhatsAppStatusController::class, 'show'])->middleware('perm:clinic_settings.view');
     Route::get('clinic/profile', [ClinicClinicProfileController::class, 'show'])->middleware('perm:clinic_profile.view');
     Route::put('clinic/profile', [ClinicClinicProfileController::class, 'update'])->middleware('perm:clinic_profile.edit');
 });

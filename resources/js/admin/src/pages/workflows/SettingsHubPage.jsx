@@ -4,46 +4,32 @@ import client from '../../api/client';
 import AppIcon from '../../components/AppIcon';
 import { useScope } from '../../context/ScopeContext';
 
-// Every card names the permission it needs; a role only sees what it holds.
-// Counts and states are filled in after load where they are cheap to get.
+// Only real settings live here; day-to-day lists (doctors, team, bills,
+// follow-ups, messages) are in the sidebar. Every card names the permission
+// it needs, so a role only sees what it holds.
 const GROUPS = [
     {
         title: 'Clinic',
         items: [
-            { key: 'profile', title: 'Clinic profile', desc: 'Name, address, contact, logo and colours shown to patients.', to: '/workflows/clinic-profile', perm: 'clinic_profile.view', icon: 'building' },
-            { key: 'rules', title: 'Booking & waitlist rules', desc: 'Online booking, walk-ins, tokens, reminders, cancel and reschedule limits.', to: '/modules/clinicSettings', perm: 'clinic_settings.view', icon: 'settings' },
-            { key: 'services', title: 'Services & fees', desc: 'What you offer, how long it takes and what it costs.', to: '/modules/services', perm: 'services.view', icon: 'briefcase', count: 'services' },
-            { key: 'domains', title: 'Domains', desc: 'Web addresses for booking and the patient portal.', to: '/modules/domains', perm: 'clinic_settings.view', icon: 'globe' },
+            { key: 'profile', title: 'Clinic profile', desc: 'Name, address, contact details and logo shown to patients.', to: '/workflows/clinic-profile', perm: 'clinic_profile.view', icon: 'building' },
+            { key: 'booking', title: 'Booking & visits', desc: 'Online booking, walk-ins, tokens, cancellations, waitlist and the patient portal.', to: '/settings/booking', perm: 'clinic_settings.view', icon: 'calendar' },
         ],
     },
     {
-        title: 'People',
+        title: 'Messages',
         items: [
-            { key: 'doctors', title: 'Doctors & availability', desc: 'Profiles, fees, weekly hours, leave and slot length.', to: '/modules/doctors', perm: 'doctors.view', icon: 'stethoscope', count: 'doctors' },
-            { key: 'team', title: 'Team', desc: 'Staff accounts, their role and which doctors they work for.', to: '/modules/users', perm: 'staff.view', icon: 'users', count: 'users' },
+            { key: 'whatsapp', title: 'WhatsApp', desc: 'Connection, booking by chat, reminders and the messages patients receive.', to: '/settings/whatsapp', perm: 'clinic_settings.view', icon: 'message-circle' },
         ],
     },
     {
-        title: 'Patients & messages',
+        title: 'Account',
         items: [
-            { key: 'reminders', title: 'Reminders', desc: 'Every reminder sent to patients and whether it arrived.', to: '/modules/reminders', perm: 'reminders.view', icon: 'bell' },
-            { key: 'delivery', title: 'Message delivery issues', desc: 'WhatsApp messages and reminders that failed to send.', to: '/workflows/communication/delivery-issues', perm: 'whatsapp.view', icon: 'alert-triangle' },
-            { key: 'followups', title: 'Follow-ups', desc: 'Calls and check-ins due after a visit.', to: '/modules/followups', perm: 'followups.view', icon: 'clipboard-check' },
-            { key: 'reviews', title: 'Reviews', desc: 'Patient reviews and your replies.', to: '/modules/reviews', perm: 'reviews.view', icon: 'star' },
-        ],
-    },
-    {
-        title: 'Money & account',
-        items: [
-            { key: 'invoices', title: 'Bills', desc: 'Invoices issued to patients.', to: '/modules/invoices', perm: 'billing.view', icon: 'file-text' },
-            { key: 'payments', title: 'Payments', desc: 'Money received, by method.', to: '/modules/payments', perm: 'billing.view', icon: 'credit-card' },
-            { key: 'subscription', title: 'Subscription', desc: 'Your ClinicFlow plan and payment history.', to: '/workflows/subscription', perm: 'subscription.view', icon: 'layout-template' },
+            { key: 'subscription', title: 'Subscription', desc: 'Your ClinicFlow plan and payment history.', to: '/workflows/subscription', perm: 'subscription.view', icon: 'credit-card' },
             { key: 'audit', title: 'Activity log', desc: 'Who changed what, and when.', to: '/modules/auditLogs', perm: 'audit_logs.view', icon: 'shield' },
         ],
     },
 ];
 
-const COUNT_PATHS = { services: '/clinic/services', doctors: '/clinic/doctors', users: '/clinic/users' };
 const PROFILE_FIELDS = [['address_line_1', 'address'], ['city', 'city'], ['pincode', 'pincode'], ['phone', 'phone'], ['email', 'email'], ['logo_url', 'logo']];
 
 const TONE = {
@@ -57,9 +43,8 @@ export default function SettingsHubPage() {
     const can = typeof scope.can === 'function' ? scope.can : () => false;
     const subscription = scope.context?.subscription;
     const [query, setQuery] = useState('');
-    const [counts, setCounts] = useState({});
     const [missing, setMissing] = useState(null);
-    const [failed, setFailed] = useState(null);
+    const [whatsapp, setWhatsapp] = useState(null);
 
     const groups = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -74,22 +59,17 @@ export default function SettingsHubPage() {
 
     useEffect(() => {
         let cancelled = false;
-        const all = GROUPS.flatMap((g) => g.items).filter((i) => i.count && can(i.perm));
-        Promise.all(all.map((i) => client.get(COUNT_PATHS[i.count], { params: { per_page: 1 } })
-            .then((r) => [i.count, r.data?.meta?.total ?? null]).catch(() => [i.count, null])))
-            .then((pairs) => { if (!cancelled) setCounts(Object.fromEntries(pairs)); });
-
         if (can('clinic_profile.view')) {
             client.get('/clinic/clinic/profile')
                 .then((r) => {
                     const c = r.data?.data || {};
-                    if (!cancelled) setMissing(PROFILE_FIELDS.filter(([k]) => !c[k]).map(([, label]) => label));
+                    if (!cancelled) setMissing(PROFILE_FIELDS.filter(([k]) => !c[k]).map(([, l]) => l));
                 })
                 .catch(() => {});
         }
-        if (can('whatsapp.view')) {
-            client.get('/clinic/whatsapp/messages', { params: { delivery_status: 'failed', per_page: 1 } })
-                .then((r) => { if (!cancelled) setFailed(r.data?.meta?.total ?? 0); })
+        if (can('clinic_settings.view')) {
+            client.get('/clinic/whatsapp/status')
+                .then((r) => { if (!cancelled) setWhatsapp(r.data?.data || null); })
                 .catch(() => {});
         }
         return () => { cancelled = true; };
@@ -100,8 +80,8 @@ export default function SettingsHubPage() {
         if (item.key === 'profile' && missing) {
             return missing.length ? { label: `Add ${missing.slice(0, 2).join(', ')}${missing.length > 2 ? '…' : ''}`, tone: 'warn' } : { label: 'Complete', tone: 'ok' };
         }
-        if (item.key === 'delivery' && failed != null) {
-            return failed ? { label: `${failed} failed`, tone: 'warn' } : { label: 'All delivered', tone: 'ok' };
+        if (item.key === 'whatsapp' && whatsapp) {
+            return whatsapp.connected ? { label: 'Connected', tone: 'ok' } : { label: 'Not connected', tone: 'warn' };
         }
         if (item.key === 'subscription' && subscription?.status) {
             if (subscription.status === 'trialing') {
@@ -110,12 +90,6 @@ export default function SettingsHubPage() {
             }
             if (subscription.status === 'active') return { label: subscription.plan_name || 'Active', tone: 'ok' };
             return { label: String(subscription.status).replace(/_/g, ' '), tone: 'warn' };
-        }
-        if (item.count && counts[item.count] != null) {
-            const n = counts[item.count];
-            const noun = { services: 'service', doctors: 'doctor', users: 'person' }[item.count];
-            const plural = item.count === 'users' ? (n === 1 ? 'person' : 'people') : `${noun}${n === 1 ? '' : 's'}`;
-            return { label: `${n} ${plural}`, tone: n ? 'info' : 'warn' };
         }
         return null;
     };

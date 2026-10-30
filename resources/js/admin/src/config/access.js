@@ -96,8 +96,8 @@ export function canAccessModule(role, moduleKey, can) {
     const r = String(role || '');
     const key = String(moduleKey);
 
-    // Reviews hidden from all roles
-    if (key === 'reviews') return false;
+    // Reviews and domains are not in use yet: hidden from all roles.
+    if (key === 'reviews' || key === 'domains') return false;
 
     if (r === 'super_admin') {
         return !isSuperAdminHiddenModuleKey(key);
